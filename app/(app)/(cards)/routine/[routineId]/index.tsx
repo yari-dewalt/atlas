@@ -97,6 +97,8 @@ export default function RoutineDetail() {
           total_sets,
           default_weight,
           default_reps,
+          default_reps_min,
+          default_reps_max,
           default_rpe,
           exercises (
             id,
@@ -111,7 +113,7 @@ export default function RoutineDetail() {
       .eq('id', routineId)
       .single();
 
-    console.log(routineData);
+    console.log("ROUTINE:",routineData);
 
     if (routineError) throw routineError;
 
@@ -330,16 +332,18 @@ export default function RoutineDetail() {
 
       if (routineError) throw routineError;
 
-      // Copy all exercises
+      // Copy all exercises (excluding personal defaults like weight)
       const exercisesToCopy = routine.routine_exercises.map((exercise: any) => ({
         routine_id: newRoutine.id,
         exercise_id: exercise.exercise_id, // Include exercise_id to maintain relationship with exercises table
         name: exercise.name,
         order_position: exercise.order_position,
         total_sets: exercise.total_sets,
-        default_weight: exercise.default_weight,
+        default_weight: null, // Don't copy personal weight defaults
         default_reps: exercise.default_reps,
-        default_rpe: exercise.default_rpe,
+        default_reps_min: exercise.default_reps_min,
+        default_reps_max: exercise.default_reps_max,
+        default_rpe: exercise.default_rpe, // Copy RPE as it's part of the routine design
       }));
 
       const { error: exercisesError } = await supabase
@@ -521,9 +525,9 @@ export default function RoutineDetail() {
           image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
           sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
             id: Date.now() + Math.random() + i,
-            weight: exercise.default_weight,
-            reps: exercise.default_reps,
-            rpe: exercise.default_rpe,
+            weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
+            reps: exercise.default_reps_min || exercise.default_reps, // Use rep range minimum or legacy default
+            rpe: exercise.default_rpe, // Always inherit RPE defaults
             isCompleted: false
           })),
           notes: ""
@@ -1031,7 +1035,14 @@ export default function RoutineDetail() {
                     <View style={styles.exerciseItemDetails}>
                       <Text style={styles.exerciseItemDetailsText}>
                         {exercise.total_sets} sets
-                        {exercise.default_reps && ` × ${exercise.default_reps} reps`}
+                        {exercise.default_reps_min && exercise.default_reps_max
+                          ? ` • ${exercise.default_reps_min}-${exercise.default_reps_max} reps`
+                          : exercise.default_reps_min 
+                          ? ` • ${exercise.default_reps_min} reps`
+                          : exercise.default_reps 
+                          ? ` • ${exercise.default_reps} reps`
+                          : ''
+                        }
                       </Text>
                     </View>
                   </View>

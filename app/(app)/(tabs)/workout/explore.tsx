@@ -556,6 +556,8 @@ export default function ExploreRoutines() {
           total_sets,
           default_weight,
           default_reps,
+          default_reps_min,
+          default_reps_max,
           default_rpe
         )
       `)
@@ -578,16 +580,18 @@ export default function ExploreRoutines() {
     
     if (createError) throw createError;
     
-    // Save all exercises
+    // Save all exercises (excluding personal defaults like weight)
     const exercisesToSave = originalRoutine.routine_exercises.map(ex => ({
       routine_id: newRoutine.id,
       exercise_id: ex.exercise_id,
       name: ex.name,
       order_position: ex.order_position,
       total_sets: ex.total_sets,
-      default_weight: ex.default_weight,
+      default_weight: null, // Don't copy personal weight defaults
       default_reps: ex.default_reps,
-      default_rpe: ex.default_rpe
+      default_reps_min: ex.default_reps_min,
+      default_reps_max: ex.default_reps_max,
+      default_rpe: ex.default_rpe // Copy RPE as it's part of routine design
     }));
     
     const { error: exerciseError } = await supabase

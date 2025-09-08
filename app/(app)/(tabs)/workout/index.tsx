@@ -244,6 +244,9 @@ export default function Workout() {
         return;
       }
       
+      // Check if this routine belongs to the current user
+      const isOwner = routine.user_id === session?.user?.id;
+      
       // Start a new workout with this routine
       useWorkoutStore.getState().startNewWorkout({
         name: routine.name,
@@ -255,9 +258,9 @@ export default function Workout() {
           image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
           sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
             id: Date.now() + Math.random() + i,
-            weight: exercise.default_weight,
-            reps: exercise.default_reps,
-            rpe: exercise.default_rpe,
+            weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
+            reps: exercise.default_reps_min || exercise.default_reps, // Use rep range minimum or legacy default
+            rpe: exercise.default_rpe, // Always inherit RPE defaults
             isCompleted: false
           })),
           notes: "",
