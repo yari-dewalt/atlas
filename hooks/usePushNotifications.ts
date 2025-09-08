@@ -15,45 +15,50 @@ export const usePushNotifications = () => {
     error 
   } = useNotificationStore();
 
+  // Effect to handle auth state changes (non-async)
   useEffect(() => {
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          // Initialize push notifications when user signs in
+      (event, session) => {
+        // Just log the auth state change, don't perform async operations here
+        console.log('Push notifications: Auth state changed:', event, !!session);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Separate effect to handle push notification initialization
+  useEffect(() => {
+    const initializePushNotificationsAsync = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user && !pushNotificationsEnabled) {
+          console.log('Initializing push notifications for authenticated user');
           await initializePushNotifications();
           
-          // Register background task for processing notifications
+          // Register background task
           const taskManager = BackgroundTaskManager.getInstance();
           await taskManager.registerBackgroundFetch();
-        } else if (event === 'SIGNED_OUT') {
-          // Remove push token when user signs out
+          console.log('Push notifications and background tasks initialized');
+        } else if (!user && pushNotificationsEnabled) {
+          console.log('User signed out, disabling push notifications');
           await disablePushNotifications();
           
           // Unregister background task
           const taskManager = BackgroundTaskManager.getInstance();
           await taskManager.unregisterBackgroundFetch();
+          console.log('Push notifications and background tasks disabled');
         }
-      }
-    );
-
-    // Initialize for already logged in users
-    const initializeIfLoggedIn = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && !pushNotificationsEnabled) {
-        await initializePushNotifications();
-        
-        // Register background task
-        const taskManager = BackgroundTaskManager.getInstance();
-        await taskManager.registerBackgroundFetch();
+      } catch (error) {
+        console.error('Error managing push notifications:', error);
       }
     };
 
-    initializeIfLoggedIn();
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    // Run the initialization
+    initializePushNotificationsAsync();
   }, [initializePushNotifications, disablePushNotifications, pushNotificationsEnabled]);
 
   return {

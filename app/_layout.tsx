@@ -64,12 +64,6 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, updatedSession) => {
         setSession(updatedSession);
-        
-        if (updatedSession?.user) {
-          await fetchProfile();
-        }
-        
-        setLoading(false);
       }
     );
 
@@ -169,7 +163,7 @@ export default function RootLayout() {
   // No need for Context.Provider when using Zustand
   return (
     <>
-      <StatusBar hidden />
+      <StatusBar translucent backgroundColor="transparent" />
       <Animated.View style={[styles.container, { opacity: contentOpacity }]}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(app)" />
