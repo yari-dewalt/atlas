@@ -30,34 +30,6 @@ export const scrollToTop = (tabName) => {
   }
 };
 
-const TopNavBar = ({ title }) => {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-                activeOpacity={0.5} style={styles.headerButton}>
-            <Text style={styles.atlasLogo}>Atlas</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.headerTitle}>{title}</Text>
-        
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-                activeOpacity={0.5} style={styles.headerButton}>
-            <IonIcon name="chatbox-outline" size={24} color={colors.primaryText} />
-          </TouchableOpacity>
-          <TouchableOpacity
-                activeOpacity={0.5} style={styles.headerButton}>
-            <IonIcon name="notifications-outline" size={24} color={colors.primaryText} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
-};
-
 export default function AppLayout() {
   const [activeTab, setActiveTab] = useState('home');
   const [isProfileRoute, setIsProfileRoute] = useState(false);
