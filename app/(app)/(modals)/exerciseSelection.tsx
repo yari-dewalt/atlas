@@ -951,7 +951,7 @@ export default function ExerciseSelection() {
             ]}
           >
             <TouchableOpacity
-                activeOpacity={0.5} 
+                activeOpacity={0.5}
               style={styles.addButton}
               onPress={handleAddSelectedExercises}
             >
@@ -1458,13 +1458,15 @@ customText: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    backgroundColor: colors.brand,
+    paddingVertical: 12,
     paddingHorizontal: 24,
+    borderRadius: 8,
   },
   addButtonText: {
     color: colors.primaryText,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '500',
     marginLeft: 8,
   },
   exerciseNameRow: {

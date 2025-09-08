@@ -473,6 +473,7 @@ export default function Workout() {
                         startRoutine(routine.id);
                       }}
                     >
+                      <IonIcon name="add" size={18} color={colors.primaryText} />
                       <Text style={styles.startRoutineButtonText}>Start Routine</Text>
                     </TouchableOpacity>
                   </View>
@@ -692,16 +693,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brand,
-    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     width: '100%',
   },
   startRoutineButtonText: {
     color: colors.primaryText,
-    fontWeight: '600',
-    marginLeft: 4,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   historyContainer: {
     marginBottom: 16,

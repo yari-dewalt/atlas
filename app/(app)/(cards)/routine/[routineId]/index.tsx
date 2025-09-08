@@ -688,7 +688,7 @@ export default function RoutineDetail() {
       backgroundColor: colors.background,
     },
     startWorkoutButton: {
-      paddingVertical: 14,
+      paddingVertical: 12,
       borderRadius: 8,
       alignItems: 'center',
       justifyContent: 'center',
@@ -699,8 +699,9 @@ export default function RoutineDetail() {
     },
     startWorkoutButtonText: {
       color: colors.primaryText,
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 14,
+      fontWeight: '500',
+      marginLeft: 8,
     },
     routineStats: {
       marginTop: 4,
@@ -979,6 +980,7 @@ export default function RoutineDetail() {
             style={styles.startWorkoutButton}
             onPress={handleStartWorkout}
           >
+            <Ionicons name="add" size={18} color={colors.primaryText} />
             <Text style={styles.startWorkoutButtonText}>Start Routine</Text>
           </TouchableOpacity>
         </View>

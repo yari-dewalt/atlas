@@ -1732,6 +1732,7 @@ const handleTimerCompletion = async () => {
       <SwipeRow
         rightOpenValue={-80}
         disableRightSwipe={true}
+        disableLeftSwipe={exercise.sets.length === 1} // Disable swipe if only one set
         
         // Sensitivity adjustments
         friction={100}
@@ -2021,7 +2022,7 @@ const handleTimerCompletion = async () => {
               addSet(exercise.id);
             }}
           >
-            <IonIcon name="add-outline" size={18} color={colors.brand} />
+            <IonIcon name="add" size={18} color={colors.primaryText} />
             <Text style={styles.addSetButtonText}>Add Set</Text>
           </TouchableOpacity>
         </>
@@ -2041,7 +2042,7 @@ const handleTimerCompletion = async () => {
               handleAddExercise();
             }}
           >
-            <IonIcon name="add-circle-outline" size={22} color={colors.brand} />
+            <IonIcon name="add" size={18} color={colors.primaryText} />
             <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
           </TouchableOpacity>
         )}
@@ -3102,19 +3103,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.brand,
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 20,
-    padding: 14,
+    paddingVertical: 12,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderStyle: 'dashed',
   },
   addExerciseButtonText: {
-    color: colors.brand,
-    fontWeight: '600',
+    color: colors.primaryText,
+    fontSize: 14,
+    fontWeight: '500',
     marginLeft: 8,
   },
   exercisesContainer: {
@@ -3253,15 +3252,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 4,
-    padding: 8,
-    marginTop: 12,
+    backgroundColor: colors.primaryAccent,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
   },
   addSetButtonText: {
-    color: colors.brand,
+    color: colors.primaryText,
     fontSize: 14,
-    marginLeft: 4,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   notesContainer: {
     marginTop: 16,
@@ -3777,7 +3777,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderTopRightRadius: 8,
     borderBottomRightRadius: 8,
-    marginRight: 1,
+    marginRight: 2,
   },
   deleteText: {
     color: 'white',

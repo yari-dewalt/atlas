@@ -270,7 +270,8 @@ export default function ProfileRoutines() {
                 style={styles.createRoutineButton}
                 onPress={() => router.push('/editRoutine/new')}
               >
-                <Text style={styles.createRoutineButtonText}>+ New Routine</Text>
+                <Ionicons name="add" size={18} color={colors.primaryText} />
+                <Text style={styles.createRoutineButtonText}>New Routine</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -392,14 +393,16 @@ const styles = StyleSheet.create({
   },
   createRoutineButton: {
     backgroundColor: colors.brand,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
   },
   createRoutineButtonText: {
     color: colors.primaryText,
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '500',
+    fontSize: 14,
+    marginLeft: 8,
   }
 });

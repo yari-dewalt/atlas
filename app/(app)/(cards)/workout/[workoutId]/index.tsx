@@ -637,7 +637,7 @@ export default function WorkoutDetailScreen() {
             onPress={startWorkoutBasedOnCurrent}
             disabled={isStartingWorkout}
           >
-            <Ionicons name="play-outline" size={20} color={colors.primaryText} />
+            <Ionicons name="add" size={18} color={colors.primaryText} />
             <Text style={styles.startWorkoutButtonText}>
               Start Workout
             </Text>
@@ -1113,17 +1113,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.brand,
     paddingVertical: 12,
-    paddingHorizontal: 20,
     borderRadius: 8,
     marginTop: 16,
-    gap: 8,
   },
   startWorkoutButtonDisabled: {
     opacity: 0.6,
   },
   startWorkoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: colors.primaryText,
+    marginLeft: 8,
   },
 });
