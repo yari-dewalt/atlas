@@ -14,7 +14,6 @@ import { StatusBar } from 'react-native';
 export default function RootLayout() {
   // Get state and actions from auth store
   const { session, loading, setSession, setLoading, fetchProfile, profile } = useAuthStore();
-  const { isOnboardingComplete, isInOnboardingFlow, checkOnboardingStatus } = useOnboardingStore();
   const { fetchNotifications, subscribeToNotifications } = useNotificationStore();
   
   // Initialize push notifications
@@ -46,11 +45,7 @@ export default function RootLayout() {
         // Get initial session
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         setSession(initialSession);
-        
-        // If we have a session, fetch the profile
-        if (initialSession?.user) {
-          await fetchProfile();
-        }
+        await fetchProfile();
       } catch (error) {
         console.error('Error initializing auth:', error);
       } finally {
@@ -64,18 +59,12 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, updatedSession) => {
         setSession(updatedSession);
+        fetchProfile();
       }
     );
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Check onboarding status when profile changes
-  useEffect(() => {
-    if (!loading && session?.user && profile !== undefined) {
-      checkOnboardingStatus(profile);
-    }
-  }, [profile, loading, session, checkOnboardingStatus]);
 
   // Setup notification subscription when user is authenticated
   useEffect(() => {
@@ -105,7 +94,7 @@ export default function RootLayout() {
       }
     } else {
       // Has session - check onboarding status from profile
-      if (!isOnboardingComplete || isInOnboardingFlow) {
+      if (profile && profile.onboarding_completed !== true) {
         // Needs onboarding or is currently in the flow
         if (!inOnboardingGroup) {
           router.replace('/(onboarding)/welcome');
@@ -117,7 +106,7 @@ export default function RootLayout() {
         }
       }
     }
-  }, [session, segments, loading, isOnboardingComplete, isInOnboardingFlow]);
+  }, [session, segments, loading]);
 
   // Handle fade-in animation when loading completes
   useEffect(() => {
