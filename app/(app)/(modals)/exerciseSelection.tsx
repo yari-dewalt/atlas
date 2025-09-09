@@ -399,13 +399,28 @@ export default function ExerciseSelection() {
     let filtered = exerciseList;
 
     if (selectedMuscleGroup && selectedMuscleGroup !== "All") {
-      filtered = filtered.filter(exercise => 
-        exercise.primary_muscle_group === selectedMuscleGroup ||
-        (exercise.secondary_muscle_groups && 
-         exercise.secondary_muscle_groups.includes(selectedMuscleGroup)) ||
-        (exercise.muscle_groups &&
-         exercise.muscle_groups.includes(selectedMuscleGroup))
-      );
+      // Separate exercises into primary and secondary matches
+      const primaryMatches = [];
+      const secondaryMatches = [];
+      
+      exerciseList.forEach(exercise => {
+        // Check if it's primary muscle group
+        if (exercise.primary_muscle_group === selectedMuscleGroup) {
+          primaryMatches.push(exercise);
+        }
+        // Check if it's in secondary muscle groups (but not primary)
+        else if (
+          (exercise.secondary_muscle_groups && 
+           exercise.secondary_muscle_groups.includes(selectedMuscleGroup)) ||
+          (exercise.muscle_groups &&
+           exercise.muscle_groups.includes(selectedMuscleGroup))
+        ) {
+          secondaryMatches.push(exercise);
+        }
+      });
+      
+      // Combine with primary matches first, then secondary matches
+      filtered = [...primaryMatches, ...secondaryMatches];
     }
 
     if (selectedEquipment && selectedEquipment !== "All") {
