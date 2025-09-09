@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fetchPostById, updatePost, uploadPostMedia } from "../../../../../utils/postUtils";
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from "expo-image-picker";
 import { format, formatDistanceToNow } from 'date-fns';
 import { supabase } from "../../../../../lib/supabase";
@@ -622,6 +623,7 @@ export default function EditPost() {
   // Handle workout selection with keyboard dismissal
   const handleWorkoutButtonPress = () => {
     Keyboard.dismiss();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     workoutBottomSheetRef.current?.expand();
   };
   

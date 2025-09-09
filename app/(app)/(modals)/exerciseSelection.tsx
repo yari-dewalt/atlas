@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../../../constants/colors';
 import { supabase } from '../../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -537,12 +538,14 @@ export default function ExerciseSelection() {
   const openMuscleGroupSelection = () => {
     Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setMuscleGroupModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     muscleGroupBottomSheetRef.current?.expand();
   };
 
   const openEquipmentSelection = () => {
     Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setEquipmentModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     equipmentBottomSheetRef.current?.expand();
   };
 

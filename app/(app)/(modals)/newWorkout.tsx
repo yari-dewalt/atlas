@@ -225,6 +225,7 @@ export default function NewWorkout() {
       setRestTimerModalVisible(false);
     } else {
       setRestTimerModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       restTimerBottomSheetRef.current?.expand();
     }
   };
@@ -243,6 +244,7 @@ export default function NewWorkout() {
     }
     
     setTimeInputModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     timeInputBottomSheetRef.current?.expand();
   };
 
@@ -268,6 +270,7 @@ export default function NewWorkout() {
     }
     
     setRpeModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     rpeBottomSheetRef.current?.expand();
     
     rpeFlatListRef.current?.scrollToIndex({ 
@@ -279,6 +282,7 @@ export default function NewWorkout() {
   const showExerciseOptions = (exercise) => {
     setSelectedExerciseForOptions(exercise);
     setExerciseOptionsModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     exerciseOptionsBottomSheetRef.current?.expand();
   };
 
@@ -286,6 +290,7 @@ export default function NewWorkout() {
     exerciseOptionsBottomSheetRef.current?.close();
     setTimeout(() => {
       setReorderModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       reorderBottomSheetRef.current?.expand();
     }, 200);
   };
@@ -295,6 +300,7 @@ const handleAddToSuperset = () => {
   setTimeout(() => {
     setSelectedExerciseForSuperset(selectedExerciseForOptions);
     setSupersetModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     supersetBottomSheetRef.current?.expand();
   }, 200);
 };
@@ -366,6 +372,7 @@ const handleRemoveExercise = () => {
     if (cameFromSetEdit) {
       setTimeout(() => {
         // Reopen with the same editing indices we had before
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setEditBottomSheetRef.current?.expand();
         setIsConfirmingRpe(false); // Reset the flag
         setCameFromSetEdit(false); // Reset the flag
@@ -730,6 +737,7 @@ const handleRemoveExercise = () => {
     setTempReps(set.reps !== null ? String(set.reps) : '');
     setTempRpe(set.rpe ? String(set.rpe) : '');
     setSetEditModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditBottomSheetRef.current?.expand();
   };
 

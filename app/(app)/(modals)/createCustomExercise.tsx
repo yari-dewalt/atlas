@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../../../constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -167,16 +168,19 @@ export default function CreateCustomExercise() {
 
   const openPrimaryMuscleGroupSelection = () => {
     setPrimaryMuscleModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     primaryMuscleBottomSheetRef.current?.expand();
   };
 
   const openSecondaryMuscleGroupSelection = () => {
     setSecondaryMuscleModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     secondaryMuscleBottomSheetRef.current?.expand();
   };
 
   const openEquipmentSelection = () => {
     setEquipmentModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     equipmentBottomSheetRef.current?.expand();
   };
 

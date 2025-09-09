@@ -47,6 +47,7 @@ const handleTimerSoundSheetChanges = useCallback((index) => {
 
 const openTimerSoundModal = () => {
   setTimerSoundModalVisible(true);
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   timerSoundBottomSheetRef.current?.expand();
 };
 

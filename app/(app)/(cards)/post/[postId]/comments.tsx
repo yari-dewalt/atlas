@@ -459,6 +459,7 @@ export default function PostCommentsScreen() {
   const showCommentOptions = (comment) => {
     setSelectedComment(comment);
     setShowOptionsFor(null); // Clear any existing dropdown
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     commentOptionsBottomSheetRef.current?.expand();
   };
 

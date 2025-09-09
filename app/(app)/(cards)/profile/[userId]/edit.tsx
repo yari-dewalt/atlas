@@ -7,6 +7,7 @@ import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/botto
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colors } from '../../../../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../../../../stores/authStore';
 import { useProfileStore } from '../../../../../stores/profileStore';
 import { useEditProfileStore } from '../../../../../stores/editProfileStore';
@@ -194,6 +195,7 @@ export default function EditProfileScreen() {
 
   const handleChangePhotoPress = () => {
     setPhotoOptionsVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     photoOptionsBottomSheetRef.current?.expand();
   };
 
@@ -223,11 +225,13 @@ export default function EditProfileScreen() {
 
   const handleChangeWeightUnitPress = () => {
     setWeightUnitOptionsVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     weightUnitOptionsBottomSheetRef.current?.expand();
   };
 
   const handleDatePress = () => {
     setDatePickerVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     datePickerBottomSheetRef.current?.expand();
     // Small delay to ensure bottom sheet is open before showing Android picker
     if (Platform.OS === 'android') {

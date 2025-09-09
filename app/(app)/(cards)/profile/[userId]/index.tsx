@@ -1459,7 +1459,10 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 activeOpacity={0.5} 
                 style={styles.controlButton}
-                onPress={() => metricBottomSheetRef.current?.expand()}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  metricBottomSheetRef.current?.expand();
+                }}
               >
                 <Text style={styles.controlButtonText}>{getMetricLabel()}</Text>
                 <IonIcon name="chevron-down" size={16} color={colors.secondaryText} />

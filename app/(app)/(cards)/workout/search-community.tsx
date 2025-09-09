@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndic
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AntDesign } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { colors } from '../../../../constants/colors';
@@ -50,11 +51,13 @@ export default function SearchCommunity() {
   // Helper functions for bottom sheets
   const openFilterSheet = () => {
     Keyboard.dismiss();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     filterBottomSheetRef.current?.expand();
   };
   
   const openSortSheet = () => {
     Keyboard.dismiss();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     sortBottomSheetRef.current?.expand();
   };
   

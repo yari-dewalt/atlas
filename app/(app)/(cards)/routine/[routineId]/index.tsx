@@ -56,6 +56,7 @@ export default function RoutineDetail() {
     // Expose function to open options modal globally
     (global as any).openRoutineOptions = () => {
       setOptionsModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       optionsBottomSheetRef.current?.expand();
     };
 

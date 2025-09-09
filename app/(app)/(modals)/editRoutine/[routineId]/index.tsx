@@ -805,6 +805,7 @@ export default function EditRoutine() {
       }
     }, 100);
     
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     rpeBottomSheetRef.current?.snapToIndex(0);
   };
 
@@ -818,6 +819,7 @@ export default function EditRoutine() {
       // Reset the flag and reopen the set edit bottom sheet after a short delay
       setTimeout(() => {
         setIsGoingToRpe(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setEditBottomSheetRef.current?.expand();
       }, 100);
     }
@@ -827,6 +829,7 @@ export default function EditRoutine() {
   const showExerciseOptions = (exercise: Exercise) => {
     setSelectedExerciseForOptions(exercise);
     setExerciseOptionsModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     exerciseOptionsBottomSheetRef.current?.expand();
   };
 
@@ -834,6 +837,7 @@ export default function EditRoutine() {
     exerciseOptionsBottomSheetRef.current?.close();
     setTimeout(() => {
       setReorderModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       reorderBottomSheetRef.current?.expand();
     }, 200);
   };
@@ -1074,6 +1078,7 @@ export default function EditRoutine() {
                       onPress={() => {
                         // Open rep selection for the entire exercise
                         setSelectedSetForReps({ exerciseId: item.id, setId: 'exercise-level' });
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         repSelectionBottomSheetRef.current?.snapToIndex(0);
                       }}
                     >
@@ -1179,6 +1184,7 @@ export default function EditRoutine() {
                             onPress={() => {
                               closeAllSwipeables();
                               setSelectedSetForEdit({ exerciseId: item.id, setId: set.id });
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               setEditBottomSheetRef.current?.snapToIndex(0);
                             }}
                           >
@@ -1479,6 +1485,7 @@ export default function EditRoutine() {
                 // If we came from set edit modal, return to it
                 if (selectedSetForEdit) {
                   setTimeout(() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setEditBottomSheetRef.current?.snapToIndex(0);
                   }, 200);
                 }
@@ -1507,6 +1514,7 @@ export default function EditRoutine() {
                 // If we came from set edit modal, return to it
                 if (selectedSetForEdit) {
                   setTimeout(() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setEditBottomSheetRef.current?.snapToIndex(0);
                   }, 200);
                 }
