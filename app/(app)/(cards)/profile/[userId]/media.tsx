@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   },
   viewModeToggle: {
     flexDirection: 'row',
-    backgroundColor: colors.primaryAccent,
+    backgroundColor: colors.background,
     overflow: 'hidden',
   },
   toggleButton: {
@@ -749,8 +749,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primaryAccent,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.whiteOverlay,
   },
   activeToggleButton: {
     borderBottomColor: colors.brand,
