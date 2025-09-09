@@ -2423,10 +2423,10 @@ const handleTimerCompletion = async () => {
                     <View style={styles.primaryControlsRow}>
                       {!stopwatchActive && stopwatchTime > 0 ? (
                         // Show both Reset and Start buttons when stopwatch is stopped and has time
-                        <>
+                        <View style={{ marginTop: 62 , flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 10 }}>
                           <TouchableOpacity
                 activeOpacity={0.5} 
-                            style={[styles.primaryControlButton, styles.resetButton, styles.halfWidthButton]}
+                            style={[styles.primaryControlButton, styles.resetButton, styles.halfWidthButton, { minWidth: '0%'}]}
                             onPress={resetStopwatch}
                           >
                             <Text style={styles.resetButtonText}>Reset</Text>
@@ -2434,17 +2434,17 @@ const handleTimerCompletion = async () => {
                           
                           <TouchableOpacity
                 activeOpacity={0.5} 
-                            style={[styles.primaryControlButton, styles.startButton, styles.halfWidthButton]}
+                            style={[styles.primaryControlButton, styles.startButton, styles.halfWidthButton, { minWidth: '0%'}]}
                             onPress={startStopwatch}
                           >
                             <Text style={styles.startButtonText}>Start</Text>
                           </TouchableOpacity>
-                        </>
+                        </View>
                       ) : (
                         // Show only Start/Stop button when stopwatch is running or at zero
                         <TouchableOpacity
                 activeOpacity={0.5} 
-                          style={[styles.primaryControlButton, styles.startButton, styles.fullWidthButton]}
+                          style={[styles.primaryControlButton, styles.startButton, styles.fullWidthButton, { marginTop: 63 }]}
                           onPress={() => {
                             stopwatchActive ? pauseStopwatch() : startStopwatch();
                           }}
@@ -3665,6 +3665,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   timerControls: {
+    marginTop: 40,
     width: '100%',
     alignItems: 'center',
   },
@@ -3693,13 +3694,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryControlButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    minWidth: 100,
+    minWidth: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    maxWidth: 120,
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   startButton: {
     backgroundColor: colors.brand,
