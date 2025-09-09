@@ -13,7 +13,7 @@ export default {
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff"
+      backgroundColor: "#000000ff"
     },
     ios: {
       bundleIdentifier: "com.atlasfitness.atlas",
@@ -29,7 +29,7 @@ export default {
     },
     android: {
       package: "com.atlasfitness.atlas",
-      versionCode: 2,
+      versionCode: 4,
       icon: "./assets/android-icon.png",
       adaptiveIcon: {
         foregroundImage: "./assets/android-icon.png",
