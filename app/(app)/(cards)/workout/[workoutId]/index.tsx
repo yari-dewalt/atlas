@@ -663,7 +663,7 @@ export default function WorkoutDetailScreen() {
                 <Text style={styles.userText}>
                   <Text style={styles.completedByText}>Completed by </Text>
                   <Text style={styles.usernameText}>
-                    {user.full_name || user.username}
+                    {user.username}
                   </Text>
                 </Text>
                 <Text style={styles.workoutDate}>
@@ -672,14 +672,6 @@ export default function WorkoutDetailScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Notes */}
-        {workout.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.sectionTitle}>Notes</Text>
-            <Text style={styles.notesText}>{workout.notes}</Text>
           </View>
         )}
 
