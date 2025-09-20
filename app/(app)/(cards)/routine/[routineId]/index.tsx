@@ -15,6 +15,7 @@ import CachedAvatar from '../../../../../components/CachedAvatar';
 import RoutineDetailSkeleton from '../../../../../components/RoutineDetailSkeleton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { Ionicons as IonIcon } from '@expo/vector-icons';
 
 export default function RoutineDetail() {
   const [routine, setRoutine] = useState<any>(null);
@@ -915,11 +916,11 @@ export default function RoutineDetail() {
                   style={styles.likeButton}
                   onPress={handleLikeRoutine}
                 >
-                  <AntDesign 
-                    name={isLiked ? "like1" : "like2"} 
-                    size={20} 
-                    color={isLiked ? colors.brand : colors.secondaryText} 
-                  />
+                <IonIcon 
+                  name={isLiked ? "heart" : "heart-outline"} 
+                  size={20} 
+                  color={isLiked ? colors.notification : colors.primaryText} 
+                />
                 </TouchableOpacity>
               </View>
             )}
@@ -970,7 +971,7 @@ export default function RoutineDetail() {
               </Text>
             </View>
             <View style={styles.statisticItem}>
-              <AntDesign name="like1" size={16} color={colors.secondaryText} />
+              <IonIcon name="heart" size={16} color={colors.secondaryText} />
               <Text style={styles.statisticText}>
                 {likeCount} {likeCount === 1 ? 'like' : 'likes'}
               </Text>

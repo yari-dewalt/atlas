@@ -666,10 +666,10 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 activeOpacity={0.5} 
               onPress={toggleLiked} 
             >
-                <AntDesign 
-                  name={liked ? "like1" : "like2"} 
+                <IonIcon 
+                  name={liked ? "heart" : "heart-outline"} 
                   size={26} 
-                  color={liked ? colors.brand : colors.primaryText} 
+                  color={liked ? colors.notification : colors.primaryText} 
                 />
             </TouchableOpacity>
             <TouchableOpacity
@@ -772,10 +772,10 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 style={styles.commentLikes}
                 onPress={() => handleCommentLike(comment.id, currentLikes, isLiked)}
               >
-                <AntDesign 
-                  name={isLiked ? "like1" : "like2"}
+                <IonIcon 
+                  name={isLiked ? "heart" : "heart-outline"}
                   size={16} 
-                  color={isLiked ? colors.brand : colors.secondaryText} 
+                  color={isLiked ? "#FF6B9D" : colors.secondaryText} 
                 />
                 {currentLikes > 0 && (
                   <Text style={styles.commentLikesText}>

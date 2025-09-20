@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, FlatList, Keyboard, TouchableWithoutFeedback, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { AntDesign } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
@@ -298,7 +298,7 @@ export default function SearchCommunity() {
         <View style={styles.content}>
         <View style={styles.header}>
         <View style={[styles.searchContainer, Platform.OS === 'ios' ? { } : { paddingVertical: 2 }]}>
-          <Ionicons name="search" size={20} color={colors.secondaryText} />
+          <IonIcon name="search" size={20} color={colors.secondaryText} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search for routines..."
@@ -321,7 +321,7 @@ export default function SearchCommunity() {
                 }
               }}
             >
-              <Ionicons name="close-circle" size={20} color={colors.secondaryText} />
+              <IonIcon name="close-circle" size={20} color={colors.secondaryText} />
             </TouchableOpacity>
           )}
         </View>
@@ -335,7 +335,7 @@ export default function SearchCommunity() {
             ]} 
             onPress={openFilterSheet}
           >
-            <Ionicons name="funnel" size={16} color={filterBy !== 'all' ? colors.primaryText : colors.primaryText} />
+            <IonIcon name="funnel" size={16} color={filterBy !== 'all' ? colors.primaryText : colors.primaryText} />
             <Text style={[
               styles.controlButtonText,
               filterBy !== 'all' && styles.controlButtonTextActive
@@ -347,17 +347,17 @@ export default function SearchCommunity() {
                 <Text style={styles.filterCountText}>1</Text>
               </View>
             ) : (
-              <Ionicons name="chevron-down" size={16} color={colors.secondaryText} />
+              <IonIcon name="chevron-down" size={16} color={colors.secondaryText} />
             )}
           </TouchableOpacity>
           
           <TouchableOpacity
                 activeOpacity={0.5} style={styles.controlButton} onPress={openSortSheet}>
-            <Ionicons name="swap-vertical" size={16} color={colors.primaryText} />
+            <IonIcon name="swap-vertical" size={16} color={colors.primaryText} />
             <Text style={styles.controlButtonText}>
               {sortBy === 'recent' ? 'Recent' : sortBy === 'popular' ? 'Popular' : sortBy === 'most_saved' ? 'Most Saved' : 'Most Used'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.secondaryText} />
+            <IonIcon name="chevron-down" size={16} color={colors.secondaryText} />
           </TouchableOpacity>
         </View>
         </View>
@@ -367,7 +367,7 @@ export default function SearchCommunity() {
           {!hasSearched && searchQuery.length < 1 ? (
             // Initial state
             <View style={styles.placeholderContainer}>
-              <Ionicons name="search" size={80} color={colors.brand} />
+              <IonIcon name="search" size={80} color={colors.brand} />
               <Text style={styles.placeholderTitle}>Search Community Routines</Text>
               <View style={styles.searchTips}>
                 <Text style={styles.tipItem}>• Try exercise names like "bench press" or "squats"</Text>
@@ -399,7 +399,7 @@ export default function SearchCommunity() {
           ) : (
             // No results
             <View style={styles.noResultsContainer}>
-              <Ionicons name="search" size={60} color={colors.secondaryText} />
+              <IonIcon name="search" size={60} color={colors.secondaryText} />
               <Text style={styles.noResultsTitle}>No routines found</Text>
               <Text style={styles.noResultsText}>
                 No routines match your search for "{searchQuery}".
@@ -444,11 +444,11 @@ export default function SearchCommunity() {
                 >
                   {filterBy === 'official' && (
                     <View style={styles.filterSquareCheckmark}>
-                      <Ionicons name="checkmark" size={20} color={colors.brand} />
+                      <IonIcon name="checkmark" size={20} color={colors.brand} />
                     </View>
                   )}
                   <View style={styles.filterSquareIconContainer}>
-                    <Ionicons 
+                    <IonIcon 
                       name="shield-checkmark" 
                       size={32} 
                       color={colors.secondaryText} 
@@ -469,11 +469,11 @@ export default function SearchCommunity() {
                 >
                   {filterBy === 'community' && (
                     <View style={styles.filterSquareCheckmark}>
-                      <Ionicons name="checkmark" size={16} color={colors.brand} />
+                      <IonIcon name="checkmark" size={16} color={colors.brand} />
                     </View>
                   )}
                   <View style={styles.filterSquareIconContainer}>
-                    <Ionicons 
+                    <IonIcon 
                       name="people" 
                       size={32} 
                       color={colors.secondaryText} 
@@ -531,14 +531,14 @@ export default function SearchCommunity() {
               onPress={() => handleSortChange('recent')}
             >
               <View style={styles.bottomSheetOptionIcon}>
-                <Ionicons name="time" size={24} color={colors.primaryText} />
+                <IonIcon name="time" size={24} color={colors.primaryText} />
               </View>
               <View style={styles.bottomSheetOptionTextContainer}>
                 <Text style={styles.bottomSheetOptionTitle}>Most Recent</Text>
                 <Text style={styles.bottomSheetOptionDescription}>Show newest routines first</Text>
               </View>
               {sortBy === 'recent' && (
-                <Ionicons name="checkmark" size={20} color={colors.brand} />
+                <IonIcon name="checkmark" size={20} color={colors.brand} />
               )}
             </TouchableOpacity>
 
@@ -548,14 +548,14 @@ export default function SearchCommunity() {
               onPress={() => handleSortChange('popular')}
             >
               <View style={styles.bottomSheetOptionIcon}>
-                <AntDesign name="like1" size={24} color={colors.primaryText} />
+                <IonIcon name="heart" size={24} color={colors.primaryText} />
               </View>
               <View style={styles.bottomSheetOptionTextContainer}>
                 <Text style={styles.bottomSheetOptionTitle}>Most Popular</Text>
                 <Text style={styles.bottomSheetOptionDescription}>Show most liked routines first</Text>
               </View>
               {sortBy === 'popular' && (
-                <Ionicons name="checkmark" size={20} color={colors.brand} />
+                <IonIcon name="checkmark" size={20} color={colors.brand} />
               )}
             </TouchableOpacity>
 
@@ -565,14 +565,14 @@ export default function SearchCommunity() {
               onPress={() => handleSortChange('most_saved')}
             >
               <View style={styles.bottomSheetOptionIcon}>
-                <Ionicons name="bookmark" size={24} color={colors.primaryText} />
+                <IonIcon name="bookmark" size={24} color={colors.primaryText} />
               </View>
               <View style={styles.bottomSheetOptionTextContainer}>
                 <Text style={styles.bottomSheetOptionTitle}>Most Saved</Text>
                 <Text style={styles.bottomSheetOptionDescription}>Show most bookmarked routines first</Text>
               </View>
               {sortBy === 'most_saved' && (
-                <Ionicons name="checkmark" size={20} color={colors.brand} />
+                <IonIcon name="checkmark" size={20} color={colors.brand} />
               )}
             </TouchableOpacity>
 
@@ -582,14 +582,14 @@ export default function SearchCommunity() {
               onPress={() => handleSortChange('most_used')}
             >
               <View style={styles.bottomSheetOptionIcon}>
-                <Ionicons name="trending-up" size={24} color={colors.primaryText} />
+                <IonIcon name="trending-up" size={24} color={colors.primaryText} />
               </View>
               <View style={styles.bottomSheetOptionTextContainer}>
                 <Text style={styles.bottomSheetOptionTitle}>Most Used</Text>
                 <Text style={styles.bottomSheetOptionDescription}>Show most frequently used routines first</Text>
               </View>
               {sortBy === 'most_used' && (
-                <Ionicons name="checkmark" size={20} color={colors.brand} />
+                <IonIcon name="checkmark" size={20} color={colors.brand} />
               )}
             </TouchableOpacity>
           </View>

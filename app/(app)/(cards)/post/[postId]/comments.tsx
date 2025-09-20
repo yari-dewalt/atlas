@@ -821,10 +821,10 @@ export default function PostCommentsScreen() {
                 onPress={() => handleLikeComment(reply)}
                 disabled={likingCommentId === reply.id}
               >
-                <AntDesign 
-                  name={reply.is_liked ? "like1" : "like2"} 
+                <IonIcon 
+                  name={reply.is_liked ? "heart" : "heart-outline"} 
                   size={14} 
-                  color={reply.is_liked ? colors.brand : colors.secondaryText} 
+                  color={reply.is_liked ? colors.notification : colors.primaryText} 
                 />
                 {reply.likes_count > 0 && (
                   <Text style={styles.replyLikesText}>
@@ -921,11 +921,11 @@ export default function PostCommentsScreen() {
                 onPress={() => handleLikeComment(comment)}
                 disabled={likingCommentId === comment.id}
               >
-                  <AntDesign 
-                    name={comment.is_liked ? "like1" : "like2"} 
-                    size={14} 
-                    color={comment.is_liked ? colors.brand : colors.secondaryText} 
-                  />
+                <IonIcon 
+                  name={comment.is_liked ? "heart" : "heart-outline"} 
+                  size={14} 
+                  color={comment.is_liked ? colors.notification : colors.primaryText} 
+                />
                 {comment.likes_count > 0 && (
                   <Text style={styles.commentLikesText}>
                     {comment.likes_count}
@@ -1083,10 +1083,10 @@ export default function PostCommentsScreen() {
                       disabled={isLikeLoading}
                       style={styles.likeButton}
                     >
-                      <AntDesign 
-                        name={liked ? "like1" : "like2"} 
+                      <IonIcon 
+                        name={liked ? "heart" : "heart-outline"} 
                         size={26} 
-                        color={liked ? colors.brand : colors.primaryText} 
+                        color={liked ? colors.notification : colors.primaryText} 
                       />
                     </TouchableOpacity>
                     

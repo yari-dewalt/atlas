@@ -119,7 +119,7 @@ export default function RoutineCard({ routine, showTrendingBadge = false, onPres
           <Text style={styles.metricText}>{routine.saveCount}</Text>
         </View>
         <View style={styles.metric}>
-          <AntDesign name="like1" size={16} color={colors.secondaryText} />
+          <Ionicons name="heart" size={16} color={colors.secondaryText} />
           <Text style={styles.metricText}>{routine.likeCount}</Text>
         </View>
       </View>

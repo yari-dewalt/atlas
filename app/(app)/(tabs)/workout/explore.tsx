@@ -632,7 +632,7 @@ export default function ExploreRoutines() {
               <View style={styles.categoryRow}>
                 <TouchableOpacity
               activeOpacity={0.5} style={styles.categoryButton} onPress={handleMostLiked}>
-                  <AntDesign name="like1" size={60} color={colors.brand} />
+                  <Ionicons name="heart" size={60} color={colors.brand} />
                   <Text style={styles.categoryButtonText}>Most Liked</Text>
                 </TouchableOpacity>
                 
