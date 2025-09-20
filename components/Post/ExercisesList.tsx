@@ -96,22 +96,37 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
 
   const { supersets, standaloneExercises } = groupedExercises();
 
-  // Calculate total displayed exercises vs total exercises
+  // Calculate what to display with a max of 4 exercises total
+  const maxExercisesToShow = 4;
+  let exercisesShown = 0;
   const totalExercises = exercises.length;
-  const displayedSupersetExercises = Object.values(supersets).reduce((count, exercises) => {
-    return count + Math.min(3, exercises.length); // Max 3 exercises per superset
-  }, 0);
-  const displayedStandaloneExercises = standaloneExercises.length;
-  const totalDisplayedExercises = displayedSupersetExercises + displayedStandaloneExercises;
-  const remainingExercises = totalExercises - totalDisplayedExercises;
+
+  // Determine how many exercises from each group we can show
+  const supersetsToShow: {[key: string]: any[]} = {};
+  const supersetKeys = Object.keys(supersets);
+  
+  // First, add supersets (prioritizing them)
+  for (const supersetId of supersetKeys) {
+    if (exercisesShown >= maxExercisesToShow) break;
+    
+    const supersetExercises = supersets[supersetId];
+    const canShow = Math.min(supersetExercises.length, maxExercisesToShow - exercisesShown);
+    supersetsToShow[supersetId] = supersetExercises.slice(0, canShow);
+    exercisesShown += canShow;
+  }
+
+  // Then add standalone exercises
+  const standaloneToShow = standaloneExercises.slice(0, maxExercisesToShow - exercisesShown);
+  exercisesShown += standaloneToShow.length;
+
+  const remainingExercises = totalExercises - exercisesShown;
 
   const renderSuperset = (supersetId: string, exercises: any[], supersetIndex: number) => {
-    const displayExercises = exercises.slice(0, 3);
     const supersetColor = getSupersetColor(supersetId, supersetIndex);
     
     return (
       <View key={supersetId} style={styles.supersetContainer}>
-        {displayExercises.map((exercise, index) => (
+        {exercises.map((exercise, index) => (
           <View key={exercise.id} style={styles.supersetExercise}>
             <View style={[styles.supersetRibbon, { backgroundColor: supersetColor }]} />
             <View style={styles.supersetExerciseContent}>
@@ -144,12 +159,12 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
         
         <View style={styles.exercisesContainer}>
           {/* Render supersets */}
-          {Object.keys(supersets).map((supersetId, index) => 
-            renderSuperset(supersetId, supersets[supersetId], index)
+          {Object.keys(supersetsToShow).map((supersetId, index) => 
+            renderSuperset(supersetId, supersetsToShow[supersetId], index)
           )}
           
           {/* Render standalone exercises */}
-          {standaloneExercises.map((exercise, exIndex) => (
+          {standaloneToShow.map((exercise, exIndex) => (
             <Exercise 
               key={`exercise-${exIndex}`} 
               exerciseData={exercise}
@@ -163,7 +178,9 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
       {/* Show remaining exercises count if there are any */}
       {remainingExercises > 0 && (
         <View style={styles.remainingExercisesContainer}>
-          <Text style={styles.remainingExercisesText}>+{remainingExercises} more exercises</Text>
+          <Text style={styles.remainingExercisesText}>
+            +{remainingExercises} more {remainingExercises === 1 ? 'exercise' : 'exercises'}
+          </Text>
         </View>
       )}
       
@@ -250,6 +267,7 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     alignSelf: 'center',
     paddingVertical: 12,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
