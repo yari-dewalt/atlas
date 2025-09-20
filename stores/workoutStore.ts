@@ -136,7 +136,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         id: Date.now().toString(),
         startTime: new Date(),
         routineId,
-        name: routineName || (routineId ? "Routine Workout" : "Empty Workout"),
+        name: routineName || (routineId ? "Routine Workout" : "New Workout"),
         exercises: [],
         duration: 0,
       },

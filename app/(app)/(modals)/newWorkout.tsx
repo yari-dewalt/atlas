@@ -80,7 +80,7 @@ export default function NewWorkout() {
   const restTimerRef = useRef(null);
   const [completionAnimations, setCompletionAnimations] = useState({});
   const [completionRibbonAnimations, setCompletionRibbonAnimations] = useState({});
-  const [workoutName, setWorkoutName] = useState(activeWorkout?.name || "Empty Workout");
+  const [workoutName, setWorkoutName] = useState(activeWorkout?.name || "New Workout");
   const [timeInputModalVisible, setTimeInputModalVisible] = useState(false);
   const [manualHours, setManualHours] = useState('00');
   const [manualMinutes, setManualMinutes] = useState('00');
@@ -1119,7 +1119,7 @@ const handleTimerCompletion = async () => {
           setLoading(false);
         }
       } else if (!activeWorkout){
-        // Start an empty workout
+        // Start a new workout
         startWorkout();
       }
     };

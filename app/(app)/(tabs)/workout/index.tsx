@@ -346,7 +346,7 @@ export default function Workout() {
               styles.startEmptyText,
               navigating && styles.disabledText
             ]}>
-              Empty Workout
+              New Workout
             </Text>
           </TouchableOpacity>
         </View>
@@ -409,10 +409,10 @@ export default function Workout() {
         )}
       </View>
       
-      {/* My Routines Section - Show skeleton while loading */}
+      {/* Routines Section - Show skeleton while loading */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Routines</Text>
+          <Text style={styles.sectionTitle}>Routines</Text>
         </View>
         
         {/* Quick Action Buttons - Always visible */}
@@ -422,8 +422,8 @@ export default function Workout() {
             style={styles.quickActionButton}
             onPress={() => router.push("/editRoutine/new")}
           >
-            <IonIcon name="add-circle-outline" size={20} color={colors.primaryText} />
-            <Text style={styles.quickActionText}>Create New</Text>
+            <IonIcon name="add" size={20} color={colors.primaryText} />
+            <Text style={styles.quickActionText}>Create Routine</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -487,24 +487,19 @@ export default function Workout() {
                 <Text style={styles.emptyStateText}>
                   You haven't created any routines yet
                 </Text>
-                <TouchableOpacity
-            activeOpacity={0.5} 
-                  style={styles.emptyStateButton}
-                  onPress={() => router.push(`/profile/${session?.user.id}/routines`)}
-                >
-                  <Text style={styles.emptyStateButtonText}>View Routines</Text>
-                </TouchableOpacity>
               </View>
             )}
             
-            <TouchableOpacity
-              activeOpacity={0.5} 
-              style={styles.viewAllButton}
-              onPress={() => router.push(`/profile/${session?.user.id}/routines`)}
-            >
-              <Text style={styles.viewAllText}>View All Routines</Text>
-              <IonIcon name="chevron-forward" size={16} color={colors.brand} />
-            </TouchableOpacity>
+            {routines.length > 0 && (
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.viewAllButton}
+                onPress={() => router.push(`/profile/${session?.user.id}/routines`)}
+              >
+                <Text style={styles.viewAllText}>View All Routines</Text>
+                <IonIcon name="chevron-forward" size={16} color={colors.brand} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -573,24 +568,19 @@ export default function Workout() {
                 <Text style={styles.emptyStateText}>
                   You haven't logged any workouts yet
                 </Text>
-                <TouchableOpacity
-            activeOpacity={0.5} 
-                  style={styles.emptyStateButton}
-                  onPress={startEmptyWorkout}
-                >
-                  <Text style={styles.emptyStateButtonText}>Start First Workout</Text>
-                </TouchableOpacity>
               </View>
             )}
             
-            <TouchableOpacity
-              activeOpacity={0.5} 
-              style={styles.viewAllButton}
-              onPress={() => router.push(`/profile/${session?.user.id}/workouts`)}
-            >
-              <Text style={styles.viewAllText}>View All History</Text>
-              <IonIcon name="chevron-forward" size={16} color={colors.brand} />
-            </TouchableOpacity>
+            {workoutHistory.length > 0 && (
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.viewAllButton}
+                onPress={() => router.push(`/profile/${session?.user.id}/workouts`)}
+              >
+                <Text style={styles.viewAllText}>View All History</Text>
+                <IonIcon name="chevron-forward" size={16} color={colors.brand} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -768,24 +758,13 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.secondaryAccent,
+    backgroundColor: colors.primaryAccent,
     borderRadius: 12,
     marginBottom: 8,
   },
   emptyStateText: {
     textAlign: 'center',
     color: colors.secondaryText,
-    marginBottom: 12,
-  },
-  emptyStateButton: {
-    backgroundColor: colors.brand,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  emptyStateButtonText: {
-    color: colors.primaryText,
-    fontWeight: '500',
   },
   activeWorkoutContainer: {
     marginTop: 8,
