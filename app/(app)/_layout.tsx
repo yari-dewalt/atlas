@@ -54,7 +54,7 @@ const TopNavBar = () => {
   const isRoutineSpecificRoute = pathname.includes('/routine/');
   const isEditRoutineRoute = pathname.includes('/editRoutine/');
   const isRoutineMainRoute = pathname.includes('/routines') && !isRoutineSpecificRoute;
-  const isMainTab = !isProfileRoute && !isModalRoute && !isPostRoute && !isClubRoute && !isNotificationRoute && !isMessagesRoute && !isNewMessageRoute && !isConversationRoute && !isSettingsRoute && !isWorkoutMainRoute && !isWorkoutSpecificRoute && !isRoutineMainRoute && !isRoutineSpecificRoute && !isEditRoutineRoute;
+  const isMainTab = !isProfileRoute && !isModalRoute && !isPostRoute && !isClubRoute && !isNotificationRoute && !isMessagesRoute && !isNewMessageRoute && !isConversationRoute && !isSettingsRoute && !isWorkoutSpecificRoute && !isRoutineMainRoute && !isRoutineSpecificRoute && !isEditRoutineRoute;
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -238,9 +238,6 @@ const TopNavBar = () => {
     if (isClubRoute && clubId) {
       // No need to pass session here since we just need the name
       fetchClubById(clubId as string);
-      
-      // Add this console.log to verify the effect is running
-      console.log("TopNavBar fetching club:", clubId);
     }
   }, [clubId, isClubRoute]);
   
@@ -303,7 +300,7 @@ const TopNavBar = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={ Platform.OS === 'ios' ? styles.header : styles.headerAndroid }>
         {/* LEFT SIDE */}
-        {!isWorkoutMainRoute && (
+        {(
           <View style={styles.headerLeft}>
             {/* Back button for profile/modal routes */}
             {((isProfileRoute || isModalRoute || isPostRoute || isClubRoute || isNotificationRoute || isMessagesRoute || isNewMessageRoute || isConversationRoute || isSettingsRoute || isWorkoutSpecificRoute || isRoutineSpecificRoute) && !pathname.endsWith('/profile')) ? (
