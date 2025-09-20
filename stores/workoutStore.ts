@@ -107,7 +107,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     timerSound: 'bell',
     timerVolume: 0.8,
     vibrationEnabled: false,
-    autoStartTimer: false,
+    autoStartTimer: true,
     
     // Display Settings
     showElapsedTime: true,
@@ -119,7 +119,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     autoSaveEnabled: true,
     confirmSetCompletion: false,
     swipeToDelete: true,
-    quickAddSets: false,
+    quickAddSets: true,
     rpeEnabled: true,
     
     // Units
