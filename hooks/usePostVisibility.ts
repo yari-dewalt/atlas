@@ -35,9 +35,9 @@ export const usePostVisibility = ({ threshold = 0.5 }: UsePostVisibilityProps = 
     const screenHeight = Dimensions.get('window').height;
     
     // Calculate current position based on scroll
-    const elementTop = initialPositionRef.current.y - currentScrollY;
-    const elementBottom = elementTop + initialPositionRef.current.height;
-    
+    const elementTop = initialPositionRef.current.y - currentScrollY + 320;
+    const elementBottom = elementTop + initialPositionRef.current.height - 80;
+
     // Calculate how much of the element is visible
     const visibleTop = Math.max(0, elementTop);
     const visibleBottom = Math.min(screenHeight, elementBottom);
