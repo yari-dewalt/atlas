@@ -282,7 +282,9 @@ export async function fetchPostById(postId: string, userId?: string) {
       .from('posts')
       .select(`
         id,
+        title,
         description,
+        workout_id,
         created_at,
         likes_count,
         user_id,
@@ -304,6 +306,8 @@ export async function fetchPostById(postId: string, userId?: string) {
     // Format the post data
     return {
       id: data.id,
+      title: data.title,
+      workout_id: data.workout_id,
       user: {
         id: data.profiles.id,
         username: data.profiles.username,

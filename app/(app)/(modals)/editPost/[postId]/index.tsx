@@ -109,12 +109,86 @@ export default function EditPost() {
         }
         
         setPost(postData);
-        setPostTitle((postData as any).title || '');
+        setPostTitle(postData.title || '');
         setDescription(postData.text || '');
         setMedia(postData.media || []);
-        // If the post has a workout attached, set it
-        if ((postData as any).workout_id) {
-          // We could fetch the workout details here if needed
+        
+        // If the post has a workout attached, fetch and set it
+        if (postData.workout_id) {
+          try {
+            const { data: workoutData, error: workoutError } = await supabase
+              .from('workouts')
+              .select(`
+                id,
+                name,
+                start_time,
+                end_time,
+                notes,
+                routine_id,
+                routines(
+                  id,
+                  name
+                ),
+                workout_exercises(
+                  id,
+                  name,
+                  exercise_id,
+                  superset_id,
+                  exercises(
+                    id,
+                    name,
+                    image_url
+                  ),
+                  workout_sets(
+                    id,
+                    weight,
+                    reps,
+                    is_completed
+                  )
+                )
+              `)
+              .eq('id', postData.workout_id)
+              .single();
+            
+            if (workoutError) {
+              console.error('Error fetching workout:', workoutError);
+            } else if (workoutData) {
+              // Process the workout data similar to fetchRecentWorkouts
+              let totalVolume = 0;
+              const exercises = workoutData.workout_exercises || [];
+              
+              exercises.forEach(exercise => {
+                const sets = exercise.workout_sets || [];
+                sets.forEach(set => {
+                  if (set.weight && set.reps) {
+                    totalVolume += set.weight * set.reps;
+                  }
+                });
+              });
+
+              // Calculate duration in minutes
+              let duration = 0;
+              if (workoutData.start_time && workoutData.end_time) {
+                const startTime = new Date(workoutData.start_time);
+                const endTime = new Date(workoutData.end_time);
+                duration = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+              }
+              
+              const processedWorkout = {
+                ...workoutData,
+                duration: duration,
+                displayDate: formatWorkoutDate(workoutData.start_time),
+                exerciseCount: workoutData.workout_exercises?.length || 0,
+                totalSets: workoutData.workout_exercises?.reduce((acc, ex) => 
+                  acc + (ex.workout_sets?.length || 0), 0) || 0,
+                totalVolume: Math.round(totalVolume)
+              };
+              
+              setSelectedWorkout(processedWorkout);
+            }
+          } catch (workoutErr) {
+            console.error('Error loading workout for post:', workoutErr);
+          }
         }
       } catch (err) {
         console.error('Error loading post for editing:', err);
