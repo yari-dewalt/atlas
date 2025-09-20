@@ -2858,7 +2858,16 @@ const handleTimerCompletion = async () => {
                   }
                 }}
                 renderItem={({ item, index }) => (
-                  <View style={styles.rpeScrollItem}>
+                  <TouchableOpacity 
+                    activeOpacity={0.5}
+                    style={styles.rpeScrollItem}
+                    onPress={() => {
+                      rpeFlatListRef.current?.scrollToIndex({ 
+                        index, 
+                        animated: true 
+                      });
+                    }}
+                  >
                     <View style={[
                       styles.rpeNumberContainer,
                       index === currentRpeIndex ? styles.rpeNumberContainerActive : styles.rpeNumberContainerInactive
@@ -2870,7 +2879,7 @@ const handleTimerCompletion = async () => {
                         {item.value}
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 )}
               />
 

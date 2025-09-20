@@ -1732,7 +1732,16 @@ export default function EditRoutine() {
                 }
               }}
               renderItem={({ item, index }) => (
-                <View style={styles.rpeScrollItem}>
+                <TouchableOpacity 
+                  activeOpacity={0.5}
+                  style={styles.rpeScrollItem}
+                  onPress={() => {
+                    rpeFlatListRef.current?.scrollToIndex({ 
+                      index, 
+                      animated: true 
+                    });
+                  }}
+                >
                   <View style={[
                     styles.rpeNumberContainer,
                     index === currentRpeIndex ? styles.rpeNumberContainerActive : styles.rpeNumberContainerInactive
@@ -1744,7 +1753,7 @@ export default function EditRoutine() {
                       {item.value}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
             />
 
