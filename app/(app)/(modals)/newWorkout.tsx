@@ -2938,6 +2938,11 @@ const handleTimerCompletion = async () => {
                   value={tempWeight}
                   onChangeText={(text) => {
                     setTempWeight(text);
+                    // Update immediately as user types
+                    if (editingExerciseIndex !== null && editingSetIndex !== null) {
+                      const weightValue = text === '' ? null : parseFloat(text);
+                      updateSetValue(editingExerciseIndex, editingSetIndex, 'weight', isNaN(weightValue) ? null : weightValue);
+                    }
                   }}
                   onEndEditing={() => {
                     // Auto-save when user finishes editing
@@ -2956,6 +2961,11 @@ const handleTimerCompletion = async () => {
                   value={tempReps}
                   onChangeText={(text) => {
                     setTempReps(text);
+                    // Update immediately as user types
+                    if (editingExerciseIndex !== null && editingSetIndex !== null) {
+                      const repsValue = text === '' ? null : parseInt(text);
+                      updateSetValue(editingExerciseIndex, editingSetIndex, 'reps', isNaN(repsValue) ? null : repsValue);
+                    }
                   }}
                   onEndEditing={() => {
                     // Auto-save when user finishes editing
