@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { ActivityIndicator, View, Text, Animated, StyleSheet, Image } from 'react-native';
+import { ActivityIndicator, View, Text, Animated, StyleSheet, Image, Platform } from 'react-native';
 import { useAuthStore } from '../stores/authStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -9,6 +9,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { colors } from '../constants/colors';
 import { StatusBar } from 'react-native';
+import { Audio } from 'expo-av';
 
 // Root layout component
 export default function RootLayout() {
@@ -38,6 +39,10 @@ export default function RootLayout() {
       .catch(error => {
         console.error('Failed to lock screen orientation:', error);
       });
+
+    if (Platform.OS === 'ios') {
+      Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+    }
 
     // Setup auth state listener
     const initializeAuth = async () => {
