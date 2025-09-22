@@ -23,6 +23,7 @@ export default function FollowingScreen() {
   const [following, setFollowing] = useState<Following[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const { session } = useAuthStore();
   const currentUserId = session?.user?.id;
   
@@ -37,7 +38,30 @@ export default function FollowingScreen() {
   
   useEffect(() => {
     fetchFollowing();
+    fetchFollowingRelationships();
   }, [userId]);
+
+  // Fetch who's following us to show "Follow back" button
+  const fetchFollowingRelationships = async () => {
+    if (!currentUserId) return;
+
+    try {
+      // Get users who are following us
+      const { data: followersData, error: followersError } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', currentUserId);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+      } else {
+        const followersSet = new Set(followersData.map(f => f.follower_id));
+        setFollowingBackUsers(followersSet);
+      }
+    } catch (error) {
+      console.error('Error fetching follow relationships:', error);
+    }
+  };
   
   async function fetchFollowing() {
     try {
@@ -217,7 +241,8 @@ export default function FollowingScreen() {
                   styles.followButtonText,
                   item.is_following && styles.followingButtonText
                 ]}>
-                  {item.is_following ? 'Following' : 'Follow'}
+                  {item.is_following ? 'Following' : 
+                   (followingBackUsers.has(item.id) ? 'Follow Back' : 'Follow')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -294,7 +319,7 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
   },
   followButton: {
-    width: 100,
+    width: 120,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,

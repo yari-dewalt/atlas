@@ -38,6 +38,8 @@ export default function Explore() {
   
   // Follow button states for each user
   const [followButtonStates, setFollowButtonStates] = useState({});
+  const [followingUsers, setFollowingUsers] = useState(new Set());
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   
   // Search bar sliding animation
   const searchBarTranslateY = useRef(new Animated.Value(0)).current;
@@ -185,10 +187,46 @@ export default function Explore() {
     if (session?.user?.id) {
       loadRecentSearches();
       loadSuggestedUsers();
+      fetchFollowingRelationships();
       setHasMorePosts(true); // Reset pagination state
       fetchTrendingPosts(false); // Start fresh
     }
   }, [session?.user?.id]);
+
+  // Fetch who we're following and who's following us
+  const fetchFollowingRelationships = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      // Get users we're following
+      const { data: followingData, error: followingError } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', session.user.id);
+
+      if (followingError) {
+        console.error('Error fetching following:', followingError);
+      } else {
+        const followingSet = new Set(followingData.map(f => f.following_id));
+        setFollowingUsers(followingSet);
+      }
+
+      // Get users who are following us
+      const { data: followersData, error: followersError } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', session.user.id);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+      } else {
+        const followersSet = new Set(followersData.map(f => f.follower_id));
+        setFollowingBackUsers(followersSet);
+      }
+    } catch (error) {
+      console.error('Error fetching follow relationships:', error);
+    }
+  };
   
   // Handle loading more posts when reaching the end
   const handleLoadMore = useCallback(() => {
@@ -205,6 +243,7 @@ export default function Explore() {
     setHasMorePosts(true); // Reset pagination state
     await Promise.all([
       loadSuggestedUsers(),
+      fetchFollowingRelationships(),
       fetchTrendingPosts(false) // Reset posts
     ]);
     setRefreshing(false);
@@ -680,7 +719,8 @@ export default function Explore() {
             styles.userCardFollowText,
             buttonState === 'following' && styles.followingButtonText
           ]}>
-            {buttonState === 'follow' ? 'Follow' : 'Following'}
+            {buttonState === 'following' ? 'Following' : 
+             (followingBackUsers.has(user.id) ? 'Follow Back' : 'Follow')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -1055,7 +1095,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     marginTop: 0,
-    width: '90%',
+    width: '94%',
     alignItems: 'center',
   },
   userCardFollowText: {

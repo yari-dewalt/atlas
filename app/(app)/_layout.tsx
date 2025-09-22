@@ -24,6 +24,7 @@ const TopNavBar = () => {
   const [followButtonState, setFollowButtonState] = useState<'follow' | 'following' | 'hidden'>('follow');
   const [isFollowAnimating, setIsFollowAnimating] = useState(false);
   const [supportHasText, setSupportHasText] = useState(false);
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
   // Edit Profile Store
@@ -59,8 +60,34 @@ const TopNavBar = () => {
   useEffect(() => {
     if (session?.user?.id) {
       fetchNotifications();
+      fetchFollowingRelationships();
     }
   }, [session?.user?.id]);
+
+  // Fetch who's following us to show "Follow back" button
+  const fetchFollowingRelationships = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      // Import supabase dynamically to avoid import issues
+      const { supabase } = await import('../../lib/supabase');
+      
+      // Get users who are following us
+      const { data: followersData, error: followersError } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', session.user.id);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+      } else {
+        const followersSet = new Set(followersData.map(f => f.follower_id));
+        setFollowingBackUsers(followersSet);
+      }
+    } catch (error) {
+      console.error('Error fetching follow relationships:', error);
+    }
+  };
 
   // Check support text state periodically when on support routes
   useEffect(() => {
@@ -459,7 +486,8 @@ const TopNavBar = () => {
                   styles.followButtonText,
                   followButtonState === 'following' && styles.followingButtonText
                 ]}>
-                  {followButtonState === 'follow' ? 'Follow' : 'Following'}
+                  {followButtonState === 'following' ? 'Following' : 
+                   (followingBackUsers.has(userId) ? 'Follow Back' : 'Follow')}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -696,11 +724,13 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   followButton: {
+    width: 120,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 10,
     marginRight: 8,
+    alignItems: 'center',
   },
   followingButton: {
     backgroundColor: colors.secondaryAccent,

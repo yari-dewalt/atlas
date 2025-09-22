@@ -90,6 +90,7 @@ export default function ProfileScreen() {
     fetchProfile,
     updateCurrentProfile
   } = useProfileStore();
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const router = useRouter();
 
   // Get user's preferred weight unit
@@ -104,8 +105,33 @@ export default function ProfileScreen() {
       fetchRoutines(currentProfile.id);
       fetchActivityData(currentProfile.id);
       fetchRecentMedia(currentProfile.id);
+      fetchFollowingRelationships();
     }
   }, [currentProfile?.id]);
+
+  // Fetch who's following us to show "Follow back" button
+  const fetchFollowingRelationships = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      // Get users who are following us
+      const { data: followersData, error: followersError } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', session.user.id);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+      } else {
+        const followersSet = new Set(followersData.map(f => f.follower_id));
+        setFollowingBackUsers(followersSet);
+      }
+    } catch (error) {
+      console.error('Error fetching follow relationships:', error);
+    }
+  };
+
+
 
   // Refresh profile data when screen comes into focus (e.g., after deleting a routine or post)
   useFocusEffect(
@@ -1381,7 +1407,8 @@ export default function ProfileScreen() {
                 onPress={handleFollowAction}
               >
                 <Text style={styles.buttonText}>
-                  {currentProfile?.is_following ? 'Following' : 'Follow'}
+                  {currentProfile?.is_following ? 'Following' : 
+                   (followingBackUsers.has(currentProfile?.id) ? 'Follow Back' : 'Follow')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1846,7 +1873,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   followButton: {
-    width: 100,
+    width: 120,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,

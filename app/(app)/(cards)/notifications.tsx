@@ -53,14 +53,51 @@ export default function NotificationsScreen() {
   const undoToastAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
   const [followingUsers, setFollowingUsers] = useState(new Set());
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const [loadingImages, setLoadingImages] = useState(new Set());
   
-  // Fetch notifications on mount
+  // Fetch notifications and following relationships on mount
   useEffect(() => {
     if (session?.user?.id) {
       //fetchNotifications();
+      fetchFollowingRelationships();
     }
   }, [session?.user?.id]);
+
+  // Fetch who we're following and who's following us
+  const fetchFollowingRelationships = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      // Get users we're following
+      const { data: followingData, error: followingError } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', session.user.id);
+
+      if (followingError) {
+        console.error('Error fetching following:', followingError);
+      } else {
+        const followingSet = new Set(followingData.map(f => f.following_id));
+        setFollowingUsers(followingSet);
+      }
+
+      // Get users who are following us
+      const { data: followersData, error: followersError } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', session.user.id);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+      } else {
+        const followersSet = new Set(followersData.map(f => f.follower_id));
+        setFollowingBackUsers(followersSet);
+      }
+    } catch (error) {
+      console.error('Error fetching follow relationships:', error);
+    }
+  };
 
   // Mark all notifications as read when navigating away from screen
   useFocusEffect(
@@ -80,7 +117,10 @@ export default function NotificationsScreen() {
   // Handle pull-to-refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchNotifications();
+    await Promise.all([
+      fetchNotifications(),
+      fetchFollowingRelationships()
+    ]);
     setRefreshing(false);
   }, []);
   
@@ -375,8 +415,17 @@ export default function NotificationsScreen() {
       case 'follow':
         const isOwnProfile = session?.user?.id === notification.actor_id;
         const isFollowing = followingUsers.has(notification.actor_id);
+        const isFollowingBack = followingBackUsers.has(notification.actor_id);
         
         if (isOwnProfile) return null;
+        
+        // Determine button text
+        let buttonText = 'Follow';
+        if (isFollowing) {
+          buttonText = 'Following';
+        } else if (isFollowingBack) {
+          buttonText = 'Follow Back';
+        }
         
         return (
           <TouchableOpacity
@@ -394,7 +443,7 @@ export default function NotificationsScreen() {
               styles.followButtonText,
               isFollowing && styles.followingButtonText
             ]}>
-              {isFollowing ? 'Following' : 'Follow'}
+              {buttonText}
             </Text>
           </TouchableOpacity>
         );
@@ -938,7 +987,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   followButton: {
-    width: 100,
+    width: 120,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,

@@ -18,6 +18,7 @@ export default function PostLikesScreen() {
   const [filteredLikes, setFilteredLikes] = useState([]);
   const [error, setError] = useState(null);
   const [followingUsers, setFollowingUsers] = useState(new Set());
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const [searchQuery, setSearchQuery] = useState('');
   
   const { session } = useAuthStore();
@@ -71,6 +72,17 @@ export default function PostLikesScreen() {
             const followingSet = new Set(followData.map(f => f.following_id));
             setFollowingUsers(followingSet);
           }
+        }
+
+        // Get users who are following us for "Follow back" functionality
+        const { data: followersData, error: followersError } = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', session.user.id);
+
+        if (!followersError && followersData) {
+          const followersSet = new Set(followersData.map(f => f.follower_id));
+          setFollowingBackUsers(followersSet);
         }
       }
     } catch (err) {
@@ -179,7 +191,8 @@ export default function PostLikesScreen() {
               styles.followButtonText,
               isFollowing && styles.followingButtonText
             ]}>
-              {isFollowing ? 'Following' : 'Follow'}
+              {isFollowing ? 'Following' : 
+               (followingBackUsers.has(item.profiles.id) ? 'Follow Back' : 'Follow')}
             </Text>
           </TouchableOpacity>
         )}
@@ -334,7 +347,7 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
   },
   followButton: {
-    width: 100,
+    width: 120,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,
