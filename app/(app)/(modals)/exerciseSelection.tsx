@@ -554,14 +554,14 @@ export default function ExerciseSelection() {
     Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setMuscleGroupModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    muscleGroupBottomSheetRef.current?.expand();
+    muscleGroupBottomSheetRef.current?.snapToIndex(0);
   };
 
   const openEquipmentSelection = () => {
     Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setEquipmentModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    equipmentBottomSheetRef.current?.expand();
+    equipmentBottomSheetRef.current?.snapToIndex(0);
   };
 
   // Check if any filters are applied
@@ -919,6 +919,10 @@ export default function ExerciseSelection() {
             renderSectionHeader={renderSectionHeader}
             contentContainerStyle={contentContainerStyle}
             stickySectionHeadersEnabled={false}
+            keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={() => {
+              Keyboard.dismiss();
+            }}
             ListEmptyComponent={
               searchQuery ? (
                 <View style={styles.searchEmptyContainer}>
