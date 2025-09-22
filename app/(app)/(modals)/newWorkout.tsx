@@ -1233,7 +1233,7 @@ const handleTimerCompletion = async () => {
     if (!hasValidWorkout) {
       Alert.alert(
         "No Valid Sets Found",
-        "You must complete at least one set in at least one exercise to finish your workout.",
+        "You must complete at least one set in at least one exercise to finish your workout. Enter weight and reps (greater than 0) for at least one set, then mark it as complete.",
         [
           {
             text: "OK",
@@ -1807,12 +1807,10 @@ const handleTimerCompletion = async () => {
   const repsErrorFlash = errorFlashAnimations[repsErrorKey] || new Animated.Value(0);
   const rpeErrorFlash = errorFlashAnimations[rpeErrorKey] || new Animated.Value(0);
   
-  // Validation: check if required fields are filled
-  const hasWeight = set.weight !== null && set.weight !== undefined && set.weight !== 0;
-  const hasReps = set.reps !== null && set.reps !== undefined && set.reps !== 0;
-  const isValid = hasWeight && hasReps;
-  
-  // Ensure we have animation objects for this set
+              // Validation: check if required fields are filled
+              const hasWeight = set.weight !== null && set.weight !== undefined;
+              const hasReps = set.reps !== null && set.reps !== undefined && set.reps > 0;
+              const isValid = hasWeight && hasReps;  // Ensure we have animation objects for this set
   if (!completionAnimations[setKey]) {
     setCompletionAnimations(prev => ({...prev, [setKey]: animation}));
   }
@@ -2020,9 +2018,9 @@ Animated.timing(deletionAnim, {
             <Text style={[
               styles.setValueText,
               set.isCompleted && styles.completedSetText,
-              (!set.weight && !set.isCompleted) && styles.placeholderSetText
+              (set.weight === null || set.weight === undefined) && !set.isCompleted && styles.placeholderSetText
             ]}>
-              {set.weight !== null && set.weight !== undefined && set.weight !== 0 ? `${String(set.weight)} ${userWeightUnit}` : "-"}
+              {set.weight !== null && set.weight !== undefined ? `${String(set.weight)} ${userWeightUnit}` : "-"}
             </Text>
           </View>
 
@@ -2082,8 +2080,8 @@ Animated.timing(deletionAnim, {
               closeAllSwipeables();
               
               // Validation: check if required fields are filled
-              const hasWeight = set.weight !== null && set.weight !== undefined && set.weight !== 0;
-              const hasReps = set.reps !== null && set.reps !== undefined && set.reps !== 0;
+              const hasWeight = set.weight !== null && set.weight !== undefined;
+              const hasReps = set.reps !== null && set.reps !== undefined && set.reps > 0;
               const isValid = hasWeight && hasReps;
               
               if (!isValid && !set.isCompleted) {
@@ -3247,11 +3245,14 @@ Animated.timing(deletionAnim, {
                   style={styles.setEditInputHorizontal}
                   value={tempReps}
                   onChangeText={(text) => {
-                    setTempReps(text);
-                    // Update immediately as user types
-                    if (editingExerciseIndex !== null && editingSetIndex !== null) {
-                      const repsValue = text === '' ? null : parseInt(text);
-                      updateSetValue(editingExerciseIndex, editingSetIndex, 'reps', isNaN(repsValue) ? null : repsValue);
+                    // Only allow integers and prevent decimals
+                    const repsValue = text === '' ? null : parseInt(text);
+                    if (text === '' || (!isNaN(repsValue!) && repsValue! >= 1 && text === repsValue!.toString())) {
+                      setTempReps(text);
+                      // Update immediately as user types
+                      if (editingExerciseIndex !== null && editingSetIndex !== null) {
+                        updateSetValue(editingExerciseIndex, editingSetIndex, 'reps', repsValue);
+                      }
                     }
                   }}
                   onEndEditing={() => {

@@ -452,7 +452,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
               
             const newSet: WorkoutSet = {
               id: setId,
-              weight: setData.weight !== undefined ? setData.weight : (lastSet?.weight || null),
+              weight: setData.weight !== undefined ? setData.weight : (lastSet ? lastSet.weight : null),
               reps: setData.reps !== undefined ? setData.reps : (lastSet?.reps || null),
               rpe: setData.rpe !== undefined ? setData.rpe : (lastSet?.rpe || null),
               isCompleted: setData.isCompleted || false

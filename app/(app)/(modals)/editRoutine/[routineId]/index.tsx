@@ -345,7 +345,7 @@ export default function EditRoutine() {
         // Create new set based on exercise's rep mode, only using previous set values (no defaults)
         const newSet: ExerciseSet = {
           id: `${exerciseId}-${Date.now()}-${exercise.sets.length}`,
-          weight: previousSet?.weight || null,
+          weight: previousSet ? previousSet.weight : null,
           reps: exercise.repMode === 'single' ? (previousSet?.reps || null) : null,
           repsMin: exercise.repMode === 'range' ? (previousSet?.repsMin || null) : null,
           repsMax: exercise.repMode === 'range' ? (previousSet?.repsMax || null) : null,
@@ -1239,9 +1239,9 @@ export default function EditRoutine() {
                                 <View style={styles.setInputContainer}>
                                   <Text style={[
                                     styles.setDisplayText,
-                                    (!set.weight) && styles.placeholderSetText
+                                    (set.weight === null || set.weight === undefined) && styles.placeholderSetText
                                   ]}>
-                                    {set.weight !== null && set.weight !== undefined && set.weight !== 0 ? `${String(set.weight)} ${weightUnit}` : "-"}
+                                    {set.weight !== null && set.weight !== undefined ? `${String(set.weight)} ${weightUnit}` : "-"}
                                   </Text>
                                 </View>
                                 
