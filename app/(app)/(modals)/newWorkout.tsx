@@ -1198,7 +1198,52 @@ const handleTimerCompletion = async () => {
     };
   }, [routineId]);
   
+  // Helper function to check if workout meets minimum requirements
+  const isWorkoutValid = () => {
+    if (!activeWorkout?.exercises || activeWorkout.exercises.length === 0) {
+      return false;
+    }
+    
+    return activeWorkout.exercises.some(exercise => 
+      exercise.sets && exercise.sets.length > 0 && exercise.sets.some(set => set.isCompleted)
+    );
+  };
+
   const handleSaveWorkout = () => {
+    // First, check if we have any exercises at all
+    if (!activeWorkout?.exercises || activeWorkout.exercises.length === 0) {
+      Alert.alert(
+        "No Exercises Added",
+        "You must add at least one exercise to finish your workout.",
+        [
+          {
+            text: "OK",
+            style: "default"
+          }
+        ]
+      );
+      return;
+    }
+
+    // Check if we have at least one exercise with at least one valid (completed) set
+    const hasValidWorkout = activeWorkout.exercises.some(exercise => 
+      exercise.sets && exercise.sets.length > 0 && exercise.sets.some(set => set.isCompleted)
+    );
+
+    if (!hasValidWorkout) {
+      Alert.alert(
+        "No Valid Sets Found",
+        "You must complete at least one set in at least one exercise to finish your workout.",
+        [
+          {
+            text: "OK",
+            style: "default"
+          }
+        ]
+      );
+      return;
+    }
+
     // Check for exercises with no sets and uncompleted sets
     let uncompletedSetsCount = 0;
     let exercisesWithUncompletedSets = [];
@@ -1413,14 +1458,22 @@ const handleTimerCompletion = async () => {
       <IonIcon name="timer-outline" size={26} color={colors.primaryText} />
     </TouchableOpacity>
     <TouchableOpacity
-                activeOpacity={0.5} 
+      activeOpacity={0.5} 
       onPress={() => {
         closeAllSwipeables();
         handleSaveWorkout();
       }} 
-      style={styles.finishButton}
+      style={[
+        styles.finishButton,
+        !isWorkoutValid() && styles.finishButtonDisabled
+      ]}
     >
-      <Text style={styles.finishButtonText}>Finish</Text>
+      <Text style={[
+        styles.finishButtonText,
+        !isWorkoutValid() && styles.finishButtonTextDisabled
+      ]}>
+        Finish
+      </Text>
     </TouchableOpacity>
   </View>
 </View>
@@ -3296,6 +3349,13 @@ const styles = StyleSheet.create({
   finishButtonText: {
     color: colors.primaryText,
     fontWeight: '600',
+  },
+  finishButtonDisabled: {
+    backgroundColor: colors.secondaryAccent,
+    opacity: 0.6,
+  },
+  finishButtonTextDisabled: {
+    color: colors.secondaryText,
   },
   timerContainer: {
     flexDirection: 'row',

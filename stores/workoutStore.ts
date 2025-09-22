@@ -260,22 +260,30 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         
         console.log('Successfully saved exercise:', exerciseData.id);
         
-        // 4. Create all sets for this exercise
+        // 4. Create all sets for this exercise (only include sets with weight AND reps)
         if (exercise.sets.length > 0) {
-          const setsToInsert = exercise.sets.map((set, index) => ({
-            exercise_id: exerciseData.id,
-            weight: set.weight ? convertWeightForStorage(set.weight, userWeightUnit, 'kg') : null,
-            reps: set.reps,
-            rpe: set.rpe,
-            is_completed: set.isCompleted,
-            order_index: index
-          }));
+          const validSets = exercise.sets.filter(set => 
+            set.weight !== null && set.weight !== undefined && set.weight !== 0 &&
+            set.reps !== null && set.reps !== undefined && set.reps !== 0 &&
+            set.isCompleted === true // Only save completed sets
+          );
           
-          const { error: setsError } = await supabase
-            .from('workout_sets')
-            .insert(setsToInsert);
-          
-          if (setsError) throw setsError;
+          if (validSets.length > 0) {
+            const setsToInsert = validSets.map((set, index) => ({
+              exercise_id: exerciseData.id,
+              weight: convertWeightForStorage(set.weight, userWeightUnit, 'kg'),
+              reps: set.reps,
+              rpe: set.rpe,
+              is_completed: set.isCompleted,
+              order_index: index
+            }));
+            
+            const { error: setsError } = await supabase
+              .from('workout_sets')
+              .insert(setsToInsert);
+            
+            if (setsError) throw setsError;
+          }
         }
       }
       
