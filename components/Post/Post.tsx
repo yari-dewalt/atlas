@@ -337,7 +337,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
               ...workout,
               duration: calculatedDuration,
               exerciseCount: exercises.length,
-              totalVolume: Math.round(totalVolume),
+              totalVolume,
               totalSets: exercises.reduce((acc, ex) => 
                 acc + (ex.workout_sets?.length || 0), 0)
             });
