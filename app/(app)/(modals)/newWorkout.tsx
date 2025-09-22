@@ -105,6 +105,7 @@ export default function NewWorkout() {
   const [supersetCounter, setSupersetCounter] = useState(0);
   const [reorderModalVisible, setReorderModalVisible] = useState(false);
   const [exercises, setExercises] = useState([]);
+  const [failedImages, setFailedImages] = useState(new Set()); // Track failed image loads
   const [restTime, setRestTime] = useState(() => {
     const defaultTime = (workoutSettings.defaultRestMinutes * 60) + workoutSettings.defaultRestSeconds;
     return defaultTime || 120; // Fallback to 2 minutes if no settings
@@ -1661,11 +1662,14 @@ const handleTimerCompletion = async () => {
   >
     <View style={styles.exerciseNameRow}>
       {/* Exercise Image */}
-      {exercise.image_url ? (
+      {exercise.image_url && !failedImages.has(exercise.id) ? (
         <Image 
           source={{ uri: exercise.image_url }}
           style={styles.exerciseImage}
           resizeMode="cover"
+          onError={() => {
+            setFailedImages(prev => new Set(prev).add(exercise.id));
+          }}
         />
       ) : (
         <View style={styles.exerciseImagePlaceholder}>
@@ -4135,7 +4139,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     marginRight: 10,
-    backgroundColor: colors.primaryText,
+    backgroundColor: colors.primaryAccent,
   },
   
   exerciseImagePlaceholder: {
