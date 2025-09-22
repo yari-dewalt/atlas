@@ -4,6 +4,8 @@ import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
 import { XIcon } from '../../../../components/icons/XIcon';
+import { ThreadsIcon } from '../../../../components/icons/ThreadsIcon';
+import { BlueskyIcon } from '../../../../components/icons/BlueskyIcon';
 
 export default function AboutScreen() {
   const router = useRouter();
@@ -104,7 +106,7 @@ export default function AboutScreen() {
             onPress={() => handleSocialPress('Threads', 'https://threads.net/@atlasfitness.app')}
           >
             <View style={styles.settingTextContainer}>
-              <Ionicons name="at" size={22} color={colors.primaryText} />
+              <ThreadsIcon size={22} color={colors.primaryText} />
               <Text style={styles.settingText}>Threads</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
@@ -116,7 +118,7 @@ export default function AboutScreen() {
             onPress={() => handleSocialPress('Bluesky', 'https://bsky.app/profile/atlasfitness.bsky.social')}
           >
             <View style={styles.settingTextContainer}>
-              <Ionicons name="cloud-outline" size={22} color={colors.primaryText} />
+              <BlueskyIcon size={22} color={colors.primaryText} />
               <Text style={styles.settingText}>Bluesky</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
