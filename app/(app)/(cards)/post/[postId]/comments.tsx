@@ -245,11 +245,61 @@ export default function PostCommentsScreen() {
   const handleAddComment = async () => {
     if (!newComment.trim() || !session?.user?.id || isSubmitting) return;
 
+    const parentId = replyingTo ? replyingTo.id : undefined;
+    const commentText = newComment.trim();
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    
+    // Create optimistic comment data
+    const optimisticComment = {
+      id: tempId,
+      text: commentText,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user_id: session.user.id,
+      post_id: postId as string,
+      parent_id: parentId,
+      likes_count: 0,
+      is_liked: false,
+      user: {
+        id: session.user.id,
+        username: profile?.username || session.user.user_metadata?.username,
+        full_name: profile?.name || session.user.user_metadata?.full_name,
+        avatar_url: profile?.avatar_url || session.user.user_metadata?.avatar_url
+      },
+      replies: []
+    };
+
+    // Immediately update UI with optimistic comment
+    if (replyingTo) {
+      // Add optimistic reply
+      setComments(prevComments => 
+        prevComments.map(comment => {
+          if (comment.id === replyingTo.id) {
+            return {
+              ...comment,
+              replies: [...(comment.replies || []), optimisticComment]
+            };
+          }
+          return comment;
+        })
+      );
+    } else {
+      // Add optimistic top-level comment
+      setComments(prevComments => [optimisticComment, ...prevComments]);
+      setCommentsCount(prev => prev + 1);
+    }
+
+    // Clear input immediately for better UX
+    Keyboard.dismiss();
     setIsSubmitting(true);
+    setNewComment('');
+    setReplying(false);
+    setReplyingTo(null);
+    setShouldAutoFocus(false);
+    setInputHeight(36); // Reset input height
+
     try {
-      const parentId = replyingTo ? replyingTo.id : undefined;
-      const commentText = newComment.trim();
-      
+      // Make the actual API call
       const newCommentData = await addComment(
         postId as string, 
         session.user.id, 
@@ -257,33 +307,49 @@ export default function PostCommentsScreen() {
         parentId
       );
       
+      // Replace optimistic comment with real data
       if (replyingTo) {
-        // Add to replies
         setComments(prevComments => 
           prevComments.map(comment => {
             if (comment.id === replyingTo.id) {
               return {
                 ...comment,
-                replies: [...(comment.replies || []), newCommentData]
+                replies: (comment.replies || []).map(reply => 
+                  reply.id === tempId ? newCommentData : reply
+                )
               };
             }
             return comment;
           })
         );
       } else {
-        // Add as a top-level comment
-        setComments(prevComments => [newCommentData, ...prevComments]);
-        setCommentsCount(prev => prev + 1);
+        setComments(prevComments => 
+          prevComments.map(comment => 
+            comment.id === tempId ? newCommentData : comment
+          )
+        );
       }
-      
-      setNewComment('');
-      setReplying(false);
-      setReplyingTo(null);
-      setShouldAutoFocus(false);
-      setInputHeight(36); // Reset input height
     } catch (error) {
       console.error('Error adding comment:', error);
       Alert.alert('Error', 'Failed to add comment');
+      
+      // Remove optimistic comment on error
+      if (replyingTo) {
+        setComments(prevComments => 
+          prevComments.map(comment => {
+            if (comment.id === replyingTo.id) {
+              return {
+                ...comment,
+                replies: (comment.replies || []).filter(reply => reply.id !== tempId)
+              };
+            }
+            return comment;
+          })
+        );
+      } else {
+        setComments(prevComments => prevComments.filter(comment => comment.id !== tempId));
+        setCommentsCount(prev => Math.max(0, prev - 1));
+      }
     } finally {
       setIsSubmitting(false);
     }
