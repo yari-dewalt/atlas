@@ -25,8 +25,9 @@ import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import * as Haptics from 'expo-haptics';
-import { SwipeRow } from 'react-native-swipe-list-view';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Animated } from 'react-native';
+import { useAnimatedStyle } from "react-native-reanimated";
 import { getUserWeightUnit } from "../../../../../utils/weightUtils";
 
 // Create a simple exercise selection interface since the main one might have complex dependencies
@@ -135,7 +136,7 @@ export default function EditRoutine() {
   const rpeFlatListRef = useRef<FlatList>(null);
 
   // Swipe and animation state
-  const swipeableRefs = useRef<{[key: string]: any}>({});
+  const swipeableRefs = useRef({});
   const [deletionAnimations, setDeletionAnimations] = useState<{[key: string]: Animated.Value}>({});
   const [pressedSets, setPressedSets] = useState<Set<string>>(new Set());
 
@@ -386,11 +387,65 @@ export default function EditRoutine() {
 
   // Function to close all swipeables
   const closeAllSwipeables = () => {
-    Object.values(swipeableRefs.current).forEach(ref => {
-      if (ref && ref.closeRow) {
-        ref.closeRow();
+    Object.keys(swipeableRefs.current).forEach(key => {
+      const ref = swipeableRefs.current[key];
+      if (key.endsWith('_swiping')) {
+        // Skip swiping state tracking keys
+        return;
+      }
+      if (ref && ref.close) {
+        ref.close();
       }
     });
+  };
+
+  // Right action function for swipeable sets
+  const rightAction = (exerciseId: number, setId: string, deletionAnim: Animated.Value, setKey: string, prog: any) => {
+    if (prog.value > 2.2) {
+      // Auto-delete on full swipe
+      Animated.timing(deletionAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => {
+        removeSet(exerciseId, setId);
+        
+        setDeletionAnimations(prev => {
+          const newAnims = { ...prev };
+          delete newAnims[setKey];
+          return newAnims;
+        });
+      });
+    }
+    return (
+      <View style={styles.hiddenItem}>
+        <TouchableOpacity
+          activeOpacity={0.5}
+          style={[styles.deleteButton, Platform.OS === 'android' && styles.deleteButtonAndroid]}
+          onPress={() => {
+            // Manual delete via button press
+            Animated.timing(deletionAnim, {
+              toValue: 0,
+              duration: 250,
+              useNativeDriver: false,
+            }).start(() => {
+              removeSet(exerciseId, setId);
+              
+              setDeletionAnimations(prev => {
+                const newAnims = { ...prev };
+                delete newAnims[setKey];
+                return newAnims;
+              });
+            });
+          }}
+        >
+          <View style={styles.centeredContainer}>
+            <Ionicons name="trash-outline" size={20} color="white" />
+            <Text style={styles.deleteText}>Delete</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   // Validation function for required fields
@@ -1070,7 +1125,7 @@ export default function EditRoutine() {
                 <View style={styles.setsSection}>
                   {/* Column Headers */}
                   <View style={styles.setColumnHeaders}>
-                    <Text style={[styles.setColumnHeader, { fontWeight: '600' }]}>SET</Text>
+                    <Text style={[styles.setColumnHeader, styles.columnHeaderBold]}>SET</Text>
                     <Text style={styles.setColumnHeader}>WEIGHT</Text>
                     <TouchableOpacity
                       activeOpacity={0.5}
@@ -1085,7 +1140,7 @@ export default function EditRoutine() {
                       <Text style={styles.setColumnHeader}>
                         REPS
                       </Text>
-                      <Ionicons style={{ marginLeft: -16, marginRight: 20 }} name="chevron-down" size={16} color={colors.secondaryText} />
+                      <Ionicons style={styles.repsHeaderIcon} name="chevron-down" size={16} color={colors.secondaryText} />
                     </TouchableOpacity>
                     <View style={styles.rpeColumnHeaderContainer}>
                       <Text style={styles.setColumnHeader}>RPE</Text>
@@ -1126,62 +1181,46 @@ export default function EditRoutine() {
                           opacity: deletionAnim,
                         }}
                       >
-                        {/* @ts-ignore */}
-                        <SwipeRow
-                          rightOpenValue={-80}
-                          disableRightSwipe={true}
-                          disableLeftSwipe={item.sets.length === 1} // Disable swipe if only one set
-                          friction={100}
-                          tension={40}
-                          directionalDistanceChangeThreshold={10}
-                          swipeToOpenPercent={30}
-                          swipeToClosePercent={30}
-                          stopLeftSwipe={-1}
-                          stopRightSwipe={-80}
-                          closeOnRowPress={true}
-                          closeOnScroll={true}
-                          onRowDidOpen={() => {
+                        <Swipeable
+                          // @ts-ignore - Swipeable ref callback type mismatch
+                          ref={(ref: any) => {
+                            if (ref) {
+                              swipeableRefs.current[swipeableKey] = ref;
+                            } else {
+                              delete swipeableRefs.current[swipeableKey];
+                            }
+                          }}
+                          enabled={item.sets.length > 1} // Disable swipe if only one set
+                          renderRightActions={(prog) => rightAction(item.id, set.id, deletionAnim, setKey, prog)}
+                          rightThreshold={60}
+                          onSwipeableOpenStartDrag={() => {
+                            // Mark this one as swiping first
+                            swipeableRefs.current[swipeableKey + '_swiping'] = true;
+                            
+                            // Close all other swipeables (excluding the current one)
                             Object.keys(swipeableRefs.current).forEach(key => {
-                              if (key !== swipeableKey && swipeableRefs.current[key]) {
-                                swipeableRefs.current[key].closeRow();
+                              const ref = swipeableRefs.current[key];
+                              if (key.endsWith('_swiping')) {
+                                // Skip swiping state tracking keys
+                                return;
+                              }
+                              if (key !== swipeableKey && ref && ref.close) {
+                                ref.close();
                               }
                             });
                           }}
-                          ref={ref => {
-                            if (ref) {
-                              swipeableRefs.current[swipeableKey] = ref;
-                            }
+                          onSwipeableWillClose={() => {
+                            swipeableRefs.current[swipeableKey + '_swiping'] = false;
                           }}
                         >
-                          {/* Hidden delete button */}
-                          <View style={styles.hiddenItem}>
-                            <TouchableOpacity
-                              activeOpacity={0.5}
-                              style={styles.deleteButton}
-                              onPress={() => {
-                                Animated.timing(deletionAnim, {
-                                  toValue: 0,
-                                  duration: 250,
-                                  useNativeDriver: false,
-                                }).start(() => {
-                                  removeSet(item.id, set.id);
-                                  setDeletionAnimations(prev => {
-                                    const newAnims = { ...prev };
-                                    delete newAnims[setKey];
-                                    return newAnims;
-                                  });
-                                });
-                              }}
-                            >
-                              <Ionicons name="trash-outline" size={20} color="white" />
-                              <Text style={styles.deleteText}>Delete</Text>
-                            </TouchableOpacity>
-                          </View>
-                          
-                          {/* Set row content */}
                           <Pressable
                             style={styles.setRow}
                             onPress={() => {
+                              // Check if we're currently swiping to prevent accidental presses
+                              if (swipeableRefs.current[swipeableKey + '_swiping']) {
+                                return;
+                              }
+                              
                               closeAllSwipeables();
                               setSelectedSetForEdit({ exerciseId: item.id, setId: set.id });
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1244,7 +1283,7 @@ export default function EditRoutine() {
                               </>
                             )}
                           </Pressable>
-                        </SwipeRow>
+                        </Swipeable>
                       </Animated.View>
                     );
                   })}
@@ -2231,9 +2270,8 @@ reorderModalFooter: {
   setColumnHeaders: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     paddingHorizontal: 4,
+    paddingVertical: 8,
     marginTop: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlay,
@@ -2266,23 +2304,24 @@ reorderModalFooter: {
 
   // SwipeRow and set styles
   hiddenItem: {
-    backgroundColor: colors.notification,
-    flex: 1,
+    width: 80,
+    flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    flexDirection: 'row',
-    borderRadius: 8,
-    marginLeft: 1,
-    marginRight: 2,
+    backgroundColor: colors.background,
+    paddingRight: 0,
   },
   deleteButton: {
     backgroundColor: colors.notification,
-    alignItems: 'center',
     justifyContent: 'center',
-    width: 80,
+    alignItems: 'flex-end',
+    width: 300,
     height: '100%',
     borderTopRightRadius: 8,
     borderBottomRightRadius: 8,
+    marginRight: 2,
+    marginLeft: 2,
+    paddingRight: 20,
   },
   deleteText: {
     color: colors.primaryText,
@@ -2294,7 +2333,7 @@ reorderModalFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlayLight,
     backgroundColor: colors.primaryAccent,
@@ -2704,6 +2743,23 @@ reorderModalFooter: {
   },
   rpeFlatListContent: {
     paddingHorizontal: 120,
+  },
+
+  // Additional inline style fixes
+  deleteButtonAndroid: {
+    bottom: 1,
+    right: 2,
+  },
+  centeredContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  columnHeaderBold: {
+    fontWeight: '600',
+  },
+  repsHeaderIcon: {
+    marginLeft: -16,
+    marginRight: 20,
   },
 
 });

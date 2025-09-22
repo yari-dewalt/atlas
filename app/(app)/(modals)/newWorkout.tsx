@@ -29,7 +29,7 @@ import { useWorkoutStore } from "../../../stores/workoutStore";
 import { getUserWeightUnit, displayWeightForUser } from "../../../utils/weightUtils";
 import ExerciseSelectionModal from "./exerciseSelection";
 import { supabase } from "../../../lib/supabase";
-import { SwipeRow } from 'react-native-swipe-list-view';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { GestureHandlerRootView, PanGestureHandler } from "react-native-gesture-handler";
 import DraggableFlatList from "react-native-draggable-flatlist";
@@ -37,6 +37,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { Audio } from 'expo-av';
+import { useAnimatedStyle } from "react-native-reanimated";
 
 export default function NewWorkout() {
   const { routineId } = useLocalSearchParams();
@@ -157,6 +158,9 @@ export default function NewWorkout() {
   // Animation refs for pulse effect
   const stopwatchPulseAnimation = useRef(new Animated.Value(1)).current;
   const floatingTimerPulseAnimation = useRef(new Animated.Value(1)).current;
+  
+  // Swipe animation control ref
+  const animationIsRunning = useRef(false);
 
   // Bottom Sheet snap points
   const supersetSnapPoints = useMemo(() => ['50%'], []);
@@ -678,9 +682,14 @@ const handleRemoveExercise = () => {
 
   // Function to close all open swipeables
   const closeAllSwipeables = () => {
-    Object.values(swipeableRefs.current).forEach(ref => {
-      if (ref && ref.closeRow) {
-        ref.closeRow();
+    Object.keys(swipeableRefs.current).forEach(key => {
+      const ref = swipeableRefs.current[key];
+      if (key.endsWith('_swiping')) {
+        // Skip swiping state tracking keys
+        return;
+      }
+      if (ref && ref.close) {
+        ref.close();
       }
     });
   };
@@ -1142,11 +1151,19 @@ const handleTimerCompletion = async () => {
   }, [routineId]);
   
   const handleSaveWorkout = () => {
-    // Check for uncompleted sets
+    // Check for exercises with no sets and uncompleted sets
     let uncompletedSetsCount = 0;
     let exercisesWithUncompletedSets = [];
+    let exercisesWithNoSets = [];
     
     activeWorkout?.exercises.forEach(exercise => {
+      // Check if exercise has no sets
+      if (!exercise.sets || exercise.sets.length === 0) {
+        exercisesWithNoSets.push(exercise.name);
+        return;
+      }
+      
+      // Check for uncompleted sets
       const uncompletedInExercise = exercise.sets.filter(set => !set.isCompleted).length;
       if (uncompletedInExercise > 0) {
         uncompletedSetsCount += uncompletedInExercise;
@@ -1156,6 +1173,32 @@ const handleTimerCompletion = async () => {
         });
       }
     });
+    
+    // Check if there are exercises with no sets
+    if (exercisesWithNoSets.length > 0) {
+      const noSetsMessage = exercisesWithNoSets
+        .map(name => `• ${name}`)
+        .join('\n');
+      
+      Alert.alert(
+        "Exercises Without Sets",
+        `The following exercise${exercisesWithNoSets.length > 1 ? 's have' : ' has'} no sets and won't be saved:\n\n${noSetsMessage}\n\nWould you like to continue finishing your workout?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Continue",
+            style: "default",
+            onPress: () => {
+              router.push('/saveWorkout');
+            }
+          }
+        ]
+      );
+      return;
+    }
     
     if (uncompletedSetsCount > 0) {
       // Create a detailed message about uncompleted sets
@@ -1728,6 +1771,54 @@ const handleTimerCompletion = async () => {
       Animated.parallel(animations).start();
     }
   };
+
+  // Right action function for swipeable sets
+  const rightAction = (exerciseId, setId, deletionAnim, setKey, prog) => {
+    if (prog.value > 2.2) {
+Animated.timing(deletionAnim, {
+              toValue: 0,
+              duration: 250,
+              useNativeDriver: false,
+            }).start(() => {
+              removeSet(exerciseId, setId);
+              
+              setDeletionAnimations(prev => {
+                const newAnims = { ...prev };
+                delete newAnims[setKey];
+                return newAnims;
+              });
+            });
+    }
+    return (
+      <View style={styles.hiddenItem}>
+        <TouchableOpacity
+          activeOpacity={0.5}
+          style={[styles.deleteButton, Platform.OS === 'ios' ? {} : { bottom: 1, right: 2 }]}
+          onPress={() => {
+            // Manual delete via button press
+            Animated.timing(deletionAnim, {
+              toValue: 0,
+              duration: 250,
+              useNativeDriver: false,
+            }).start(() => {
+              removeSet(exerciseId, setId);
+              
+              setDeletionAnimations(prev => {
+                const newAnims = { ...prev };
+                delete newAnims[setKey];
+                return newAnims;
+              });
+            });
+          }}
+        >
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <IonIcon name="trash-outline" size={20} color="white" />
+            <Text style={styles.deleteText}>Delete</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
   
   
   return (
@@ -1737,76 +1828,48 @@ const handleTimerCompletion = async () => {
         opacity: deletionAnim, // Only fade opacity
       }}
     >
-      <SwipeRow
-        rightOpenValue={-80}
-        disableRightSwipe={true}
-        disableLeftSwipe={exercise.sets.length === 1} // Disable swipe if only one set
-        
-        // Sensitivity adjustments
-        friction={100}
-        tension={40}
-        directionalDistanceChangeThreshold={10}
-        swipeToOpenPercent={30}
-        swipeToClosePercent={30}
-        
-        // Gesture handling
-        stopLeftSwipe={-1}
-        stopRightSwipe={-80}
-        
-        // Close behavior
-        closeOnRowPress={true}
-        closeOnScroll={true}
-        
-        onRowDidOpen={() => {
-          // Close other swipeables
+      <Swipeable
+        ref={(ref: any) => {
+          if (ref) {
+            swipeableRefs.current[swipeableKey] = ref;
+          } else {
+            delete swipeableRefs.current[swipeableKey];
+          }
+        }}
+        enabled={exercise.sets.length > 1} // Disable swipe if only one set
+        renderRightActions={(prog) => rightAction(exercise.id, set.id, deletionAnim, setKey, prog)}
+        rightThreshold={60}
+        onSwipeableOpenStartDrag={() => {
+          // Mark this one as swiping first
+          swipeableRefs.current[swipeableKey + '_swiping'] = true;
+          
+          // Close all other swipeables (excluding the current one)
           Object.keys(swipeableRefs.current).forEach(key => {
-            if (key !== swipeableKey && swipeableRefs.current[key]) {
-              swipeableRefs.current[key].closeRow();
+            const ref = swipeableRefs.current[key];
+            if (key.endsWith('_swiping')) {
+              // Skip swiping state tracking keys
+              return;
+            }
+            if (key !== swipeableKey && ref && ref.close) {
+              ref.close();
             }
           });
         }}
-        
-        ref={ref => {
-          if (ref) {
-            swipeableRefs.current[swipeableKey] = ref;
-          }
+        onSwipeableWillClose={() => {
+          swipeableRefs.current[swipeableKey + '_swiping'] = false;
         }}
       >
-        {/* Hidden item (shows when swiped) */}
-        <View style={styles.hiddenItem}>
-          <TouchableOpacity
-                activeOpacity={0.5}
-            style={[styles.deleteButton, Platform.OS === 'ios' ? {} : { bottom: 1, right: 2 }]}
-            onPress={() => {
-              // Start simple fade out animation
-              Animated.timing(deletionAnim, {
-                toValue: 0,
-                duration: 250, // Slightly faster
-                useNativeDriver: false,
-              }).start(() => {
-                // Remove the set after animation completes
-                removeSet(exercise.id, set.id);
-                
-                // Clean up the animation
-                setDeletionAnimations(prev => {
-                  const newAnims = { ...prev };
-                  delete newAnims[setKey];
-                  return newAnims;
-                });
-              });
-            }}
-          >
-            <IonIcon name="trash-outline" size={20} color="white" />
-            <Text style={styles.deleteText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-        
         <Pressable
           style={[
             styles.setRow,
             set.isCompleted && styles.completedSetRow,
           ]}
           onPress={() => {
+            // Check if we're currently swiping to prevent accidental presses
+            if (swipeableRefs.current[swipeableKey + '_swiping']) {
+              return;
+            }
+            
             if (!set.isCompleted) {
               closeAllSwipeables();
               openSetEditModal(exerciseIndex, setIndex);
@@ -2016,7 +2079,7 @@ const handleTimerCompletion = async () => {
             </>
           )}
         </Pressable>
-      </SwipeRow>
+      </Swipeable>
     </Animated.View>
   );
 })}
@@ -3790,7 +3853,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   hiddenItem: {
-    flex: 1,
+    width: 80,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
@@ -3798,17 +3861,19 @@ const styles = StyleSheet.create({
     paddingRight: 0,
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: colors.notification,
     justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
+    alignItems: 'flex-end',
+    width: 300,
     height: '100%',
     borderTopRightRadius: 8,
     borderBottomRightRadius: 8,
     marginRight: 2,
+    marginLeft: 2,
+    paddingRight: 20,
   },
   deleteText: {
-    color: 'white',
+    color: colors.primaryText,
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
