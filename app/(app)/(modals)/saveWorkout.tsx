@@ -16,7 +16,7 @@ import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
 import { useWorkoutStore } from '../../../stores/workoutStore';
 import { useAuthStore } from '../../../stores/authStore';
-import { getUserWeightUnit, displayWeightForUser } from '../../../utils/weightUtils';
+import { getUserWeightUnit, displayWeightForUser, convertWeight } from '../../../utils/weightUtils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -130,26 +130,6 @@ export default function SaveWorkout() {
     }
   };
 
-  const onDateChange = (event: any, selectedDate: any) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setWorkoutDate(selectedDate);
-    }
-  };
-
-  const VisibilityButton = ({ title, value, onPress }: any) => (
-    <View style={styles.visibilityContainer}>
-      <Text style={styles.visibilityTitle}>{title}</Text>
-      <TouchableOpacity
-                activeOpacity={0.5} style={styles.visibilityButton} onPress={onPress}>
-        <Text style={styles.visibilityButtonText}>
-          {value === 'public' ? 'Public' : value === 'friends' ? 'Friends' : 'Private'}
-        </Text>
-        <IonIcon name="chevron-forward" size={16} color={colors.secondaryText} />
-      </TouchableOpacity>
-    </View>
-  );
-
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Header */}
@@ -206,7 +186,7 @@ export default function SaveWorkout() {
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryValue}>
-                  {displayWeightForUser(stats.volume, 'kg', userWeightUnit, true)}
+                  {displayWeightForUser(convertWeight(stats.volume, userWeightUnit, 'kg'), 'kg', userWeightUnit, true)}
                 </Text>
                 <Text style={styles.summaryLabel}>Volume</Text>
               </View>
@@ -228,45 +208,13 @@ export default function SaveWorkout() {
                 <View key={exercise.id} style={styles.exerciseItem}>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
                   <Text style={styles.exerciseStats}>
-                    {completedSets} sets • {displayWeightForUser(exerciseVolume, 'kg', userWeightUnit, true)}
+                    {completedSets} sets • {displayWeightForUser(convertWeight(stats.volume, userWeightUnit, 'kg'), 'kg', userWeightUnit, true)}
                   </Text>
                 </View>
               );
             })}
           </View>
         </View>
-
-        {/* When Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>When</Text>
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <IonIcon name="calendar-outline" size={20} color={colors.secondaryText} />
-            <Text style={styles.dateText}>
-              {workoutDate.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </Text>
-            <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
-          </TouchableOpacity>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={workoutDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-        </View>
-
       </ScrollView>
 
       {/* Workout Visibility Bottom Sheet */}

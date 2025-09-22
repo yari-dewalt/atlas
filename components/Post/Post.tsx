@@ -640,7 +640,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     <View style={styles.workoutInfo}> 
       <Text style={styles.workoutInfoHeaderText}>Volume</Text>
       <Text style={styles.workoutInfoText}>
-        {displayWeightForUser(workoutData.totalVolume, 'kg', userWeightUnit, true) || '0kg'}
+        {displayWeightForUser(workoutData.totalVolume, 'kg', userWeightUnit, true)}
       </Text>
     </View>
   )}
