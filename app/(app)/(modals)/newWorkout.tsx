@@ -1345,6 +1345,7 @@ const handleTimerCompletion = async () => {
     (props) => (
       <BottomSheetBackdrop
         {...props}
+        style={{ zIndex: 2 }}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
         enableTouchThrough={false} // Prevents touches from passing through
@@ -2744,6 +2745,7 @@ Animated.timing(deletionAnim, {
   backgroundStyle={styles.bottomSheetBackground}
   handleIndicatorStyle={styles.bottomSheetIndicator}
   backdropComponent={renderBackdrop}
+  containerStyle={{ zIndex: 4 }}
 >
   <BottomSheetView style={styles.exerciseOptionsModalContent}>
       <Text style={styles.exerciseOptionsTitle}>
@@ -2846,6 +2848,7 @@ Animated.timing(deletionAnim, {
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
+          containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={styles.supersetModalContent}>
             <Text style={styles.supersetModalTitle}>Superset</Text>
@@ -2962,6 +2965,7 @@ Animated.timing(deletionAnim, {
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
+          containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={styles.reorderModalContent}>
             <Text style={styles.reorderModalTitle}>Reorder Exercises</Text>
@@ -3100,6 +3104,7 @@ Animated.timing(deletionAnim, {
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
           enableContentPanningGesture={false}
+          containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={styles.rpeModalContent}>
             <Text style={styles.rpeModalTitle}>RPE</Text>
@@ -3205,6 +3210,7 @@ Animated.timing(deletionAnim, {
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
           android_keyboardInputMode="adjustResize"
+          containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={[styles.setEditBottomSheetContent, Platform.OS === 'android' && { height: 300 }]}>
             <View style={styles.setEditHeader}>
