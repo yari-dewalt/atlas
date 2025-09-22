@@ -1531,7 +1531,7 @@ const handleTimerCompletion = async () => {
       <ScrollView 
         ref={scrollViewRef}
         style={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="never"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }} // Add extra padding at bottom
         onScrollBeginDrag={closeAllSwipeables} // Close swipeables when scrolling
