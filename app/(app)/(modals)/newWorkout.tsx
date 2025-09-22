@@ -2714,11 +2714,17 @@ Animated.timing(deletionAnim, {
 
       {/* Superset Option */}
       <TouchableOpacity
-                activeOpacity={0.5} style={styles.exerciseOptionItem} onPress={
-        exerciseToSuperset.has(selectedExerciseForOptions?.id) 
-          ? handleRemoveFromSuperset 
-          : handleAddToSuperset
-      }>
+                activeOpacity={0.5} 
+        style={[
+          styles.exerciseOptionItem, 
+          exerciseToSuperset.has(selectedExerciseForOptions?.id) && styles.destructiveOption
+        ]} 
+        onPress={
+          exerciseToSuperset.has(selectedExerciseForOptions?.id) 
+            ? handleRemoveFromSuperset 
+            : handleAddToSuperset
+        }
+      >
         <View style={styles.exerciseOptionIcon}>
           <IonIcon 
             name={exerciseToSuperset.has(selectedExerciseForOptions?.id) 
@@ -2726,11 +2732,17 @@ Animated.timing(deletionAnim, {
               : "add-circle-outline"
             } 
             size={24} 
-            color={colors.primaryText} 
+            color={exerciseToSuperset.has(selectedExerciseForOptions?.id) 
+              ? colors.notification 
+              : colors.primaryText
+            } 
           />
         </View>
         <View style={styles.exerciseOptionTextContainer}>
-          <Text style={styles.exerciseOptionTitle}>
+          <Text style={[
+            styles.exerciseOptionTitle,
+            exerciseToSuperset.has(selectedExerciseForOptions?.id) && styles.destructiveText
+          ]}>
             {exerciseToSuperset.has(selectedExerciseForOptions?.id) 
               ? "Remove from Superset" 
               : "Add to Superset"
@@ -2743,20 +2755,27 @@ Animated.timing(deletionAnim, {
             }
           </Text>
         </View>
-        <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
+        <IonIcon 
+          name="chevron-forward" 
+          size={20} 
+          color={exerciseToSuperset.has(selectedExerciseForOptions?.id) 
+            ? colors.notification 
+            : colors.secondaryText
+          } 
+        />
       </TouchableOpacity>
 
       {/* Remove Exercise Option */}
       <TouchableOpacity
                 activeOpacity={0.5} style={[styles.exerciseOptionItem, styles.destructiveOption]} onPress={handleRemoveExercise}>
         <View style={styles.exerciseOptionIcon}>
-          <IonIcon name="trash-outline" size={24} color="#dc3545" />
+          <IonIcon name="trash-outline" size={24} color={colors.notification} />
         </View>
         <View style={styles.exerciseOptionTextContainer}>
           <Text style={[styles.exerciseOptionTitle, styles.destructiveText]}>Remove Exercise</Text>
           <Text style={styles.exerciseOptionSubtitle}>Permanently remove this exercise from your workout</Text>
         </View>
-        <IonIcon name="chevron-forward" size={20} color="#dc3545" />
+        <IonIcon name="chevron-forward" size={20} color={colors.notification} />
       </TouchableOpacity>
     </View>
   </BottomSheetView>
@@ -4971,7 +4990,7 @@ destructiveOption: {
 },
 
 destructiveText: {
-  color: '#dc3545',
+  color: colors.notification,
 },
 
 // Set display styles (replacing input styles)
