@@ -107,6 +107,18 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 activeOpacity={0.5} 
                 style={styles.settingItem}
+                onPress={() => router.push('/workoutSettings')}
+              >
+                <View style={styles.settingTextContainer}>
+                  <Ionicons name="barbell-outline" size={22} color={colors.primaryText} />
+                  <Text style={styles.settingText}>Workout Settings</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.settingItem}
                 onPress={() => router.push('/settings/notifications')}
               >
                 <View style={styles.settingTextContainer}>
