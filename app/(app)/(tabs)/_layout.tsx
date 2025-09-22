@@ -1,7 +1,7 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../../constants/colors';
-import { View, Text, SafeAreaView, Pressable, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, SafeAreaView, Pressable, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import CachedAvatar from '../../../components/CachedAvatar';
@@ -34,7 +34,7 @@ export default function AppLayout() {
   const [activeTab, setActiveTab] = useState('home');
   const [isProfileRoute, setIsProfileRoute] = useState(false);
   const { profile, session } = useAuthStore();
-  const { activeWorkout, isPaused } = useWorkoutStore();
+  const { activeWorkout, isPaused, workoutSettings } = useWorkoutStore();
   
   const router = useRouter();
   const pathname = usePathname();
@@ -110,6 +110,72 @@ export default function AppLayout() {
 
   return (
     <View style={styles.container}>
+      {/* Active Workout Indicator Bar */}
+      {activeWorkout && workoutSettings.showActiveWorkoutBanner && (
+        <View style={styles.workoutIndicatorContainer}>
+          <View style={styles.workoutIndicatorBar}>
+            <View style={styles.workoutIndicatorContent}>
+              <View style={styles.workoutStatusSection}>
+                <Text style={styles.workoutIndicatorText}>
+                  Workout in Progress {isPaused ? '(Paused)' : ''}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.workoutButtonsSection}>
+              <TouchableOpacity 
+                style={styles.workoutButton}
+                onPress={() => {
+                  // Navigate to workout or resume logic
+                  router.push('/newWorkout');
+                }}
+                activeOpacity={0.7}
+              >
+                <IonIcon 
+                  name="play" 
+                  size={14} 
+                  color={colors.brand} 
+                />
+                <Text style={styles.resumeButtonText}>Resume</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.workoutButton}
+                onPress={() => {
+                  Alert.alert(
+                    "Discard Workout",
+                    "Are you sure you want to discard this workout? This action cannot be undone.",
+                    [
+                      {
+                        text: "Cancel",
+                        style: "cancel"
+                      },
+                      {
+                        text: "Discard",
+                        style: "destructive",
+                        onPress: () => {
+                          // Import the endWorkout function from useWorkoutStore
+                          const { endWorkout } = useWorkoutStore.getState();
+                          endWorkout();
+                        }
+                      }
+                    ]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <IonIcon 
+                  name="close" 
+                  size={14} 
+                  color={colors.notification} 
+                />
+                <Text style={styles.discardButtonText}>Discard</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+      
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: colors.brand,
@@ -162,18 +228,7 @@ export default function AppLayout() {
           options={{
             tabBarLabel: createTabBarLabel('Workout'),
             tabBarIcon: createTabBarIcon(({ color, focused }) => (
-              <View>
-                <IonIcon name={focused ? "barbell" : "barbell-outline"} size={28} color={color} />
-                {activeWorkout && (
-                  <View style={styles.workoutIndicator}>
-                    {isPaused ? (
-                      <IonIcon name="pause" size={10} color="#000" />
-                    ) : (
-                      <IonIcon name="time" size={10} color="#000" />
-                    )}
-                  </View>
-                )}
-              </View>
+              <IonIcon name={focused ? "barbell" : "barbell-outline"} size={28} color={color} />
             )),
           }}
           listeners={{
@@ -236,55 +291,70 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  safeArea: {
-    backgroundColor: colors.secondaryAccent,
+
+  workoutIndicatorContainer: {
+    position: 'absolute',
+    bottom: 86, // Position above the tab bar with some spacing
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
   },
-  header: {
-    height: 50, // Increased height a bit for better spacing
+  workoutIndicatorBar: {
+    width: '100%',
+    backgroundColor: colors.background,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderColor: colors.whiteOverlay,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+  },
+  workoutIndicatorContent: {
+    marginBottom: 12,
+  },
+  workoutStatusSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workoutIndicatorText: {
+    color: colors.secondaryText,
+    fontSize: 15,
+    fontWeight: '400',
+  },
+  workoutButtonsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+  },
+  workoutButton: {
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    backgroundColor: colors.secondaryAccent,
-    position: 'relative', // Important for absolute positioning of title
+    paddingVertical: 8,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // No margins needed - it will naturally align to the left
+  resumeButtonText: {
+    color: colors.brand,
+    fontSize: 14,
+    fontWeight: '400',
+    marginLeft: 6,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primaryText,
-    position: 'absolute', // Position absolutely to center perfectly
-    left: 0,
-    right: 0,
-    textAlign: 'center', // Center the text
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto', // Push to the far right
-  },
-  headerButton: {
-    padding: 8,
-  },
-  atlasLogo: {
-    color: colors.primaryText,
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  workoutIndicator: {
-    position: 'absolute',
-    right: -6,
-    top: -3,
-    backgroundColor: colors.brand,
-    borderRadius: 10,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.secondaryAccent,
+  discardButtonText: {
+    color: colors.notification,
+    fontSize: 14,
+    fontWeight: '400',
+    marginLeft: 6,
   },
 });

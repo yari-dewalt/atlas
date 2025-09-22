@@ -281,6 +281,19 @@ return (
               thumbColor={settings.largeTimerDisplay ? colors.primaryText : 'rgba(255,255,255,0.8)'}
             />
           </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Show Active Workout Banner</Text>
+              <Text style={styles.settingSubtitle}>Display in progress workout at the bottom of the screen</Text>
+            </View>
+            <Switch
+              value={settings.showActiveWorkoutBanner}
+              onValueChange={(value) => updateSetting('showActiveWorkoutBanner', value)}
+              trackColor={{ false: 'rgba(255,255,255,0.2)', true: colors.brand }}
+              thumbColor={settings.showActiveWorkoutBanner ? colors.primaryText : 'rgba(255,255,255,0.8)'}
+            />
+          </View>
         </View>
 
         {/* Workout Behavior */}

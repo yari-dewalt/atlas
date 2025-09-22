@@ -45,6 +45,7 @@ interface WorkoutSettings {
   showRestTimer: boolean;
   keepScreenOn: boolean;
   largeTimerDisplay: boolean;
+  showActiveWorkoutBanner: boolean;
   
   // Workout Behavior
   autoSaveEnabled: boolean;
@@ -114,6 +115,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     showRestTimer: true,
     keepScreenOn: false,
     largeTimerDisplay: false,
+    showActiveWorkoutBanner: true,
     
     // Workout Behavior
     autoSaveEnabled: true,
