@@ -86,7 +86,7 @@ export default function NewWorkout() {
   const [manualHours, setManualHours] = useState('00');
   const [manualMinutes, setManualMinutes] = useState('00');
   const [manualSeconds, setManualSeconds] = useState('00');
-  const [focusedInput, setFocusedInput] = useState(null);
+  const [focusedInput, setFocusedInput] = useState(null); // For timer editing: 'minutes' or 'seconds'
   const [showRpeTooltip, setShowRpeTooltip] = useState(false);
   const [rpeTooltipPosition, setRpeTooltipPosition] = useState({ x: 0, y: 0 });
   const [restTimerActive, setRestTimerActive] = useState(false);
@@ -118,6 +118,13 @@ export default function NewWorkout() {
   const [selectedSetForRpe, setSelectedSetForRpe] = useState(null);
   const [currentRpeIndex, setCurrentRpeIndex] = useState(5); // Default to RPE 6 (index 5)
   const [isConfirmingRpe, setIsConfirmingRpe] = useState(false); // Track if we're confirming RPE selection
+  
+  // Timer editing state (only for rest timer - stopwatch is not editable)
+  const [isEditingTimer, setIsEditingTimer] = useState(false);
+  const [editMinutes, setEditMinutes] = useState('');
+  const [editSeconds, setEditSeconds] = useState('');
+  const minutesInputRef = useRef(null);
+  const secondsInputRef = useRef(null);
   const [cameFromSetEdit, setCameFromSetEdit] = useState(false); // Track if RPE modal was opened from set edit
   const rpeData = [
     { value: 1, label: "Very Easy", description: "Could have done 9+ more reps" },
@@ -225,6 +232,8 @@ export default function NewWorkout() {
   // Functions to open/close bottom sheets
   const toggleRestTimerModal = () => {
     if (restTimerModalVisible) {
+      // Reset any unsaved editing changes when closing modal
+      resetEditingChanges();
       restTimerBottomSheetRef.current?.close();
       setRestTimerModalVisible(false);
     } else {
@@ -466,12 +475,14 @@ const handleRemoveExercise = () => {
   useEffect(() => {
     if (workoutSettings) {
       const defaultTime = (workoutSettings.defaultRestMinutes * 60) + workoutSettings.defaultRestSeconds;
-      if (!restTimerActive) {
+      // Only reset to default time when settings change, not when timer becomes inactive
+      // This prevents overriding the timer when it's cancelled or finishes
+      if (!restTimerActive && initialRestTime === defaultTime) {
         setRestTime(defaultTime);
         setInitialRestTime(defaultTime);
       }
     }
-  }, [workoutSettings.defaultRestMinutes, workoutSettings.defaultRestSeconds, restTimerActive]);
+  }, [workoutSettings.defaultRestMinutes, workoutSettings.defaultRestSeconds]);
 
   // Pulse animation for stopwatch outer circle
   useEffect(() => {
@@ -938,11 +949,9 @@ const handleTimerCompletion = async () => {
         }
       }
       
-      // Reset timer back to original time after the first alert
+      // Reset timer back to the time it was when started (initialRestTime) after the first alert
       if (completionCount === 1) {
-        const defaultTime = (workoutSettings.defaultRestMinutes * 60) + workoutSettings.defaultRestSeconds;
-        setRestTime(defaultTime);
-        setInitialRestTime(defaultTime);
+        setRestTime(initialRestTime);
       }
     } catch (error) {
       console.log('Error with timer alert:', error);
@@ -974,7 +983,7 @@ const handleTimerCompletion = async () => {
   }
 };
   
-  // Update the pauseRestTimer function to reset initial time when cancelled
+  // Update the pauseRestTimer function to reset to initial time when cancelled
   const pauseRestTimer = () => {
     setRestTimerActive(false);
     stopAnimations();
@@ -982,6 +991,8 @@ const handleTimerCompletion = async () => {
       clearInterval(restTimerInterval);
       setRestTimerInterval(null);
     }
+    // Reset timer back to the time it was when started (initialRestTime)
+    setRestTime(initialRestTime);
   };
   
   const startStopwatch = () => {
@@ -1031,6 +1042,43 @@ const handleTimerCompletion = async () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Timer editing functions
+  const startEditingTimer = (focusField = null) => {
+    const mins = Math.floor(restTime / 60);
+    const secs = restTime % 60;
+    setEditMinutes(mins.toString());
+    setEditSeconds(secs.toString().padStart(2, '0'));
+    setIsEditingTimer(true);
+    
+    // Focus specific field if requested
+    if (focusField) {
+      setTimeout(() => {
+        if (focusField === 'minutes' && minutesInputRef.current) {
+          minutesInputRef.current.focus();
+        } else if (focusField === 'seconds' && secondsInputRef.current) {
+          secondsInputRef.current.focus();
+        }
+      }, 100);
+    }
+  };
+
+  const stopEditingTimer = () => {
+    setIsEditingTimer(false);
+    Keyboard.dismiss();
+  };
+
+  const resetEditingChanges = () => {
+    if (isEditingTimer) {
+      // Reset editing values to current rest time
+      const mins = Math.floor(restTime / 60);
+      const secs = restTime % 60;
+      setEditMinutes(mins.toString());
+      setEditSeconds(secs.toString().padStart(2, '0'));
+      setIsEditingTimer(false);
+      Keyboard.dismiss();
+    }
   };
 
   const CircularProgress = ({ percentage, size = 200, strokeWidth = 8, color = colors.brand }) => {
@@ -2347,7 +2395,10 @@ Animated.timing(deletionAnim, {
                       styles.modalTimerModeButton, 
                       restTimerMode === 'timer' && styles.modalTimerModeButtonActive
                     ]}
-                    onPress={() => setRestTimerMode('timer')}
+                    onPress={() => {
+                      resetEditingChanges(); // Reset any unsaved changes
+                      setRestTimerMode('timer');
+                    }}
                   >
                     <Text style={[
                       styles.modalTimerModeText,
@@ -2360,7 +2411,10 @@ Animated.timing(deletionAnim, {
                       styles.modalTimerModeButton, 
                       restTimerMode === 'stopwatch' && styles.modalTimerModeButtonActive
                     ]}
-                    onPress={() => setRestTimerMode('stopwatch')}
+                    onPress={() => {
+                      resetEditingChanges(); // Reset any unsaved changes
+                      setRestTimerMode('stopwatch');
+                    }}
                   >
                     <Text style={[
                       styles.modalTimerModeText,
@@ -2384,10 +2438,108 @@ Animated.timing(deletionAnim, {
                         color={restTimerActive ? colors.brand : colors.secondaryText}
                       />
                       <View style={styles.timerTextOverlay}>
-                        <Text style={styles.circularTimerText}>
-                          {formatRestTime(restTime)}
-                        </Text>
-                        <Text style={styles.circularTimerLabel}>REST</Text>
+                        {isEditingTimer && !restTimerActive ? (
+                          <View style={styles.timerEditContainer}>
+                            <View style={styles.timerEditRow}>
+                              <TextInput
+                                ref={minutesInputRef}
+                                style={styles.timerEditInput}
+                                value={editMinutes}
+                                onChangeText={(text) => {
+                                  // Only allow numbers and limit to 2 digits
+                                  const cleanText = text.replace(/[^0-9]/g, '').slice(0, 2);
+                                  const num = parseInt(cleanText) || 0;
+                                  if (num <= 99) {
+                                    setEditMinutes(cleanText);
+                                  }
+                                }}
+                                placeholder="00"
+                                placeholderTextColor="rgba(255,255,255,0.4)"
+                                keyboardType="numeric"
+                                maxLength={2}
+                                selectTextOnFocus={true}
+                              />
+                              <Text style={styles.timerEditSeparator}>:</Text>
+                              <TextInput
+                                ref={secondsInputRef}
+                                style={styles.timerEditInput}
+                                value={editSeconds}
+                                onChangeText={(text) => {
+                                  // Only allow numbers, limit to 2 digits, and max 59
+                                  const cleanText = text.replace(/[^0-9]/g, '').slice(0, 2);
+                                  const num = parseInt(cleanText) || 0;
+                                  if (num <= 59) {
+                                    setEditSeconds(cleanText);
+                                  }
+                                }}
+                                placeholder="00"
+                                placeholderTextColor="rgba(255,255,255,0.4)"
+                                keyboardType="numeric"
+                                maxLength={2}
+                                selectTextOnFocus={true}
+                              />
+                            </View>
+                            <Text style={styles.circularTimerLabel}>REST</Text>
+                            
+                            {/* Confirm Button underneath REST */}
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              style={styles.timerConfirmButton}
+                              onPress={() => {
+                                // Apply changes and stop editing
+                                const minutes = parseInt(editMinutes) || 0;
+                                const seconds = parseInt(editSeconds) || 0;
+                                const totalSeconds = (minutes * 60) + seconds;
+                                
+                                // Don't allow 0 time
+                                if (totalSeconds > 0) {
+                                  setRestTime(totalSeconds);
+                                  setInitialRestTime(totalSeconds);
+                                }
+                                
+                                // Format display and stop editing
+                                setEditMinutes(minutes.toString());
+                                setEditSeconds(seconds.toString().padStart(2, '0'));
+                                setIsEditingTimer(false);
+                              }}
+                            >
+                              <IonIcon name="checkmark" size={16} color={colors.primaryText} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <>
+                            <View style={styles.timerEditRow}>
+                              <TouchableOpacity
+                                activeOpacity={0.5}
+                                onPress={() => {
+                                  if (!restTimerActive) {
+                                    startEditingTimer('minutes');
+                                  }
+                                }}
+                                disabled={restTimerActive}
+                              >
+                                <Text style={styles.circularTimerText}>
+                                  {Math.floor(restTime / 60)}
+                                </Text>
+                              </TouchableOpacity>
+                              <Text style={[styles.circularTimerText, { marginBottom: 11 }]}>:</Text>
+                              <TouchableOpacity
+                                activeOpacity={0.5}
+                                onPress={() => {
+                                  if (!restTimerActive) {
+                                    startEditingTimer('seconds');
+                                  }
+                                }}
+                                disabled={restTimerActive}
+                              >
+                                <Text style={styles.circularTimerText}>
+                                  {(restTime % 60).toString().padStart(2, '0')}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                            <Text style={styles.circularTimerLabel}>REST</Text>
+                          </>
+                        )}
                       </View>
                     </Animated.View>
                   ) : (
@@ -5072,5 +5224,41 @@ setRowCompletionRibbon: {
   backgroundColor: 'rgba(38, 194, 129, 0.2)',
   borderRadius: 8,
   pointerEvents: 'none',
+},
+
+// Timer editing styles
+timerEditContainer: {
+  alignItems: 'center',
+},
+
+timerEditRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+timerEditInput: {
+  fontSize: 32,
+  fontWeight: 'bold',
+  color: colors.primaryText,
+  marginBottom: 2,
+},
+
+timerEditSeparator: {
+  fontSize: 32,
+  fontWeight: 'bold',
+  color: colors.primaryText,
+  marginBottom: 10,
+},
+
+timerConfirmButton: {
+  backgroundColor: colors.brand,
+  borderRadius: 8,
+  paddingHorizontal: 24,
+  paddingVertical: 8,
+  marginTop: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  alignSelf: 'center',
 },
 });
