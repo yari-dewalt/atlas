@@ -498,7 +498,7 @@ export default function WorkoutDetailScreen() {
               ) : (
                 <View style={styles.exerciseImagePlaceholder}>
                   <Ionicons 
-                    name={!exercise.exercise_id ? "construct-outline" : "fitness-outline"} 
+                    name="barbell-outline"
                     size={20} 
                     color={colors.secondaryText} 
                   />
