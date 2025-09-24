@@ -42,7 +42,7 @@ export default function Workout() {
   const [officialRoutineLoading, setOfficialRoutineLoading] = useState(true);
   const router = useRouter();
   const { session, profile } = useAuthStore();
-  const { activeWorkout, isPaused } = useWorkoutStore();
+  const { activeWorkout } = useWorkoutStore();
 
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -382,14 +382,6 @@ export default function Workout() {
     }
   };
 
-  const handleActiveWorkoutPress = () => {
-    if (navigating) return;
-    
-    setNavigating(true);
-    router.push("/newWorkout");
-    setTimeout(() => setNavigating(false), 1000);
-  };
-
   const viewWorkoutDetails = (workoutId: any) => {
     router.push(`/workout/${workoutId}`);
   };
@@ -402,27 +394,6 @@ export default function Workout() {
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
-  };
-
-  const confirmDiscardWorkout = () => {
-    Alert.alert(
-      "Discard Workout",
-      "Are you sure you want to discard this workout? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Discard",
-          style: "destructive",
-          onPress: () => {
-            useWorkoutStore.getState().endWorkout();
-            // Optional: Show a toast or feedback message
-          }
-        }
-      ]
-    );
   };
 
   return (
@@ -455,8 +426,7 @@ export default function Workout() {
         </View>
 
         {/* Official Routine Showcase */}
-        {!activeWorkout && (
-          <View style={styles.officialRoutineContainer}>
+        <View style={styles.officialRoutineContainer}>
             {officialRoutineLoading ? (
               <View style={styles.officialRoutineSkeleton}>
                 <View style={styles.skeletonOfficialContent}>
@@ -497,65 +467,7 @@ export default function Workout() {
                 </View>
               </TouchableOpacity>
             ) : null}
-          </View>
-        )}
-
-        {/* Active Workout Section - Show under Quick Start */}
-        {activeWorkout && (
-          <View style={styles.activeWorkoutContainer}>
-            <TouchableOpacity
-            activeOpacity={0.5} 
-              style={[
-                styles.activeWorkoutCard,
-                navigating && styles.disabledButton
-              ]}
-              onPress={handleActiveWorkoutPress}
-              disabled={navigating}
-            >
-              <View style={styles.activeWorkoutHeader}>
-                <View style={styles.activeWorkoutTitleRow}>
-                  <Text style={styles.activeWorkoutTitle}>Active Workout</Text>
-                </View>
-                <View style={styles.activeWorkoutTimeRow}>
-                  <IonIcon 
-                    name={isPaused ? "pause-circle" : "timer-outline"} 
-                    size={18} 
-                    color={isPaused ? colors.secondaryText : colors.brand} 
-                    style={[styles.timeIcon, isPaused && { opacity: 0.5 } ]}
-                  />
-                  <Text style={[
-                    styles.activeWorkoutTime,
-                    isPaused && styles.pausedTime
-                  ]}>
-                    {formatDuration(activeWorkout.duration)}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.activeWorkoutContent}>
-                <View style={styles.activeWorkoutStats}>
-                  <View style={styles.workoutStat}>
-                    <Text style={styles.workoutStatText}>{activeWorkout.exercises.length} exercises</Text>
-                  </View>
-                </View>
-              </View>
-              
-              <View style={styles.activeWorkoutAction}>
-                <TouchableOpacity
-            activeOpacity={0.5} 
-                  style={styles.discardButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    confirmDiscardWorkout();
-                  }}
-                >
-                  <IonIcon name="trash-outline" size={16} color={colors.notification} />
-                  <Text style={styles.discardButtonText}>Discard</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
+        </View>
       </View>
       
       {/* Routines Section - Show skeleton while loading */}
@@ -904,86 +816,6 @@ const styles = StyleSheet.create({
   emptyStateText: {
     textAlign: 'center',
     color: colors.secondaryText,
-  },
-  activeWorkoutContainer: {
-    marginTop: 8,
-  },
-  activeWorkoutCard: {
-    backgroundColor: colors.primaryAccent,
-    borderRadius: 12,
-    padding: 16,
-  },
-  activeWorkoutHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  activeWorkoutTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  activeWorkoutTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeIcon: {
-    marginRight: 4,
-  },
-  activeWorkoutTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-    marginLeft: 0,
-  },
-  activeWorkoutTime: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.brand,
-  },
-  pausedTime: {
-    color: colors.secondaryText,
-    opacity: 0.5,
-  },
-  activeWorkoutContent: {
-    marginBottom: 12,
-  },
-  activeWorkoutStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  workoutStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  workoutStatText: {
-    fontSize: 14,
-    color: colors.secondaryText,
-    marginLeft: 0,
-    fontWeight: '500',
-  },
-  activeWorkoutAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  discardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryAccent,
-    borderWidth: 1,
-    borderColor: colors.notification,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    width: '100%',
-  },
-  discardButtonText: {
-    color: colors.notification,
-    fontWeight: '600',
-    marginLeft: 4,
-    fontSize: 15,
   },
   disabledButton: {
     opacity: 0.5,

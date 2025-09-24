@@ -111,7 +111,7 @@ export default function AppLayout() {
   return (
     <View style={styles.container}>
       {/* Active Workout Indicator Bar */}
-      {activeWorkout && workoutSettings.showActiveWorkoutBanner && (
+      {activeWorkout && (
         <View style={styles.workoutIndicatorContainer}>
           <View style={styles.workoutIndicatorBar}>
             <View style={styles.workoutIndicatorContent}>
