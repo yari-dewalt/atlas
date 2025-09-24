@@ -38,6 +38,8 @@ export default function Workout() {
   const scrollViewRef = useRef(null);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [officialRoutine, setOfficialRoutine] = useState<any>(null);
+  const [officialRoutineLoading, setOfficialRoutineLoading] = useState(true);
   const router = useRouter();
   const { session, profile } = useAuthStore();
   const { activeWorkout, isPaused } = useWorkoutStore();
@@ -52,6 +54,106 @@ export default function Workout() {
   useEffect(() => {
     setTabScrollRef('workout', scrollViewRef.current);
   }, []);
+
+  // Fetch a random official routine for showcase
+  const fetchRandomOfficialRoutine = async () => {
+    setOfficialRoutineLoading(true);
+    try {
+      // First get count of official routines
+      const { count, error: countError } = await supabase
+        .from('routines')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_official', true);
+
+      if (countError || !count || count === 0) {
+        setOfficialRoutine(null);
+        return;
+      }
+
+      // Get a random offset
+      const randomOffset = Math.floor(Math.random() * count);
+
+      // Fetch one random official routine
+      const { data: routineData, error: routineError } = await supabase
+        .from('routines')
+        .select(`
+          id,
+          name,
+          user_id,
+          original_creator_id,
+          created_at,
+          updated_at,
+          usage_count,
+          like_count,
+          save_count,
+          is_official,
+          category
+        `)
+        .eq('is_official', true)
+        .range(randomOffset, randomOffset)
+        .single();
+
+      if (routineError || !routineData) {
+        setOfficialRoutine(null);
+        return;
+      }
+
+      // Fetch routine exercises with exercise details
+      const { data: exercisesData, error: exercisesError } = await supabase
+        .from('routine_exercises')
+        .select(`
+          routine_id,
+          name,
+          exercises (
+            primary_muscle_group,
+            secondary_muscle_groups
+          )
+        `)
+        .eq('routine_id', routineData.id)
+        .order('order_position');
+      
+      if (exercisesError) {
+        console.error('Error fetching routine exercises:', exercisesError);
+        setOfficialRoutine(null);
+        return;
+      }
+
+      const routineExercises = exercisesData || [];
+      
+      // Extract unique muscle groups
+      const allMuscleGroups = routineExercises.reduce((groups: string[], exercise: any) => {
+        if (exercise.exercises?.primary_muscle_group) {
+          groups.push(exercise.exercises.primary_muscle_group);
+        }
+        if (exercise.exercises?.secondary_muscle_groups && Array.isArray(exercise.exercises.secondary_muscle_groups)) {
+          groups.push(...exercise.exercises.secondary_muscle_groups);
+        }
+        return groups;
+      }, []);
+      
+      const uniqueMuscleGroups = [...new Set(allMuscleGroups)];
+      
+      const processedRoutine = {
+        id: routineData.id,
+        name: routineData.name,
+        exerciseCount: routineExercises.length,
+        usageCount: routineData.usage_count || 0,
+        saveCount: routineData.save_count || 0,
+        likeCount: routineData.like_count || 0,
+        isOfficial: true,
+        muscleGroups: uniqueMuscleGroups,
+        exercises: routineExercises.map(ex => ex.name) || [],
+        created_at: new Date(routineData.created_at)
+      };
+      
+      setOfficialRoutine(processedRoutine);
+    } catch (error) {
+      console.error('Error fetching random official routine:', error);
+      setOfficialRoutine(null);
+    } finally {
+      setOfficialRoutineLoading(false);
+    }
+  };
 
   // Load user's workout history
   const fetchRecentWorkouts = async (showLoading: boolean = true) => {
@@ -134,6 +236,7 @@ export default function Workout() {
         await fetchRoutines(session.user.id);
         await (useRoutineStore.getState() as any).updateLastUsedInfo(session.user.id);
         await fetchRecentWorkouts();
+        await fetchRandomOfficialRoutine();
       };
       loadData();
     }
@@ -351,6 +454,52 @@ export default function Workout() {
           </TouchableOpacity>
         </View>
 
+        {/* Official Routine Showcase */}
+        {!activeWorkout && (
+          <View style={styles.officialRoutineContainer}>
+            {officialRoutineLoading ? (
+              <View style={styles.officialRoutineSkeleton}>
+                <View style={styles.skeletonOfficialContent}>
+                  <View style={[styles.skeletonLine, styles.skeletonOfficialTitle]} />
+                  <View style={[styles.skeletonLine, styles.skeletonOfficialSubtitle]} />
+                </View>
+                <View style={[styles.skeletonLine, styles.skeletonOfficialButton]} />
+              </View>
+            ) : officialRoutine ? (
+              <TouchableOpacity
+                activeOpacity={0.5}
+                style={styles.officialRoutineCard}
+                onPress={() => router.push(`/routine/${officialRoutine.id}`)}
+              >
+                <View style={styles.officialRoutineCardContent}>
+                  <View style={styles.officialRoutineTitleRow}>
+                    <Text style={styles.officialRoutineCardTitle}>{officialRoutine.name}</Text>
+                    <IonIcon name="shield-checkmark" size={16} color={colors.brand} />
+                  </View>
+                  <Text style={styles.officialRoutineCardDetails}>
+                    {officialRoutine.exerciseCount} exercises • {officialRoutine.muscleGroups.slice(0, 2).join(', ')}
+                    {officialRoutine.muscleGroups.length > 2 && ` +${officialRoutine.muscleGroups.length - 2} more`}
+                  </Text>
+                </View>
+                
+                <View style={styles.officialRoutineCardAction}>
+                  <TouchableOpacity
+                    activeOpacity={0.5}
+                    style={styles.startOfficialRoutineButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      startRoutine(officialRoutine.id);
+                    }}
+                  >
+                    <IonIcon name="add" size={18} color={colors.primaryText} />
+                    <Text style={styles.startOfficialRoutineButtonText}>Start Routine</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
         {/* Active Workout Section - Show under Quick Start */}
         {activeWorkout && (
           <View style={styles.activeWorkoutContainer}>
@@ -411,9 +560,7 @@ export default function Workout() {
       
       {/* Routines Section - Show skeleton while loading */}
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Routines</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Routines</Text>
         
         {/* Quick Action Buttons - Always visible */}
         <View style={styles.quickActionsContainer}>
@@ -506,9 +653,7 @@ export default function Workout() {
       
       {/* Workout History Section - Show skeleton while loading */}
       <View style={[styles.section, styles.lastSection]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Workout History</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Workout History</Text>
         
         {historyLoading ? (
           <View style={styles.historyContainer}>
@@ -600,12 +745,6 @@ const styles = StyleSheet.create({
   },
   lastSection: {
     marginBottom: 40,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
@@ -919,5 +1058,78 @@ const styles = StyleSheet.create({
     height: 14,
     width: 60,
     marginRight: 12,
+  },
+  // Official Routine Showcase styles
+  officialRoutineContainer: {
+  },
+  officialRoutineCard: {
+    flexDirection: 'column',
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 12,
+    padding: 16,
+  },
+  officialRoutineCardContent: {
+    flex: 1,
+    marginBottom: 12,
+  },
+  officialRoutineTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  officialRoutineCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primaryText,
+    flex: 1,
+    marginRight: 8,
+  },
+  officialRoutineCardDetails: {
+    fontSize: 12,
+    color: colors.secondaryText,
+  },
+  officialRoutineCardAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startOfficialRoutineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '100%',
+  },
+  startOfficialRoutineButtonText: {
+    color: colors.primaryText,
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  officialRoutineSkeleton: {
+    flexDirection: 'column',
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 12,
+    padding: 16,
+  },
+  skeletonOfficialContent: {
+    flex: 1,
+    marginBottom: 4,
+  },
+  skeletonOfficialTitle: {
+    height: 20,
+    width: '60%',
+    marginBottom: 8,
+  },
+  skeletonOfficialSubtitle: {
+    height: 16,
+    width: '80%',
+  },
+  skeletonOfficialButton: {
+    height: 44,
+    width: '100%',
+    borderRadius: 10,
   },
 });
