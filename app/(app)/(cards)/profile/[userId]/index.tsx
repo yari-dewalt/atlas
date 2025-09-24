@@ -1510,7 +1510,7 @@ export default function ProfileScreen() {
             <View style={styles.selectedPointStatsContainer}>
               <View style={styles.selectedPointDateContainer}>
                 <Text style={styles.selectedPointDate}>{selectedLabel}</Text>
-                <Text style={styles.selectedPointValueDisplay}>{selectedValue} {getMetricUnit()}</Text>
+                <Text style={styles.selectedPointValueDisplay}>{Math.round(selectedValue)} {getMetricUnit()}</Text>
               </View>
             </View>
           )}
