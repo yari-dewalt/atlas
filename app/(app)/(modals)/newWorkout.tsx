@@ -171,8 +171,8 @@ export default function NewWorkout() {
   const animationIsRunning = useRef(false);
 
   // Bottom Sheet snap points
-  const supersetSnapPoints = useMemo(() => ['50%'], []);
-  const reorderSnapPoints = useMemo(() => ['30%'], []);
+  const supersetSnapPoints = useMemo(() => [600], []);
+  const reorderSnapPoints = useMemo(() => [600], []);
   const rpeSnapPoints = useMemo(() => ['50%'], []);
   const exerciseOptionsSnapPoints = useMemo(() => ['50%'], []);
   const setEditSnapPoints = useMemo(() => ['25%'], []);
@@ -1531,7 +1531,7 @@ const handleTimerCompletion = async () => {
       <ScrollView 
         ref={scrollViewRef}
         style={styles.contentContainer}
-        keyboardShouldPersistTaps="never"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }} // Add extra padding at bottom
         onScrollBeginDrag={closeAllSwipeables} // Close swipeables when scrolling
@@ -2843,6 +2843,7 @@ Animated.timing(deletionAnim, {
           ref={supersetBottomSheetRef}
           index={-1}
           snapPoints={supersetSnapPoints}
+          maxDynamicContentSize={600}
           onChange={handleSupersetSheetChanges}
           enablePanDownToClose={true}
           backgroundStyle={styles.bottomSheetBackground}
@@ -2851,14 +2852,20 @@ Animated.timing(deletionAnim, {
           containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={styles.supersetModalContent}>
-            <Text style={styles.supersetModalTitle}>Superset</Text>
+            <View style={styles.supersetModalHeader}>
+              <Text style={styles.supersetModalTitle}>Superset</Text>
+              <Text style={styles.supersetModalSubtitle}>
+                Select exercises to superset with "{selectedExerciseForSuperset?.name}".
+              </Text>
+            </View>
             
-            <Text style={styles.supersetModalSubtitle}>
-              Select exercises to superset with "{selectedExerciseForSuperset?.name}".
-            </Text>
-            
-            <BottomSheetScrollView style={styles.supersetExerciseList} showsVerticalScrollIndicator={false}>
-              {activeWorkout?.exercises.map(exercise => {
+            <View style={styles.supersetScrollContainer}>
+              <ScrollView 
+                style={styles.supersetScrollView}
+                contentContainerStyle={styles.supersetScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {activeWorkout?.exercises.map((exercise, index) => {
                 const isInDifferentSuperset = exerciseToSuperset.has(exercise.id) && 
                   exerciseToSuperset.get(exercise.id) !== exerciseToSuperset.get(selectedExerciseForSuperset?.id);
                 const isCurrentExercise = exercise.id === selectedExerciseForSuperset?.id;
@@ -2876,61 +2883,63 @@ Animated.timing(deletionAnim, {
                 }
                 
                 return (
-                  <TouchableOpacity
-                activeOpacity={0.5}
-                    key={exercise.id}
-                    style={[
-                      styles.supersetExerciseItem,
-                      {
-                        backgroundColor,
-                        borderLeftWidth: 0,
-                      },
-                      isCurrentExercise && styles.currentExerciseItem
-                    ]}
-                    onPress={() => {
-                      if (!isCurrentExercise) {
-                        toggleExerciseSelection(exercise.id);
-                      }
-                    }}
-                    disabled={isCurrentExercise}
-                  >
-                    {/* Exercise Image */}
-                    {exercise.image_url ? (
-                      <Image 
-                        source={{ uri: exercise.image_url }}
-                        style={styles.supersetExerciseImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.supersetExerciseImagePlaceholder}>
-                        <IonIcon 
-                          name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
-                          size={16} 
-                          color={colors.secondaryText} 
+                  <React.Fragment key={exercise.id}>
+                    <TouchableOpacity
+                      activeOpacity={0.5}
+                      style={[
+                        styles.supersetExerciseItem,
+                        {
+                          backgroundColor,
+                          borderLeftWidth: 0,
+                        },
+                        isCurrentExercise && styles.currentExerciseItem
+                      ]}
+                      onPress={() => {
+                        if (!isCurrentExercise) {
+                          toggleExerciseSelection(exercise.id);
+                        }
+                      }}
+                      disabled={isCurrentExercise}
+                    >
+                      {/* Exercise Image */}
+                      {exercise.image_url ? (
+                        <Image 
+                          source={{ uri: exercise.image_url }}
+                          style={styles.supersetExerciseImage}
+                          resizeMode="cover"
                         />
+                      ) : (
+                        <View style={styles.supersetExerciseImagePlaceholder}>
+                          <IonIcon 
+                            name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
+                            size={16} 
+                            color={colors.secondaryText} 
+                          />
+                        </View>
+                      )}
+                      
+                      <View style={styles.supersetExerciseInfo}>
+                        <View style={styles.supersetExerciseNameRow}>
+                          <Text style={[
+                            styles.supersetExerciseName,
+                            isCurrentExercise && styles.currentExerciseName
+                          ]}>
+                            {exercise.name}
+                          </Text>
+                          {/* Custom Exercise Badge */}
+                          {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
+                            <View style={styles.supersetCustomBadge}>
+                              <Text style={styles.supersetCustomBadgeText}>Custom</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
-                    )}
-                    
-                    <View style={styles.supersetExerciseInfo}>
-                      <View style={styles.supersetExerciseNameRow}>
-                        <Text style={[
-                          styles.supersetExerciseName,
-                          isCurrentExercise && styles.currentExerciseName
-                        ]}>
-                          {exercise.name}
-                        </Text>
-                        {/* Custom Exercise Badge */}
-                        {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
-                          <View style={styles.supersetCustomBadge}>
-                            <Text style={styles.supersetCustomBadgeText}>Custom</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                    </TouchableOpacity>
+                  </React.Fragment>
                 );
-              })}
-            </BottomSheetScrollView>
+                })}
+              </ScrollView>
+            </View>
             
             <View style={styles.supersetModalFooter}>    
               <View style={styles.supersetModalButtons}>
@@ -2960,6 +2969,7 @@ Animated.timing(deletionAnim, {
           ref={reorderBottomSheetRef}
           index={-1}
           snapPoints={reorderSnapPoints}
+          maxDynamicContentSize={600}
           onChange={handleReorderSheetChanges}
           enablePanDownToClose={true}
           backgroundStyle={styles.bottomSheetBackground}
@@ -2968,14 +2978,16 @@ Animated.timing(deletionAnim, {
           containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={styles.reorderModalContent}>
-            <Text style={styles.reorderModalTitle}>Reorder Exercises</Text>
+            <View style={styles.reorderModalHeader}>
+              <Text style={styles.reorderModalTitle}>Reorder Exercises</Text>
+              <Text style={styles.reorderModalSubtitle}>
+                Hold and drag exercises to change their order
+              </Text>
+            </View>
             
-            <Text style={styles.reorderModalSubtitle}>
-              Hold and drag exercises to change their order
-            </Text>
-            
-            <View style={styles.reorderExerciseList}>
+            <View style={styles.reorderScrollContainer}>
               <DraggableFlatList
+                scrollEnabled={true}
                 data={exercises}
                 keyExtractor={item => item.id.toString()}
                 onDragBegin={() => {
@@ -4258,14 +4270,27 @@ const styles = StyleSheet.create({
   },
   
   supersetModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
+  
+  supersetScrollContainer: {
+    maxHeight: '65%',
+    paddingBottom: 20,
+  },
+  
+  supersetScrollView: {
+    borderRadius: 12,
+  },
+  
+  supersetScrollContent: {
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  
   
   supersetModalTitle: {
     fontSize: 16,
@@ -4278,11 +4303,7 @@ const styles = StyleSheet.create({
   supersetModalSubtitle: {
     fontSize: 14,
     color: colors.secondaryText,
-    marginBottom: 20,
     textAlign: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    paddingBottom: 12,
   },
   
   supersetExerciseList: {
@@ -4400,8 +4421,8 @@ const styles = StyleSheet.create({
   supersetBadge: {
     alignSelf: 'flex-start', // Make badge only as wide as needed
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
     marginTop: 4,
   },
   
@@ -4428,13 +4449,22 @@ const styles = StyleSheet.create({
   },
   
   reorderModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  
+  reorderScrollContainer: {
+    flex: 1,
+    paddingBottom: 20,
+    maxHeight: '35%',
+  },
+  
+  reorderScrollView: {
+    borderRadius: 12,
+    flex: 1,
   },
   
   reorderModalTitle: {
@@ -4448,11 +4478,7 @@ const styles = StyleSheet.create({
   reorderModalSubtitle: {
     fontSize: 14,
     color: colors.secondaryText,
-    marginBottom: 20,
     textAlign: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.whiteOverlay,
-    paddingBottom: 12,
   },
   
   reorderExerciseList: {
@@ -4535,8 +4561,8 @@ const styles = StyleSheet.create({
   reorderSupersetBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   
   reorderSupersetBadgeText: {
@@ -4553,7 +4579,9 @@ const styles = StyleSheet.create({
   },
   
   reorderModalFooter: {
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
     borderTopWidth: 1,
     borderTopColor: colors.whiteOverlay,
   },
@@ -4765,7 +4793,7 @@ pickerContainer: {
   },
   
   picker: {
-    width: 85,
+    width: 80,
     height: 150,
     flex: 1,
   },

@@ -52,7 +52,7 @@ export default function EditPost() {
   const workoutBottomSheetRef = useRef<BottomSheet>(null);
   
   // Bottom sheet snap points
-  const snapPoints = useMemo(() => ['75%'], []);
+  const snapPoints = useMemo(() => [600], []);
   
   // Media preview state
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -729,6 +729,36 @@ export default function EditPost() {
       { cancelable: true }
     );
   };
+
+  const handleCancel = () => {
+    // Check if there's any content to lose
+    const hasTitle = postTitle.trim() !== '';
+    const hasDescription = description.trim() !== '';
+    const hasMedia = media.length > 0 || newMedia.length > 0;
+    const hasWorkout = selectedWorkout !== null;
+    const hasContent = hasTitle || hasDescription || hasMedia || hasWorkout;
+
+    if (hasContent) {
+      Alert.alert(
+        'Discard Changes?',
+        'You have unsaved changes. Are you sure you want to discard them?',
+        [
+          {
+            text: 'Keep Editing',
+            style: 'cancel',
+          },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => router.back(),
+          },
+        ],
+        { cancelable: true }
+      );
+    } else {
+      router.back();
+    }
+  };
   
   // Handle scroll start to unfocus inputs
   const handleScrollBeginDrag = () => {
@@ -779,7 +809,7 @@ export default function EditPost() {
           <TouchableOpacity
                 activeOpacity={0.5} 
             style={styles.headerButton}
-            onPress={() => router.back()}
+            onPress={handleCancel}
           >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -992,6 +1022,7 @@ export default function EditPost() {
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
+          maxDynamicContentSize={600}
         >
           <BottomSheetView style={styles.bottomSheetContent}>
             <View style={styles.bottomSheetHeader}>
@@ -999,10 +1030,12 @@ export default function EditPost() {
               <Text style={styles.bottomSheetSubtitle}>Choose a workout to attach to your post</Text>
             </View>
             
-            <BottomSheetScrollView 
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.bottomSheetScrollContent}
-            >
+            <View style={styles.bottomSheetScrollContainer}>
+              <ScrollView
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={styles.bottomSheetScrollContent}
+                style={styles.bottomSheetScrollView}
+              >
             {workoutsLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={colors.brand} />
@@ -1014,48 +1047,51 @@ export default function EditPost() {
                 <Text style={styles.emptySubtext}>Complete a workout to attach it to your post</Text>
               </View>
             ) : (
-              workouts.map((workout) => (
-                <TouchableOpacity
-                activeOpacity={0.5} 
-                  key={workout.id}
-                  style={styles.workoutHistoryCard}
-                  onPress={() => handleSelectWorkout(workout)}
-                >
-                  <View style={styles.workoutHistoryDate}>
-                    <Text style={styles.workoutHistoryDateText}>
-                      {format(new Date(workout.start_time), "MMM d")}
-                    </Text>
-                  </View>
-                  <View style={styles.workoutHistoryDetails}>
-                    <Text style={styles.workoutHistoryTitle} numberOfLines={1} ellipsizeMode="tail">
-                      {workout.name || 'Unnamed Workout'}
-                    </Text>
-                    <View style={styles.workoutHistoryStats}>
-                      <View style={styles.workoutHistoryStat}>
-                        <IonIcon name="time-outline" size={14} color={colors.secondaryText} />
-                        <Text style={styles.workoutHistoryStatText}>
-                          {workout.displayDuration}
-                        </Text>
-                      </View>
-                      <View style={styles.workoutHistoryStat}>
-                        <IonIcon name="fitness-outline" size={14} color={colors.secondaryText} />
-                        <Text style={styles.workoutHistoryStatText}>
-                          {workout.exerciseCount}
-                        </Text>
-                      </View>
-                      <View style={styles.workoutHistoryStat}>
-                        <IonIcon name="barbell-outline" size={14} color={colors.secondaryText} />
-                        <Text style={styles.workoutHistoryStatText}>
-                          {workout.formattedVolume}
-                        </Text>
+              workouts.map((workout, index) => (
+                <View key={workout.id}>
+                  <TouchableOpacity
+                    activeOpacity={0.5} 
+                    style={[styles.workoutHistoryCard, index === 0 && { borderTopLeftRadius: 12, borderTopRightRadius: 12 }, index === workouts.length - 1 && { borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }]}
+                    onPress={() => handleSelectWorkout(workout)}
+                  >
+                    <View style={styles.workoutHistoryDate}>
+                      <Text style={styles.workoutHistoryDateText}>
+                        {format(new Date(workout.start_time), "MMM d")}
+                      </Text>
+                    </View>
+                    <View style={styles.workoutHistoryDetails}>
+                      <Text style={styles.workoutHistoryTitle} numberOfLines={1} ellipsizeMode="tail">
+                        {workout.name || 'Unnamed Workout'}
+                      </Text>
+                      <View style={styles.workoutHistoryStats}>
+                        <View style={styles.workoutHistoryStat}>
+                          <IonIcon name="time-outline" size={14} color={colors.secondaryText} />
+                          <Text style={styles.workoutHistoryStatText}>
+                            {workout.displayDuration}
+                          </Text>
+                        </View>
+                        <View style={styles.workoutHistoryStat}>
+                          <IonIcon name="fitness-outline" size={14} color={colors.secondaryText} />
+                          <Text style={styles.workoutHistoryStatText}>
+                            {workout.exerciseCount}
+                          </Text>
+                        </View>
+                        <View style={styles.workoutHistoryStat}>
+                          <IonIcon name="barbell-outline" size={14} color={colors.secondaryText} />
+                          <Text style={styles.workoutHistoryStatText}>
+                            {workout.formattedVolume}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                  <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
-                </TouchableOpacity>
+                    <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
+                  </TouchableOpacity>
+                  {index < workouts.length - 1 && <View style={styles.bottomSheetDivider} />}
+                </View>
               ))
             )}
-          </BottomSheetScrollView>
+              </ScrollView>
+            </View>
           </BottomSheetView>
         </BottomSheet>
         
@@ -1466,7 +1502,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   bottomSheetHeader: {
-    paddingVertical: 16,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
@@ -1482,24 +1520,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
+  bottomSheetScrollContainer: {
+    maxHeight: '100%',
+    paddingBottom: 140,
+  },
+  bottomSheetScrollView: {
+    borderRadius: 12,
+  },
   bottomSheetScrollContent: {
     paddingTop: 16,
     paddingBottom: 20,
   },
   
-  // Workout History Card Styles (matching workout tab)
+  // Workout History Card Styles (matching exercise selection)
   workoutHistoryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primaryAccent,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: colors.secondaryAccent,
+    padding: 16,
+    marginBottom: 0,
   },
   workoutHistoryDate: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: colors.secondaryAccent,
+    backgroundColor: colors.primaryAccent,
     marginRight: 16,
     minWidth: 60,
     alignItems: 'center',
@@ -1531,6 +1575,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.secondaryText,
     marginLeft: 4,
+  },
+  
+  // Bottom sheet divider style (matching exercise selection)
+  bottomSheetDivider: {
+    height: 1,
+    backgroundColor: colors.whiteOverlay,
+    marginHorizontal: 16,
   },
   
   // Loading and error states
