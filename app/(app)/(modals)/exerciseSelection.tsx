@@ -24,6 +24,81 @@ import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView, FlatList, ScrollView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 
+// Skeleton Loader Component for Exercise Items
+const ExerciseSkeletonItem = () => {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+
+  return (
+    <View style={styles.skeletonItemWrapper}>
+      <View style={styles.skeletonItemContent}>
+        <View style={styles.skeletonSelectableArea}>
+          <Animated.View 
+            style={[
+              styles.skeletonImage,
+              { opacity: pulseAnim }
+            ]} 
+          />
+          <View style={styles.skeletonInfo}>
+            <Animated.View 
+              style={[
+                styles.skeletonTitle,
+                { opacity: pulseAnim }
+              ]} 
+            />
+            <Animated.View 
+              style={[
+                styles.skeletonSubtitle,
+                { opacity: pulseAnim }
+              ]} 
+            />
+          </View>
+        </View>
+        <Animated.View 
+          style={[
+            styles.skeletonInfoButton,
+            { opacity: pulseAnim }
+          ]} 
+        />
+      </View>
+    </View>
+  );
+};
+
+const ExerciseSkeletonLoader = () => {
+  return (
+    <View style={styles.skeletonContainer}>
+      {/* Section Header Skeleton */}
+      <View style={styles.skeletonSectionHeader}>
+        <Animated.View style={styles.skeletonSectionTitle} />
+      </View>
+      
+      {/* Exercise Items Skeleton */}
+      {Array.from({ length: 8 }).map((_, index) => (
+        <ExerciseSkeletonItem key={index} />
+      ))}
+    </View>
+  );
+};
+
 export default function ExerciseSelection() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -900,8 +975,7 @@ export default function ExerciseSelection() {
 
         {/* Exercise List */}
         {loading ? (
-          <View style={styles.loadingContainer}>
-          </View>
+          <ExerciseSkeletonLoader />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -1170,7 +1244,7 @@ customText: {
   fontWeight: '400',
 },
   searchFilterContainer: {
-    backgroundColor: colors.backgrund,
+    backgroundColor: colors.background,
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 12,
@@ -1345,16 +1419,7 @@ customText: {
     fontWeight: '600',
     textTransform: 'uppercase',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  loadingText: {
-    color: colors.secondaryText,
-    marginTop: 12,
-  },
+
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1550,5 +1615,73 @@ customText: {
     color: colors.primaryText,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Skeleton Styles
+  skeletonContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  skeletonSectionHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingTop: 20,
+    backgroundColor: colors.background,
+  },
+  skeletonSectionTitle: {
+    height: 16,
+    width: 120,
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 4,
+  },
+  skeletonItemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.whiteOverlay,
+  },
+  skeletonItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 22,
+    paddingRight: 12,
+  },
+  skeletonSelectableArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 20,
+  },
+  skeletonImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: colors.primaryAccent,
+  },
+  skeletonInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  skeletonTitle: {
+    height: 16,
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 4,
+    marginBottom: 8,
+    width: '70%',
+  },
+  skeletonSubtitle: {
+    height: 12,
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 4,
+    width: '50%',
+  },
+  skeletonInfoButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primaryAccent,
+    marginRight: 12,
   },
 });
