@@ -1587,7 +1587,7 @@ const handleTimerCompletion = async () => {
         <View style={styles.routineAndStatsContainer}>
           {routine && (
             <View style={styles.routineBadge}>
-              <IonIcon name="barbell-outline" size={14} color={colors.brand} />
+              <IonIcon name="barbell-outline" size={14} color={colors.primaryText} />
               <Text style={styles.routineText}>{routine.name}</Text>
             </View>
           )}
@@ -3762,18 +3762,15 @@ const styles = StyleSheet.create({
   routineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 152, 219, 0.3)',
-    minWidth: 150,
+    backgroundColor: colors.primaryAccent,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    borderRadius: 8,
     justifyContent: 'center',
   },
   routineText: {
     fontSize: 12,
-    color: colors.brand,
+    color: colors.primaryText,
     fontWeight: '500',
     marginLeft: 4,
     textAlign: 'center',
