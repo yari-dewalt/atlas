@@ -166,22 +166,36 @@ export default function EditPost() {
                 });
               });
 
-              // Calculate duration in minutes
+              // Calculate duration in seconds (like workout tab)
               let duration = 0;
               if (workoutData.start_time && workoutData.end_time) {
                 const startTime = new Date(workoutData.start_time);
                 const endTime = new Date(workoutData.end_time);
-                duration = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+                duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
               }
+
+              // Format duration like workout tab
+              const hours = Math.floor(duration / 3600);
+              const minutes = Math.floor((duration % 3600) / 60);
+              const formattedDuration = hours > 0 
+                ? `${hours}h ${minutes}m` 
+                : `${minutes}m`;
+
+              // Convert volume to user's preferred unit and format with k notation
+              const volumeResult = displayWeightForUser(totalVolume, 'kg', userWeightUnit, false);
+              const volumeInUserUnit = Math.round(typeof volumeResult === 'number' ? volumeResult : parseFloat(volumeResult.toString()));
+              const formattedVolume = formatVolumeWithUnit(volumeInUserUnit, userWeightUnit);
               
               const processedWorkout = {
                 ...workoutData,
                 duration: duration,
+                displayDuration: formattedDuration,
                 displayDate: formatWorkoutDate(workoutData.start_time),
                 exerciseCount: workoutData.workout_exercises?.length || 0,
                 totalSets: workoutData.workout_exercises?.reduce((acc, ex) => 
                   acc + (ex.workout_sets?.length || 0), 0) || 0,
-                totalVolume: Math.round(totalVolume)
+                totalVolume: Math.round(totalVolume),
+                formattedVolume: formattedVolume
               };
               
               setSelectedWorkout(processedWorkout);
@@ -318,22 +332,36 @@ export default function EditPost() {
           });
         });
 
-        // Calculate duration in minutes
+        // Calculate duration in seconds (like workout tab)
         let duration = 0;
         if (workout.start_time && workout.end_time) {
           const startTime = new Date(workout.start_time);
           const endTime = new Date(workout.end_time);
-          duration = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60)); // Convert to minutes
+          duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000); // Convert to seconds
         }
+
+        // Format duration like workout tab
+        const hours = Math.floor(duration / 3600);
+        const minutes = Math.floor((duration % 3600) / 60);
+        const formattedDuration = hours > 0 
+          ? `${hours}h ${minutes}m` 
+          : `${minutes}m`;
+
+        // Convert volume to user's preferred unit and format with k notation
+        const volumeResult = displayWeightForUser(totalVolume, 'kg', userWeightUnit, false);
+        const volumeInUserUnit = Math.round(typeof volumeResult === 'number' ? volumeResult : parseFloat(volumeResult.toString()));
+        const formattedVolume = formatVolumeWithUnit(volumeInUserUnit, userWeightUnit);
         
         return {
           ...workout,
           duration: duration,
+          displayDuration: formattedDuration,
           displayDate: formatWorkoutDate(workout.start_time),
           exerciseCount: workout.workout_exercises?.length || 0,
           totalSets: workout.workout_exercises?.reduce((acc, ex) => 
             acc + (ex.workout_sets?.length || 0), 0) || 0,
-          totalVolume: Math.round(totalVolume)
+          totalVolume: Math.round(totalVolume),
+          formattedVolume: formattedVolume
         };
       }) || [];
       
@@ -352,6 +380,19 @@ export default function EditPost() {
     } catch (e) {
       return 'recently';
     }
+  };
+
+  const formatVolumeWithUnit = (volume: number, unit: string) => {
+    if (volume >= 1000) {
+      const volumeInK = volume / 1000;
+      // If it's a whole number (like 12000 -> 12k), don't show decimals
+      if (volumeInK % 1 === 0) {
+        return `${volumeInK}k ${unit}`;
+      }
+      // Otherwise show one decimal place (like 19310 -> 19.3k)
+      return `${volumeInK.toFixed(1)}k ${unit}`;
+    }
+    return `${volume} ${unit}`;
   };
 
   const processMediaUrls = async (mediaItems) => {
@@ -993,19 +1034,19 @@ export default function EditPost() {
                       <View style={styles.workoutHistoryStat}>
                         <IonIcon name="time-outline" size={14} color={colors.secondaryText} />
                         <Text style={styles.workoutHistoryStatText}>
-                          {Math.floor(workout.duration / 60)}m
+                          {workout.displayDuration}
                         </Text>
                       </View>
                       <View style={styles.workoutHistoryStat}>
                         <IonIcon name="fitness-outline" size={14} color={colors.secondaryText} />
                         <Text style={styles.workoutHistoryStatText}>
-                          {workout.exerciseCount} exercises
+                          {workout.exerciseCount}
                         </Text>
                       </View>
                       <View style={styles.workoutHistoryStat}>
                         <IonIcon name="barbell-outline" size={14} color={colors.secondaryText} />
                         <Text style={styles.workoutHistoryStatText}>
-                          {displayWeightForUser(workout.totalVolume, 'kg', userWeightUnit, true)}
+                          {workout.formattedVolume}
                         </Text>
                       </View>
                     </View>
