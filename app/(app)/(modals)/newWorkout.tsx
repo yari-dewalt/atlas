@@ -4768,7 +4768,7 @@ pickerContainer: {
   },
   
   picker: {
-    width: 80,
+    width: 85,
     height: 150,
     flex: 1,
   },
