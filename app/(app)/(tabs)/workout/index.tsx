@@ -29,9 +29,9 @@ const mockRoutines = [
 ];
 
 const mockHistory = [
-  { id: 1, name: "Upper Body Split", date: "May 12, 2025", duration: "45 min", volume: "5,400 lbs" },
-  { id: 2, name: "Lower Body Focus", date: "May 9, 2025", duration: "58 min", volume: "8,250 lbs" },
-  { id: 3, name: "Full Body Workout", date: "May 5, 2025", duration: "72 min", volume: "7,800 lbs" },
+  { id: 1, name: "Upper Body Split", date: "May 12, 2025", duration: "45 min", volume: "5.4k lbs" },
+  { id: 2, name: "Lower Body Focus", date: "May 9, 2025", duration: "58 min", volume: "8.3k lbs" },
+  { id: 3, name: "Full Body Workout", date: "May 5, 2025", duration: "72 min", volume: "7.8k lbs" },
 ];
 
 export default function Workout() {
@@ -212,12 +212,17 @@ export default function Workout() {
           ? `${hours}h ${minutes}m` 
           : `${minutes}m`;
         
+        // Convert volume to user's preferred unit and format with k notation
+        const volumeResult = displayWeightForUser(totalVolume, 'kg', userWeightUnit, false);
+        const volumeInUserUnit = Math.round(typeof volumeResult === 'number' ? volumeResult : parseFloat(volumeResult.toString()));
+        const formattedVolume = formatVolumeWithUnit(volumeInUserUnit, userWeightUnit);
+
         return {
           id: workout.id,
           name: workout.name,
           date: format(parseISO(workout.start_time), "MMM d, yyyy"),
           duration: formattedDuration,
-          volume: displayWeightForUser(Math.round(totalVolume), 'kg', userWeightUnit, true),
+          volume: formattedVolume,
           exercises: exercises.length
         };
       });
@@ -394,6 +399,19 @@ export default function Workout() {
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
+  };
+
+  const formatVolumeWithUnit = (volume: number, unit: string) => {
+    if (volume >= 1000) {
+      const volumeInK = volume / 1000;
+      // If it's a whole number (like 12000 -> 12k), don't show decimals
+      if (volumeInK % 1 === 0) {
+        return `${volumeInK}k ${unit}`;
+      }
+      // Otherwise show one decimal place (like 19310 -> 19.3k)
+      return `${volumeInK.toFixed(1)}k ${unit}`;
+    }
+    return `${volume} ${unit}`;
   };
 
   return (
@@ -609,7 +627,7 @@ export default function Workout() {
                       </View>
                       <View style={styles.historyStat}>
                         <IonIcon name="fitness-outline" size={14} color={colors.secondaryText} />
-                        <Text style={styles.historyStatText}>{workout.exercises} exercises</Text>
+                        <Text style={styles.historyStatText}>{workout.exercises}</Text>
                       </View>
                       <View style={styles.historyStat}>
                         <IonIcon name="barbell-outline" size={14} color={colors.secondaryText} />
