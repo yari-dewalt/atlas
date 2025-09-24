@@ -337,7 +337,7 @@ const TopNavBar = () => {
                 onPress={() => router.back()}
               >
                 <Ionicons
-                  name={isModalRoute ? "close" : "arrow-back"} 
+                  name={isModalRoute ? "close" : "chevron-back"} 
                   size={24} 
                   color={colors.primaryText} 
                 />
