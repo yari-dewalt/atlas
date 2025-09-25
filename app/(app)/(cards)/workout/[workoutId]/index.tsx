@@ -827,8 +827,7 @@ export default function WorkoutDetailScreen() {
                   </Text>
                 </Text>
                 <Text style={styles.workoutDate}>
-                  {format(startDate, 'MMM d, yyyy')} • {format(startDate, 'h:mm a')}
-                  {endDate && ` - ${format(endDate, 'h:mm a')}`}
+                  {format(startDate, 'MMM d, yyyy')}
                 </Text>
               </View>
             </TouchableOpacity>

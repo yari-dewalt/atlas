@@ -45,6 +45,17 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
 
+  // Format duration function (same as workout details screen)
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
   // Check if we should show the follow button
   const isProfileRoute = pathname.includes('/profile');
   const isMainProfilePage = isProfileRoute && 
@@ -280,6 +291,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
               name,
               start_time,
               end_time,
+              duration,
               notes,
               routine_id,
               routines(
@@ -311,13 +323,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           if (error) throw error;
 
           if (workout) {
-            // Calculate duration from start_time and end_time if available
-            let calculatedDuration = 0;
-            if (workout.start_time && workout.end_time) {
-              const startTime = new Date(workout.start_time);
-              const endTime = new Date(workout.end_time);
-              calculatedDuration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000); // in seconds
-            }
+            // Use the duration field directly from the database (which is already in seconds)
+            let calculatedDuration = workout.duration ?? 0;
 
             // Calculate total volume
             let totalVolume = 0;
@@ -653,13 +660,15 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       {data.text && <Text style={styles.postText}>{data.text || ''}</Text>}
 
 <View style={styles.workoutInfoContainer}>
-  {!isWorkoutLoading && workoutData?.duration && workoutData.duration > 0 && (
+  {!isWorkoutLoading && workoutData?.duration && workoutData.duration > 0 ? (
     <View style={styles.workoutInfo}>
       <Text style={styles.workoutInfoHeaderText}>Time</Text>
       <Text style={styles.workoutInfoText}>
-        {Math.floor(workoutData.duration / 60) || 0}mins
+        {formatDuration(workoutData.duration)}
       </Text>
     </View>
+  ) : (
+    null
   )}
 
   {!isWorkoutLoading && workoutData?.exerciseCount && workoutData.exerciseCount > 0 && (
