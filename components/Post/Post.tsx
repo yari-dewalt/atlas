@@ -176,7 +176,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       if (data.id) {
         setIsCommentLoading(true);
         try {
-          const comments = await fetchComments(data.id);
+          const comments = await fetchComments(data.id, session?.user?.id);
           let totalCount = comments.length;
           
           // Add the count of any replies
@@ -188,7 +188,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           
           setCommentsCount(totalCount);
           
-          // Set preview comments (top 2)
+          // Set preview comments (top 2) with proper likes data
           setPreviewComments(comments.slice(0, 2));
         } catch (error) {
           console.error('Error getting comments count:', error);
@@ -199,7 +199,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     };
     
     getCommentCount();
-  }, [data.id]);
+  }, [data.id, session?.user?.id]);
 
   useEffect(() => {
     // Check if the current user has already liked this post
@@ -453,7 +453,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     
     // Refresh preview comments
     try {
-      const comments = await fetchComments(data.id);
+      const comments = await fetchComments(data.id, session?.user?.id);
       setPreviewComments(comments.slice(0, 2));
     } catch (error) {
       console.error('Error refreshing preview comments:', error);
@@ -484,7 +484,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           comment.id === commentId 
             ? { 
                 ...comment, 
-                likes: newLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1),
+                likes_count: newLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1),
                 is_liked: newLikedState 
               }
             : comment
@@ -507,7 +507,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
             comment.id === commentId 
               ? { 
                   ...comment, 
-                  likes: result.liked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
+                  likes_count: result.liked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
                   is_liked: result.liked 
                 }
               : comment
@@ -526,7 +526,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       setPreviewComments(prev => 
         prev.map(comment => 
           comment.id === commentId 
-            ? { ...comment, likes: currentLikes, is_liked: isLiked }
+            ? { ...comment, likes_count: currentLikes, is_liked: isLiked }
             : comment
         )
       );
@@ -788,7 +788,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
         {/* Preview existing comments */}
         {previewComments.map((comment, index) => {
           const isLiked = commentLikes.get(comment.id) ?? comment.is_liked;
-          const currentLikes = comment.likes || 0;
+          const currentLikes = comment.likes_count || 0;
           
           return (
             <View key={comment.id} style={styles.commentPreview}>
@@ -822,7 +822,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 <IonIcon 
                   name={isLiked ? "heart" : "heart-outline"}
                   size={16} 
-                  color={isLiked ? "#FF6B9D" : colors.secondaryText} 
+                  color={isLiked ? colors.notification : colors.secondaryText} 
                 />
                 {currentLikes > 0 && (
                   <Text style={styles.commentLikesText}>
@@ -954,6 +954,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 16,
+    paddingBottom: 0,
   },
   postHeaderInfo: {
     flexDirection: 'column',

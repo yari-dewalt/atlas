@@ -8,7 +8,7 @@ import CachedAvatar from '../../../../../components/CachedAvatar';
 import PostCommentsSkeleton from '../../../../../components/PostCommentsSkeleton';
 import { colors } from '../../../../../constants/colors';
 import { useAuthStore } from '../../../../../stores/authStore';
-import { fetchComments, addComment, formatTimeAgo, likePost, checkIfUserLikedPost, likeComment, deleteComment, editComment } from '../../../../../utils/postUtils';
+import { fetchComments, addComment, formatTimeAgo, formatLikesCount, likePost, checkIfUserLikedPost, likeComment, deleteComment, editComment } from '../../../../../utils/postUtils';
 import * as Haptics from 'expo-haptics';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -227,7 +227,7 @@ export default function PostCommentsScreen() {
         }
 
         // Fetch comments
-        const commentsData = await fetchComments(postId as string);
+        const commentsData = await fetchComments(postId as string, session?.user?.id);
         setComments(commentsData || []);
         setCommentsCount(commentsData?.length || 0);
       } else {
@@ -894,7 +894,7 @@ export default function PostCommentsScreen() {
                 />
                 {reply.likes_count > 0 && (
                   <Text style={styles.replyLikesText}>
-                    {reply.likes_count}
+                    {formatLikesCount(reply.likes_count)}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -994,7 +994,7 @@ export default function PostCommentsScreen() {
                 />
                 {comment.likes_count > 0 && (
                   <Text style={styles.commentLikesText}>
-                    {comment.likes_count}
+                    {formatLikesCount(comment.likes_count)}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1536,9 +1536,8 @@ export default function PostCommentsScreen() {
   },
   commentHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
-    marginBottom: 4,
   },
   commentInlineLikes: {
     flexDirection: 'row',
@@ -1550,6 +1549,7 @@ export default function PostCommentsScreen() {
     flexDirection: 'column',
     alignItems: 'center',
     padding: 4,
+    position: 'relative',
   },
   commentUsername: {
     fontSize: 14,
@@ -1723,16 +1723,14 @@ export default function PostCommentsScreen() {
   commentActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
     gap: 8,
+    marginLeft: -4,
   },
   commentActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 4,
   },
   replyActionButton: {
-    padding: 4,
   },
   actionText: {
     fontWeight: 'bold',
@@ -1750,16 +1748,26 @@ export default function PostCommentsScreen() {
     padding: 4,
   },
   commentLikesText: {
+    position: 'absolute',
+    top: 18,
+    left: 0,
+    right: 0,
     fontSize: 10,
     color: colors.secondaryText,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
   },
   replyLikesText: {
+    position: 'absolute',
+    top: 18,
+    left: 0,
+    right: 0,
     fontSize: 9,
     color: colors.secondaryText,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 4,
+    textAlign: 'center',
   },
   showRepliesButton: {
     marginTop: 8,

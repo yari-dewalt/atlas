@@ -597,6 +597,8 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
         });
       });
     }
+
+    console.log(formattedComments);
     
     return sortCommentsBySmart(formattedComments, isPostOwner);
   } catch (error) {
@@ -727,16 +729,17 @@ export async function likeComment(commentId: string, userId: string): Promise<{ 
     
     if (checkError) throw checkError;
 
+    // Get comment info for notifications
     const { data: comment, error: commentError } = await supabase
-    .from('post_comments')
-    .select('user_id, text, post_id')
-    .eq('id', commentId)
-    .single();
+      .from('post_comments')
+      .select('user_id, text, post_id')
+      .eq('id', commentId)
+      .single();
     
     if (commentError) throw commentError;
     
     if (existingLike) {
-      // Unlike
+      // Unlike - just delete the like, trigger will handle count update
       const { error: unlikeError } = await supabase
         .from('comment_likes')
         .delete()
@@ -745,49 +748,16 @@ export async function likeComment(commentId: string, userId: string): Promise<{ 
       
       if (unlikeError) throw unlikeError;
       
-      // Decrement likes count
-      const { data: commentData, error: getError } = await supabase
-        .from('post_comments')
-        .select('likes_count')
-        .eq('id', commentId)
-        .single();
-      
-      if (getError) throw getError;
-      
-      const newCount = Math.max(0, (commentData.likes_count || 0) - 1);
-      const { error: updateError } = await supabase
-        .from('post_comments')
-        .update({ likes_count: newCount })
-        .eq('id', commentId);
-      
-      if (updateError) throw updateError;
-      
       return { liked: false };
     } else {
-      // Like
+      // Like - just insert the like, trigger will handle count update
       const { error: likeError } = await supabase
         .from('comment_likes')
         .insert({ comment_id: commentId, user_id: userId });
       
       if (likeError) throw likeError;
-      
-      // Increment likes count
-      const { data: commentData, error: getError } = await supabase
-        .from('post_comments')
-        .select('likes_count')
-        .eq('id', commentId)
-        .single();
-      
-      if (getError) throw getError;
-      
-      const newCount = (commentData.likes_count || 0) + 1;
-      const { error: updateError } = await supabase
-        .from('post_comments')
-        .update({ likes_count: newCount })
-        .eq('id', commentId);
-      
-      if (updateError) throw updateError;
 
+      // Send notification if not liking own comment
       if (comment.user_id !== userId) {
         try {
           await createCommentLikeNotification(comment.user_id, userId, commentId);
@@ -1005,5 +975,20 @@ export function formatTimeAgo(timestamp: string): string {
   } catch (e) {
     console.error("Error formatting time ago:", e);
     return timestamp; // Return the original timestamp if parsing fails
+  }
+}
+
+export function formatLikesCount(count: number): string {
+  if (count < 1000) {
+    return count.toString();
+  } else if (count < 1000000) {
+    const thousands = count / 1000;
+    return thousands % 1 === 0 ? `${thousands}k` : `${thousands.toFixed(1)}k`;
+  } else if (count < 1000000000) {
+    const millions = count / 1000000;
+    return millions % 1 === 0 ? `${millions}m` : `${millions.toFixed(1)}m`;
+  } else {
+    const billions = count / 1000000000;
+    return billions % 1 === 0 ? `${billions}b` : `${billions.toFixed(1)}b`;
   }
 }
