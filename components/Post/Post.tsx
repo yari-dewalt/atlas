@@ -11,7 +11,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { fetchComments } from "../../utils/postUtils";
 import { useProfileStore } from "../../stores/profileStore";
 import * as Haptics from 'expo-haptics';
-import { usePostVisibility } from "../../hooks/usePostVisibility";
+import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
 import { useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser } from "../../utils/weightUtils";
@@ -33,6 +33,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const [commentLikes, setCommentLikes] = useState(new Map()); // Track comment like states
   const [followingUsers, setFollowingUsers] = useState(new Set());
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
+  const [isPostVisible, setIsPostVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -40,7 +41,6 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const pathname = usePathname();
   const { profile, session } = useAuthStore();
   const { updatePostsCount, isCurrentUser, followUser, checkIfFollowing, isUserFollowed } = useProfileStore();
-  const { isVisible: isPostVisible, elementRef: postRef, onLayout: onPostLayout } = usePostVisibility({ threshold: 0.5 });
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -585,11 +585,11 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   };
 
   return (
-    <View 
-      ref={postRef}
-      style={styles.container}
-      onLayout={onPostLayout}
+    <VisibilitySensor
+      onChange={(isVisible) => setIsPostVisible(isVisible)}
+      threshold={{ top: 500, bottom: 560 }}
     >
+      <View style={styles.container}>
       {/* Need to stop propagation on these elements */}
       <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
         <View style={styles.postHeader}>
@@ -928,6 +928,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
         </TouchableOpacity>
       </Modal>
     </View>
+    </VisibilitySensor>
   );
 };
 
@@ -1081,11 +1082,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 20,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
+
   bottomSheetTitle: {
     fontSize: 16,
     fontWeight: '600',
