@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -21,6 +21,9 @@ import { useAuthStore } from '../../../../../stores/authStore';
 import { useWorkoutStore } from '../../../../../stores/workoutStore';
 import { getUserWeightUnit, displayWeightForUser } from '../../../../../utils/weightUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import * as Haptics from 'expo-haptics';
 
 export default function WorkoutDetailScreen() {
   const { workoutId } = useLocalSearchParams();
@@ -35,6 +38,20 @@ export default function WorkoutDetailScreen() {
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
   const [failedImages, setFailedImages] = useState(new Set<string>());
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+
+  // Bottom Sheet refs
+  const optionsBottomSheetRef = useRef<BottomSheet>(null);
+  
+  // Bottom Sheet snap points
+  const optionsSnapPoints = useMemo(() => ['25%'], []);
+
+  // Bottom Sheet callbacks
+  const handleOptionsSheetChanges = useCallback((index: number) => {
+    if (index === -1) {
+      setOptionsModalVisible(false);
+    }
+  }, []);
 
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -59,6 +76,21 @@ export default function WorkoutDetailScreen() {
   useEffect(() => {
     fetchWorkout();
   }, [workoutId]);
+
+  // Setup global function for opening options
+  useEffect(() => {
+    // Expose function to open options modal globally
+    (global as any).openWorkoutOptions = () => {
+      setOptionsModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      optionsBottomSheetRef.current?.expand();
+    };
+
+    // Cleanup function
+    return () => {
+      (global as any).openWorkoutOptions = undefined;
+    };
+  }, []);
 
   const fetchWorkout = async () => {
     try {
@@ -467,6 +499,134 @@ export default function WorkoutDetailScreen() {
     }
   };
 
+  const handleCreateRoutine = async () => {
+    if (!session?.user?.id || !workout?.workout_exercises || workout.workout_exercises.length === 0) {
+      Alert.alert('Error', 'You must be logged in to create a routine.');
+      return;
+    }
+
+    // First, prompt for routine name
+    Alert.prompt(
+      'Create Routine',
+      'Enter a name for your new routine:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Continue',
+          onPress: (routineName) => {
+            if (!routineName || routineName.trim() === '') {
+              Alert.alert('Error', 'Please enter a routine name.');
+              return;
+            }
+            confirmCreateRoutine(routineName.trim());
+          },
+        },
+      ],
+      'plain-text',
+      `${workout.name} Routine`
+    );
+  };
+
+  const confirmCreateRoutine = (routineName: string) => {
+    Alert.alert(
+      'Confirm Creation',
+      `Create a routine called "${routineName}" with ${workout.workout_exercises.length} exercise${workout.workout_exercises.length === 1 ? '' : 's'}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create Routine',
+          onPress: () => createRoutineWithName(routineName),
+          style: 'default',
+        },
+      ]
+    );
+  };
+
+  const createRoutineWithName = async (routineName: string) => {
+    try {
+      // Create a new routine from the workout
+      const { data: newRoutine, error: routineError } = await supabase
+        .from('routines')
+        .insert({
+          name: routineName,
+          user_id: session.user.id,
+          category: 'user_created',
+          original_creator_id: session.user.id,
+        })
+        .select('id')
+        .single();
+
+      if (routineError) throw routineError;
+
+      // Copy all exercises to the routine
+      const exercisesToCopy = workout.workout_exercises.map((exercise: any, index: number) => {
+        const workoutSets = exercise.sets || [];
+        
+        // Calculate rep range if there are multiple sets with different rep counts
+        const repCounts = workoutSets.map((set: any) => set.reps).filter((reps: any) => reps != null && typeof reps === 'number');
+        const uniqueReps = [...new Set(repCounts)] as number[];
+        
+        let defaultReps = null;
+        let defaultRepsMin = null;
+        let defaultRepsMax = null;
+        
+        if (uniqueReps.length === 1) {
+          // All sets have the same reps
+          defaultReps = uniqueReps[0];
+        } else if (uniqueReps.length > 1) {
+          // Sets have different reps, set a range
+          defaultRepsMin = Math.min(...uniqueReps);
+          defaultRepsMax = Math.max(...uniqueReps);
+        }
+        
+        // Get the most common RPE or the first one
+        const rpeCounts = workoutSets.map((set: any) => set.rpe).filter((rpe: any) => rpe != null);
+        const defaultRpe = rpeCounts.length > 0 ? rpeCounts[0] : null;
+        
+        return {
+          routine_id: newRoutine.id,
+          exercise_id: exercise.exercise_id, // Include exercise_id to maintain relationship with exercises table
+          name: exercise.exercises?.name || exercise.name,
+          order_position: index + 1,
+          total_sets: workoutSets.length > 0 ? workoutSets.length : 3, // Default to 3 sets if no sets exist
+          default_weight: null, // Don't copy personal weight defaults
+          default_reps: defaultReps,
+          default_reps_min: defaultRepsMin,
+          default_reps_max: defaultRepsMax,
+          default_rpe: defaultRpe,
+        };
+      });
+
+      const { error: exercisesError } = await supabase
+        .from('routine_exercises')
+        .insert(exercisesToCopy);
+
+      if (exercisesError) throw exercisesError;
+
+      // Show success message and navigate to the new routine
+      Alert.alert(
+        "Success!", 
+        `Routine "${routineName}" was successfully created with ${workout.workout_exercises.length} exercise${workout.workout_exercises.length === 1 ? '' : 's'}!`,
+        [
+          {
+            text: "View Routine",
+            onPress: () => router.push(`/routine/${newRoutine.id}`),
+            style: "default",
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error creating routine:', error);
+      Alert.alert("Error", "Failed to create routine from workout");
+    }
+  };
+
   const renderExerciseItem = (exercise: any, supersetColor?: string) => {
     return (
       <View key={exercise.id} style={styles.exerciseItemWrapper}>
@@ -590,7 +750,7 @@ export default function WorkoutDetailScreen() {
   };
   
   return (
-    <>
+    <GestureHandlerRootView style={styles.container}>
       <Stack.Screen 
         options={{
           title: workout.name,
@@ -598,7 +758,7 @@ export default function WorkoutDetailScreen() {
         }}
       />
       
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         {/* Workout Header */}
         <View style={styles.workoutHeader}>
           <Text style={styles.workoutName}>{workout.name}</Text>
@@ -752,7 +912,53 @@ export default function WorkoutDetailScreen() {
           })()}
         </View>
       </ScrollView>
-    </>
+
+      {/* Workout Options Bottom Sheet */}
+      <BottomSheet
+        ref={optionsBottomSheetRef}
+        index={-1}
+        snapPoints={optionsSnapPoints}
+        onChange={handleOptionsSheetChanges}
+        enablePanDownToClose={true}
+        backgroundStyle={styles.bottomSheetBackground}
+        handleIndicatorStyle={styles.bottomSheetIndicator}
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop
+            {...props}
+            disappearsOnIndex={-1}
+            appearsOnIndex={0}
+          />
+        )}
+      >
+        <BottomSheetView style={styles.optionsModalContent}>
+          <View style={styles.bottomSheetHeader}>
+            <Text style={styles.optionsTitle}>Workout Options</Text>
+            <Text style={styles.optionsSubtitle}>Create a routine from this workout</Text>
+          </View>
+          
+          <View style={styles.optionsContent}>
+            {/* Create Routine Option */}
+            <TouchableOpacity
+              activeOpacity={0.5} 
+              style={styles.optionItem} 
+              onPress={() => {
+                optionsBottomSheetRef.current?.close();
+                handleCreateRoutine();
+              }}
+            >
+              <View style={styles.optionIcon}>
+                <Ionicons name="copy-outline" size={24} color={colors.primaryText} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={styles.optionTitle}>Create Routine</Text>
+                <Text style={styles.optionSubtitle}>Create a routine based on this workout</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+            </TouchableOpacity>
+          </View>
+        </BottomSheetView>
+      </BottomSheet>
+    </GestureHandlerRootView>
   );
 }
 
@@ -760,6 +966,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     paddingBottom: 40,
@@ -852,16 +1061,6 @@ const styles = StyleSheet.create({
   workoutDate: {
     fontSize: 12,
     color: colors.secondaryText,
-  },
-  notesSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: colors.background,
-  },
-  notesText: {
-    fontSize: 14,
-    color: colors.secondaryText,
-    lineHeight: 20,
   },
   exercisesSection: {
     backgroundColor: colors.background,
@@ -1116,5 +1315,73 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.primaryText,
     marginLeft: 8,
+  },
+  // Bottom Sheet Styles
+  bottomSheetBackground: {
+    backgroundColor: colors.primaryAccent,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+  },
+  bottomSheetIndicator: {
+    backgroundColor: colors.secondaryText,
+    width: 50,
+  },
+  optionsModalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  bottomSheetHeader: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.whiteOverlay,
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.primaryText,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  optionsSubtitle: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  optionsContent: {
+    flex: 1,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.whiteOverlayLight,
+  },
+  optionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.whiteOverlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  optionTextContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primaryText,
+    marginBottom: 4,
+  },
+  optionSubtitle: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    lineHeight: 20,
   },
 });

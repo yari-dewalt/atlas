@@ -278,6 +278,13 @@ const TopNavBar = () => {
   const isMainRoutinePage = isRoutineSpecificRoute &&
     (pathname.endsWith(`/routine/${routineId}`) || pathname.endsWith(`/routine/${routineId}/index`) || pathname.endsWith('/routine'));
 
+  // Parse workoutId from the pathname for workout routes
+  const workoutIdMatch = pathname.match(/\/workout\/([^\/]+)/);
+  const workoutId = workoutIdMatch ? workoutIdMatch[1] : null;
+
+  const isMainWorkoutPage = isWorkoutSpecificRoute &&
+    (pathname.endsWith(`/workout/${workoutId}`) || pathname.endsWith(`/workout/${workoutId}/index`) || pathname.endsWith('/workout'));
+
   // Determine if we should show the follow button
   const shouldShowFollowButton = isProfileRoute && 
     !isMainProfilePage && 
@@ -522,6 +529,21 @@ const TopNavBar = () => {
                 // Call the global function to open routine options
                 if ((global as any).openRoutineOptions) {
                   (global as any).openRoutineOptions();
+                }
+              }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={24} color={colors.primaryText} />
+            </TouchableOpacity>
+          )}
+
+          {isMainWorkoutPage && (
+            <TouchableOpacity
+              activeOpacity={0.5} 
+              style={styles.headerButton}
+              onPress={() => {
+                // Call the global function to open workout options
+                if ((global as any).openWorkoutOptions) {
+                  (global as any).openWorkoutOptions();
                 }
               }}
             >
