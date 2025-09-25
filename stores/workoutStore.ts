@@ -76,6 +76,11 @@ interface WorkoutState {
   resumeTimer: () => void;
   startNewWorkout: (workoutData: { name?: string, routineId?: string, exercises?: WorkoutExercise[] }) => void;
   
+  // Auto-save functionality
+  saveWorkoutState: () => Promise<void>;
+  loadWorkoutState: () => Promise<boolean>;
+  clearSavedWorkoutState: () => Promise<void>;
+  
   // Exercise management
   addExercise: (exercise: { id: string, name: string, defaultSets?: number, image_url?: string, exercise_id?: string, superset_id?: string }) => string;
   updateExercise: (exerciseId: string, data: Partial<WorkoutExercise>) => void;
@@ -146,14 +151,22 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       accumulatedTime: 0,
       saveError: null
     });
+    
+    // Auto-save the new workout state
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
   
-  endWorkout: () => set({ 
-    activeWorkout: null,
-    isPaused: false,
-    pausedAt: null,
-    accumulatedTime: 0
-  }),
+  endWorkout: () => {
+    set({ 
+      activeWorkout: null,
+      isPaused: false,
+      pausedAt: null,
+      accumulatedTime: 0
+    });
+    
+    // Clear saved workout state when ending workout
+    setTimeout(() => get().clearSavedWorkoutState(), 100);
+  },
   
   saveWorkoutToDatabase: async () => {
     const { activeWorkout } = get();
@@ -287,7 +300,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         }
       }
       
-      // Success - workout is saved
+      // Success - workout is saved, clear the auto-saved state
+      await get().clearSavedWorkoutState();
       return true;
     } catch (error) {
       console.error("Error saving workout:", error);
@@ -298,67 +312,89 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     }
   },
   
-  updateActiveWorkout: (data) => set((state) => ({
-    activeWorkout: state.activeWorkout ? {...state.activeWorkout, ...data} : null
-  })),
-  
-  pauseTimer: () => set((state) => {
-    if (!state.activeWorkout || state.isPaused) return state;
-    return {
-      isPaused: true,
-      pausedAt: new Date().getTime(),
-    };
-  }),
-  
-  resumeTimer: () => set((state) => {
-    if (!state.activeWorkout || !state.isPaused) return state;
+  updateActiveWorkout: (data) => {
+    set((state) => ({
+      activeWorkout: state.activeWorkout ? {...state.activeWorkout, ...data} : null
+    }));
     
-    // Add the paused duration to accumulated time
-    const additionalTime = state.pausedAt ? 
-      (new Date().getTime() - state.pausedAt) / 1000 : 0;
-    
-    return {
-      isPaused: false,
-      pausedAt: null,
-      accumulatedTime: state.accumulatedTime + additionalTime
-    };
-  }),
+    // Auto-save after updating workout
+    setTimeout(() => get().saveWorkoutState(), 100);
+  },
   
-  updateWorkoutTime: (reset) => set((state) => {
-    if (!state.activeWorkout) return state;
+  pauseTimer: () => {
+    set((state) => {
+      if (!state.activeWorkout || state.isPaused) return state;
+      return {
+        isPaused: true,
+        pausedAt: new Date().getTime(),
+      };
+    });
     
-    // If reset is provided, set duration to that value
-    if (reset !== undefined) {
-      const now = new Date().getTime();
+    // Auto-save timer state
+    setTimeout(() => get().saveWorkoutState(), 100);
+  },
+  
+  resumeTimer: () => {
+    set((state) => {
+      if (!state.activeWorkout || !state.isPaused) return state;
+      
+      // Add the paused duration to accumulated time
+      const additionalTime = state.pausedAt ? 
+        (new Date().getTime() - state.pausedAt) / 1000 : 0;
+      
+      return {
+        isPaused: false,
+        pausedAt: null,
+        accumulatedTime: state.accumulatedTime + additionalTime
+      };
+    });
+    
+    // Auto-save timer state
+    setTimeout(() => get().saveWorkoutState(), 100);
+  },
+  
+  updateWorkoutTime: (reset) => {
+    set((state) => {
+      if (!state.activeWorkout) return state;
+      
+      // If reset is provided, set duration to that value
+      if (reset !== undefined) {
+        const now = new Date().getTime();
+        
+        return {
+          activeWorkout: {
+            ...state.activeWorkout,
+            duration: reset,
+            startTime: new Date(now - (reset * 1000)), // Adjust start time to match the duration
+          },
+          // Reset timer state
+          isPaused: true, // Keep paused after manual input
+          pausedAt: now,
+          accumulatedTime: 0, // Reset accumulated time
+        };
+      }
+      
+      // Rest of the function for regular timer updates
+      // If paused, don't update duration
+      if (state.isPaused) return state;
+      
+      // Calculate new duration: (current time - start time) - accumulated paused time
+      const rawDuration = (new Date().getTime() - state.activeWorkout.startTime.getTime()) / 1000;
+      const duration = Math.floor(rawDuration - state.accumulatedTime);
       
       return {
         activeWorkout: {
           ...state.activeWorkout,
-          duration: reset,
-          startTime: new Date(now - (reset * 1000)), // Adjust start time to match the duration
-        },
-        // Reset timer state
-        isPaused: true, // Keep paused after manual input
-        pausedAt: now,
-        accumulatedTime: 0, // Reset accumulated time
+          duration
+        }
       };
+    });
+    
+    // Auto-save after time update (but only for manual resets, not regular timer ticks)
+    if (reset !== undefined) {
+      setTimeout(() => get().saveWorkoutState(), 100);
     }
-    
-    // Rest of the function for regular timer updates
-    // If paused, don't update duration
-    if (state.isPaused) return state;
-    
-    // Calculate new duration: (current time - start time) - accumulated paused time
-    const rawDuration = (new Date().getTime() - state.activeWorkout.startTime.getTime()) / 1000;
-    const duration = Math.floor(rawDuration - state.accumulatedTime);
-    
-    return {
-      activeWorkout: {
-        ...state.activeWorkout,
-        duration
-      }
-    };
-  }),
+  },
   
   // Exercise management
   addExercise: (exercise) => {
@@ -402,6 +438,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       }
     });
     
+    // Auto-save after adding exercise
+    setTimeout(() => get().saveWorkoutState(), 100);
+    
     return exerciseId;
   },
   
@@ -419,6 +458,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         )
       }
     });
+    
+    // Auto-save after updating exercise
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
   
   removeExercise: (exerciseId) => {
@@ -431,6 +473,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         exercises: activeWorkout.exercises.filter(exercise => exercise.id !== exerciseId)
       }
     });
+    
+    // Auto-save after removing exercise
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
   
   // Set management
@@ -468,6 +513,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       }
     });
     
+    // Auto-save after adding set
+    setTimeout(() => get().saveWorkoutState(), 100);
+    
     return setId;
   },
   
@@ -493,6 +541,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         })
       }
     });
+    
+    // Auto-save after updating set
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
   
   removeSet: (exerciseId, setId) => {
@@ -513,6 +564,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         })
       }
     });
+    
+    // Auto-save after removing set
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
   
   toggleSetCompletion: (exerciseId, setId) => {
@@ -551,6 +605,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       accumulatedTime: 0,
       saveError: null
     });
+    
+    // Auto-save the new workout state
+    setTimeout(() => get().saveWorkoutState(), 100);
   },
 
   updateWorkoutSettings: async (newSettings: Partial<WorkoutSettings>) => {
@@ -586,5 +643,85 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   getDefaultRestTime: () => {
     const { workoutSettings } = get();
     return (workoutSettings.defaultRestMinutes * 60) + workoutSettings.defaultRestSeconds;
+  },
+
+  // Auto-save functionality
+  saveWorkoutState: async () => {
+    const { activeWorkout, isPaused, pausedAt, accumulatedTime } = get();
+    
+    if (!activeWorkout) {
+      // No active workout, clear any saved state
+      await get().clearSavedWorkoutState();
+      return;
+    }
+
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const workoutState = {
+        activeWorkout: {
+          ...activeWorkout,
+          startTime: activeWorkout.startTime.toISOString(), // Convert Date to string for storage
+        },
+        isPaused,
+        pausedAt,
+        accumulatedTime,
+        savedAt: new Date().toISOString(),
+      };
+      
+      await AsyncStorage.setItem('savedWorkoutState', JSON.stringify(workoutState));
+      console.log('Workout state auto-saved');
+    } catch (error) {
+      console.error('Error saving workout state:', error);
+    }
+  },
+
+  loadWorkoutState: async () => {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const savedState = await AsyncStorage.getItem('savedWorkoutState');
+      
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        
+        // Check if saved state is not too old (e.g., older than 24 hours)
+        const savedAt = new Date(parsedState.savedAt);
+        const now = new Date();
+        const hoursDiff = (now.getTime() - savedAt.getTime()) / (1000 * 60 * 60);
+        
+        if (hoursDiff > 24) {
+          console.log('Saved workout state is too old, clearing it');
+          await get().clearSavedWorkoutState();
+          return false;
+        }
+        
+        // Restore the workout state
+        set({
+          activeWorkout: {
+            ...parsedState.activeWorkout,
+            startTime: new Date(parsedState.activeWorkout.startTime), // Convert string back to Date
+          },
+          isPaused: parsedState.isPaused,
+          pausedAt: parsedState.pausedAt,
+          accumulatedTime: parsedState.accumulatedTime,
+        });
+        
+        console.log('Workout state loaded from auto-save');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading workout state:', error);
+    }
+    
+    return false;
+  },
+
+  clearSavedWorkoutState: async () => {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.removeItem('savedWorkoutState');
+      console.log('Saved workout state cleared');
+    } catch (error) {
+      console.error('Error clearing saved workout state:', error);
+    }
   },
 }));

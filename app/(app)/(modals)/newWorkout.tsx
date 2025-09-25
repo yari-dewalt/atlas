@@ -1940,7 +1940,7 @@ Animated.timing(deletionAnim, {
             delete swipeableRefs.current[swipeableKey];
           }
         }}
-        enabled={exercise.sets.length > 1} // Disable swipe if only one set
+        enabled={exercise.sets.length > 1 && !set.isCompleted} // Disable swipe if only one set
         renderRightActions={(prog) => rightAction(exercise.id, set.id, deletionAnim, setKey, prog)}
         rightThreshold={60}
         onSwipeableOpenStartDrag={() => {

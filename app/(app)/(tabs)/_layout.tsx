@@ -34,7 +34,7 @@ export default function AppLayout() {
   const [activeTab, setActiveTab] = useState('home');
   const [isProfileRoute, setIsProfileRoute] = useState(false);
   const { profile, session } = useAuthStore();
-  const { activeWorkout, isPaused, workoutSettings } = useWorkoutStore();
+  const { activeWorkout, isPaused, workoutSettings, loadWorkoutState } = useWorkoutStore();
   
   const router = useRouter();
   const pathname = usePathname();
@@ -77,6 +77,11 @@ export default function AppLayout() {
       setActiveTab(title);
     }
   }, [pathname]);
+
+  // Load saved workout state on app startup
+  useEffect(() => {
+    loadWorkoutState();
+  }, []);
   
   // Handle tab press - scroll to top if already on that tab
   const handleTabPress = (tabName) => {
