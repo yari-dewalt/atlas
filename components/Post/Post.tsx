@@ -170,6 +170,53 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     }, [])
   );
 
+  // Refresh preview comments when returning from comments screen
+  useFocusEffect(
+    useCallback(() => {
+      let timeoutId: any;
+      
+      const refreshCommentsOnFocus = async () => {
+        // Small delay to avoid too frequent refreshes
+        timeoutId = setTimeout(async () => {
+          if (data.id && session?.user?.id) {
+            try {
+              const comments = await fetchComments(data.id, session?.user?.id);
+              let totalCount = comments.length;
+              
+              // Add the count of any replies
+              comments.forEach(comment => {
+                if (comment.replies) {
+                  totalCount += comment.replies.length;
+                }
+              });
+              
+              // Only update if the count has changed (to avoid unnecessary re-renders)
+              setCommentsCount(prevCount => {
+                if (prevCount !== totalCount) {
+                  return totalCount;
+                }
+                return prevCount;
+              });
+              
+              // Update preview comments (always update as they might have changed order due to hotness)
+              setPreviewComments(comments.slice(0, 2));
+            } catch (error) {
+              console.error('Error refreshing comments on focus:', error);
+            }
+          }
+        }, 100);
+      };
+
+      refreshCommentsOnFocus();
+      
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+    }, [data.id, session?.user?.id])
+  );
+
   // Load comment count on mount
   useEffect(() => {
     const getCommentCount = async () => {
@@ -447,13 +494,20 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     }
   };
 
-  const handleCommentAdded = async () => {
-    // Increment comment count when a new comment is added
-    setCommentsCount(prev => prev + 1);
-    
-    // Refresh preview comments
+  // Function to manually refresh comments (can be called externally if needed)
+  const refreshPreviewComments = async () => {
     try {
       const comments = await fetchComments(data.id, session?.user?.id);
+      let totalCount = comments.length;
+      
+      // Add the count of any replies
+      comments.forEach(comment => {
+        if (comment.replies) {
+          totalCount += comment.replies.length;
+        }
+      });
+      
+      setCommentsCount(totalCount);
       setPreviewComments(comments.slice(0, 2));
     } catch (error) {
       console.error('Error refreshing preview comments:', error);

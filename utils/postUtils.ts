@@ -597,8 +597,6 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
         });
       });
     }
-
-    console.log(formattedComments);
     
     return sortCommentsBySmart(formattedComments, isPostOwner);
   } catch (error) {
