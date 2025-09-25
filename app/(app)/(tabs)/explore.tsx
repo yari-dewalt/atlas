@@ -374,7 +374,7 @@ export default function Explore() {
       // Add the current user's ID to exclude them from suggestions
       followingIds.push(session.user.id);
       
-      // Get users with most followers who aren't already followed
+      // Get users with most followers who aren't already followed and have completed onboarding
       const { data: users, error: usersError } = await supabase
         .from('profiles')
         .select(`
@@ -382,9 +382,11 @@ export default function Explore() {
           username,
           name,
           avatar_url,
+          onboarding_completed,
           followers:follows!follows_following_id_fkey(count)
         `)
         .not('id', 'in', `(${followingIds.length > 0 ? followingIds.join(',') : '0'})`)
+        .eq('onboarding_completed', true)
         .order('created_at', { ascending: false })
         .limit(10);
         
@@ -548,11 +550,12 @@ export default function Explore() {
     try {
       setSearchLoading(true);
       
-      // Search users only
+      // Search users only (exclude users who haven't completed onboarding)
       const { data: users, error: usersError } = await supabase
         .from('profiles')
-        .select('id, username, name, avatar_url, followers:follows!follows_following_id_fkey(count)')
+        .select('id, username, name, avatar_url, onboarding_completed, followers:follows!follows_following_id_fkey(count)')
         .or(`username.ilike.%${query}%,name.ilike.%${query}%`)
+        .eq('onboarding_completed', true)
         .limit(20);
         
       if (usersError) throw usersError;
@@ -784,7 +787,7 @@ export default function Explore() {
             onPress={() => setIsSearchFocused(true)}
           >
             <Text style={[styles.searchInputPlaceholder, searchQuery && styles.searchInputText]}>
-              {searchQuery || "Search members..."}
+              {searchQuery || "Search users..."}
             </Text>
           </TouchableOpacity>
           {searchQuery.length > 0 && (
@@ -898,7 +901,7 @@ export default function Explore() {
               <TextInput
                 ref={searchInputRef}
                 style={[styles.searchOverlayInput, Platform.OS === 'ios' ? {} : { marginLeft: 4 }]}
-                placeholder="Search members..."
+                placeholder="Search users..."
                 placeholderTextColor={colors.secondaryText}
                 value={searchQuery}
                 onChangeText={handleSearchChange}
