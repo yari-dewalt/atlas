@@ -454,6 +454,19 @@ export default function RoutineDetail() {
 
   const deleteRoutine = async () => {
     try {
+      // First, remove the routine reference from any workouts that use it
+      // This preserves workout history while removing the foreign key constraint
+      const { error: updateError } = await supabase
+        .from('workouts')
+        .update({ routine_id: null })
+        .eq('routine_id', routineId);
+
+      if (updateError) {
+        console.warn('Error updating workout references:', updateError);
+        // Continue with deletion even if this fails - the main delete might still work
+      }
+
+      // Now delete the routine
       const { error } = await supabase
         .from('routines')
         .delete()
