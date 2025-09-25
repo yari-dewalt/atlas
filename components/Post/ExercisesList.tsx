@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, TouchableWithoutFeedback, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, Pressable, TouchableWithoutFeedback, TouchableOpacity, Alert } from 'react-native';
 import { colors } from '../../constants/colors';
 import Exercise from './Exercise';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuthStore } from '../../stores/authStore';
+import { useWorkoutStore } from '../../stores/workoutStore';
+import { supabase } from '../../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ExercisesListProps {
   exercises: Array<any>;
@@ -33,6 +37,9 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
   showViewWorkoutButton = true 
 }) => {
   const router = useRouter();
+  const { session, profile } = useAuthStore();
+  const { startNewWorkout, activeWorkout, endWorkout } = useWorkoutStore();
+  const [isStartingWorkout, setIsStartingWorkout] = useState(false);
 
   // Superset colors - cycle through these (matching newWorkout.tsx)
   const supersetColors = [
@@ -65,6 +72,277 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
   const handleViewRoutine = () => {
     if (routineData?.id) {
       router.push(`/routine/${routineData.id}`);
+    }
+  };
+
+  const handleStartWorkout = async () => {
+    if (!workoutId || !exercises || exercises.length === 0) return;
+    
+    // Check if there's an active workout
+    if (activeWorkout) {
+      Alert.alert(
+        "Workout in Progress",
+        "You already have an active workout. What would you like to do?",
+        [
+          {
+            text: "Resume Current",
+            onPress: () => {
+              router.push("/newWorkout");
+            },
+            style: "default",
+          },
+          {
+            text: "Discard & Start New",
+            onPress: () => {
+              endWorkout();
+              // Continue with starting the new workout
+              startNewWorkoutFromCurrent();
+            },
+            style: "destructive",
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+        ]
+      );
+      return;
+    }
+    
+    // No active workout, proceed normally
+    await startNewWorkoutFromCurrent();
+  };
+
+  const startNewWorkoutFromCurrent = async () => {
+    setIsStartingWorkout(true);
+    
+    try {
+      // Load custom exercises from local storage
+      let customExercises: any[] = [];
+      try {
+        const customExercisesData = await AsyncStorage.getItem('custom_exercises');
+        if (customExercisesData) {
+          customExercises = JSON.parse(customExercisesData);
+        }
+      } catch (error) {
+        console.error('Error loading custom exercises:', error);
+        customExercises = [];
+      }
+      
+      // Filter and prepare exercises data for the new workout
+      const preparedExercises = exercises
+        .filter((exercise: any) => {
+          // If it's a custom exercise (no exercise_id), check if it exists in local storage
+          if (!exercise.exercise_id) {
+            const customExerciseExists = customExercises.some(
+              (customEx: any) => customEx.name === exercise.name
+            );
+            if (!customExerciseExists) {
+              console.log(`Skipping custom exercise "${exercise.name}" - not found in local storage`);
+              return false;
+            }
+          }
+          return true;
+        })
+        .map((exercise: any) => {
+          // Create exercise ID
+          const exerciseId = `exercise-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Prepare sets without weight and completion status
+          const preparedSets = exercise.workout_sets && exercise.workout_sets.length > 0 
+            ? exercise.workout_sets.map((originalSet: any, index: number) => ({
+                id: `set-${Date.now()}-${index}-${Math.floor(Math.random() * 1000)}`,
+                weight: null, // Don't copy weight
+                reps: originalSet.reps, // Copy reps
+                rpe: originalSet.rpe, // Copy RPE
+                isCompleted: false // Start as not completed
+              }))
+            : [
+                // If no sets exist, create default sets
+                {
+                  id: `set-${Date.now()}-0-${Math.floor(Math.random() * 1000)}`,
+                  weight: null,
+                  reps: null,
+                  rpe: null,
+                  isCompleted: false
+                }
+              ];
+          
+          return {
+            id: exerciseId,
+            exercise_id: exercise.exercise_id, // Keep reference to original exercise or custom ID
+            name: exercise.exercises?.name || exercise.name,
+            notes: "", // Don't copy notes
+            sets: preparedSets,
+            image_url: exercise.exercises?.image_url || null,
+            superset_id: exercise.superset_id, // Keep superset grouping
+          };
+        });
+      
+      // Check if we have any exercises left after filtering
+      if (preparedExercises.length === 0) {
+        Alert.alert(
+          'No Available Exercises',
+          'This workout contains only custom exercises that are not available in your exercise library.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+      
+      // Show info if some exercises were skipped
+      const skippedCount = exercises.length - preparedExercises.length;
+      if (skippedCount > 0) {
+        Alert.alert(
+          'Custom Exercises Skipped',
+          `${skippedCount} custom exercise${skippedCount === 1 ? '' : 's'} from the original workout ${skippedCount === 1 ? 'was' : 'were'} not included because ${skippedCount === 1 ? 'it is' : 'they are'} not in your exercise library.`,
+          [{ text: 'Continue', style: 'default' }]
+        );
+      }
+      
+      // Start a new workout with the prepared exercises
+      const newWorkoutName = `${workoutName} (Copy)`;
+      startNewWorkout({ 
+        name: newWorkoutName, 
+        routineId: undefined, // Don't associate with original routine
+        exercises: preparedExercises 
+      });
+      
+      // Navigate to the workout screen
+      router.push('/newWorkout');
+      
+    } catch (error) {
+      console.error('Error starting workout:', error);
+      Alert.alert('Error', 'Failed to start workout. Please try again.');
+    } finally {
+      setIsStartingWorkout(false);
+    }
+  };
+
+  const handleCreateRoutine = async () => {
+    if (!session?.user?.id || !exercises || exercises.length === 0) {
+      Alert.alert('Error', 'You must be logged in to create a routine.');
+      return;
+    }
+
+    // First, prompt for routine name
+    Alert.prompt(
+      'Create Routine',
+      'Enter a name for your new routine:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Continue',
+          onPress: (routineName) => {
+            if (!routineName || routineName.trim() === '') {
+              Alert.alert('Error', 'Please enter a routine name.');
+              return;
+            }
+            confirmCreateRoutine(routineName.trim());
+          },
+        },
+      ],
+      'plain-text',
+      `${workoutName} Routine`
+    );
+  };
+
+  const confirmCreateRoutine = (routineName: string) => {
+    Alert.alert(
+      'Confirm Creation',
+      `Create a routine called "${routineName}" with ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create Routine',
+          onPress: () => createRoutineWithName(routineName),
+          style: 'default',
+        },
+      ]
+    );
+  };
+
+  const createRoutineWithName = async (routineName: string) => {
+    try {
+      // Create a new routine from the workout
+      const { data: newRoutine, error: routineError } = await supabase
+        .from('routines')
+        .insert({
+          name: routineName,
+          user_id: session.user.id,
+          category: 'user_created',
+          original_creator_id: session.user.id,
+        })
+        .select('id')
+        .single();
+
+      if (routineError) throw routineError;
+
+      // Copy all exercises to the routine
+      const exercisesToCopy = exercises.map((exercise: any, index: number) => {
+        const workoutSets = exercise.workout_sets || [];
+        
+        // Calculate rep range if there are multiple sets with different rep counts
+        const repCounts = workoutSets.map((set: any) => set.reps).filter((reps: any) => reps != null && typeof reps === 'number');
+        const uniqueReps = [...new Set(repCounts)] as number[];
+        
+        let defaultReps = null;
+        let defaultRepsMin = null;
+        let defaultRepsMax = null;
+        
+        if (uniqueReps.length === 1) {
+          // All sets have the same reps
+          defaultReps = uniqueReps[0];
+        } else if (uniqueReps.length > 1) {
+          // Sets have different reps, set a range
+          defaultRepsMin = Math.min(...uniqueReps);
+          defaultRepsMax = Math.max(...uniqueReps);
+        }
+        
+        // Get the most common RPE or the first one
+        const rpeCounts = workoutSets.map((set: any) => set.rpe).filter((rpe: any) => rpe != null);
+        const defaultRpe = rpeCounts.length > 0 ? rpeCounts[0] : null;
+        
+        return {
+          routine_id: newRoutine.id,
+          exercise_id: exercise.exercise_id, // Include exercise_id to maintain relationship with exercises table
+          name: exercise.exercises?.name || exercise.name,
+          order_position: index + 1,
+          total_sets: workoutSets.length > 0 ? workoutSets.length : 3, // Default to 3 sets if no sets exist
+          default_weight: null, // Don't copy personal weight defaults
+          default_reps: defaultReps,
+          default_reps_min: defaultRepsMin,
+          default_reps_max: defaultRepsMax,
+          default_rpe: defaultRpe,
+        };
+      });
+
+      const { error: exercisesError } = await supabase
+        .from('routine_exercises')
+        .insert(exercisesToCopy);
+
+      if (exercisesError) throw exercisesError;
+
+      // Show success message and navigate to the new routine
+      Alert.alert(
+        "Success!", 
+        `Routine "${routineName}" was successfully created with ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}!`,
+        [
+          {
+            text: "View Routine",
+            onPress: () => router.push(`/routine/${newRoutine.id}`),
+            style: "default",
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error creating routine:', error);
+      Alert.alert("Error", "Failed to create routine from workout");
     }
   };
 
@@ -144,16 +422,43 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
         {/* Workout Name Header */}
         {!isDetailView && workoutName && (
           <View style={styles.workoutHeader}>
-            <Text style={styles.workoutName}>{workoutName}</Text>
-            {/* Routine Information */}
-            {routineData && (
-              <TouchableWithoutFeedback onPress={handleViewRoutine}>
-                <View style={styles.routineInfo}>
-                  <IonIcon name="list-outline" size={16} color={colors.brand} />
-                  <Text style={styles.routineText}>{routineData.name}</Text>
-                </View>
-              </TouchableWithoutFeedback>
-            )}
+            <View style={styles.workoutHeaderContent}>
+              <View style={styles.workoutTitleSection}>
+                <Text style={styles.workoutName}>{workoutName}</Text>
+                {/* Routine Information */}
+                {routineData && (
+                  <TouchableWithoutFeedback onPress={handleViewRoutine}>
+                    <View style={styles.routineInfo}>
+                      <IonIcon name="list-outline" size={16} color={colors.brand} />
+                      <Text style={styles.routineText}>{routineData.name}</Text>
+                    </View>
+                  </TouchableWithoutFeedback>
+                )}
+              </View>
+              
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={[styles.actionButton, isStartingWorkout && styles.actionButtonDisabled]}
+                  onPress={handleStartWorkout}
+                  disabled={isStartingWorkout}
+                >
+                  <IonIcon 
+                    name="play"
+                    size={16} 
+                    color={colors.primaryText} 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.actionButton}
+                  onPress={handleCreateRoutine}
+                >
+                  <IonIcon name="copy-outline" size={16} color={colors.primaryText} />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         )}
         
@@ -211,10 +516,35 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
+  workoutHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  workoutTitleSection: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   workoutName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.primaryText,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
   },
   exercisesContainer: {
     marginTop: 1,

@@ -300,14 +300,13 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                   id,
                   weight,
                   reps,
+                  rpe,
                   is_completed
                 )
               )
             `)
             .eq('id', data.workout_id)
             .single();
-
-          console.log(data);
 
           if (error) throw error;
 
