@@ -994,22 +994,21 @@ export default function EditPost() {
             style={styles.toolbarButton}
             onPress={handleWorkoutButtonPress}
           >
-            <IonIcon name="barbell-outline" size={24} color={colors.primaryText} />
-            <Text style={styles.toolbarButtonText}>Workout</Text>
+            <IonIcon name="barbell-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           <TouchableOpacity
                 activeOpacity={0.5} 
-            style={[styles.toolbarButton, { marginLeft: 'auto'}]}
+            style={styles.toolbarButton}
             onPress={addNewMedia}
           >
-            <IonIcon name="images-outline" size={24} color={colors.primaryText} />
+            <IonIcon name="images-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           <TouchableOpacity
                 activeOpacity={0.5} 
             style={styles.toolbarButton}
             onPress={openCamera}
           >
-            <IonIcon name="camera-outline" size={24} color={colors.primaryText} />
+            <IonIcon name="camera-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -1325,21 +1324,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingHorizontal: 16,
     paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.whiteOverlay,
     gap: 10,
   },
   
   toolbarButton: {
-    backgroundColor: colors.primaryAccent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderColor: colors.whiteOverlay,
-    borderWidth: 1,
+    padding: 6,
     gap: 12,
   },
   
