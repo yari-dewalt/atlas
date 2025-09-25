@@ -8,6 +8,7 @@ import VideoThumbnail from '../../../../../components/VideoThumbnail';
 import MediaSkeleton from '../../../../../components/MediaSkeleton';
 import { supabase } from '../../../../../lib/supabase';
 import { Video, AVPlaybackStatus, ResizeMode } from 'expo-av';
+import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,7 +30,7 @@ export default function MediaScreen() {
   const [backgroundVideoMutedBeforeFullscreen, setBackgroundVideoMutedBeforeFullscreen] = useState<boolean | null>(null);
   const [processedMediaCache, setProcessedMediaCache] = useState<{[key: string]: any}>({});
   const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
-  const [playingVideoIndex, setPlayingVideoIndex] = useState<number>(0); // Separate state for video playback
+  const [visibleVideos, setVisibleVideos] = useState<Set<string>>(new Set()); // Track which videos are visible
   const flatListRef = useRef<FlatList>(null);
   const gridListRef = useRef<FlatList>(null);
   const fullscreenVideoRef = useRef<Video | null>(null);
@@ -47,7 +48,6 @@ export default function MediaScreen() {
       const index = media.findIndex(item => item.id === mediaId);
       if (index !== -1) {
         setCurrentIndex(index);
-        setPlayingVideoIndex(index); // Also set the playing video index
         setShouldAutoScroll(true); // Flag that we need to auto-scroll
       }
     }
@@ -109,20 +109,20 @@ export default function MediaScreen() {
     setVideoMuted(mutedStates);
   }, [media]);
 
-  // Handle video playback based on viewable items
+  // Handle video playback based on visible videos
   useEffect(() => {
     if (viewMode === 'list') {
-      media.forEach((item, index) => {
+      media.forEach((item) => {
         if (item.type === 'video') {
           const videoRef = videoRefs.current[item.id];
           if (videoRef) {
-            if (index === playingVideoIndex) {
-              // Play the active video
+            if (visibleVideos.has(item.id)) {
+              // Play the visible video
               videoRef.setIsMutedAsync(videoMuted[item.id] ?? true).then(() => {
                 videoRef.playAsync();
               });
             } else {
-              // Pause and reset non-active videos
+              // Pause and reset non-visible videos
               videoRef.pauseAsync().then(() => {
                 videoRef.setPositionAsync(0);
               });
@@ -141,13 +141,13 @@ export default function MediaScreen() {
         }
       });
     }
-  }, [playingVideoIndex, media, viewMode]); // Use playingVideoIndex instead of currentIndex
+  }, [visibleVideos, media, viewMode]); // Use visibleVideos instead of playingVideoIndex
 
   // Handle mute state changes separately to avoid restarting videos
   useEffect(() => {
     if (viewMode === 'list') {
-      media.forEach((item, index) => {
-        if (item.type === 'video' && index === playingVideoIndex) {
+      media.forEach((item) => {
+        if (item.type === 'video' && visibleVideos.has(item.id)) {
           const videoRef = videoRefs.current[item.id];
           if (videoRef) {
             // Only update mute state without affecting playback
@@ -156,7 +156,7 @@ export default function MediaScreen() {
         }
       });
     }
-  }, [videoMuted, playingVideoIndex, media, viewMode]); // Use playingVideoIndex instead of currentIndex
+  }, [videoMuted, visibleVideos, media, viewMode]); // Use visibleVideos instead of playingVideoIndex
 
   // Cleanup effect - pause all videos when component unmounts
   useEffect(() => {
@@ -286,9 +286,8 @@ export default function MediaScreen() {
           // Restore the original muted state (before fullscreen was opened)
           const originalMutedState = backgroundVideoMutedBeforeFullscreen ?? true;
           videoRef.setIsMutedAsync(originalMutedState).then(() => {
-            // Only play if this is the currently visible item
-            const currentItem = media[playingVideoIndex];
-            if (currentItem && currentItem.id === selectedItem.id) {
+            // Only play if this video is currently visible
+            if (visibleVideos.has(selectedItem.id)) {
               videoRef.playAsync();
             }
           });
@@ -341,6 +340,19 @@ export default function MediaScreen() {
     }
   }, [videoMuted]);
 
+  // Handle video visibility changes
+  const handleVideoVisibilityChange = useCallback((itemId: string, isVisible: boolean) => {
+    setVisibleVideos(prev => {
+      const newSet = new Set(prev);
+      if (isVisible) {
+        newSet.add(itemId);
+      } else {
+        newSet.delete(itemId);
+      }
+      return newSet;
+    });
+  }, []);
+
   const renderListMediaItem = useCallback(({ item, index }: { item: any, index: number }) => {
     const aspectRatio = item.width && item.height ? item.width / item.height : 1;
     const containerWidth = width - 32; // 16px padding on each side
@@ -354,32 +366,37 @@ export default function MediaScreen() {
           onPress={() => handleMediaPress(item)}
         >
           {item.type === 'video' ? (
-            <View style={styles.videoContainer}>
-              <Video
-                ref={(ref) => { videoRefs.current[item.id] = ref; }}
-                source={{ uri: item.uri }}
-                style={styles.mediaImage}
-                useNativeControls={false}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={index === playingVideoIndex && viewMode === 'list'}
-                isLooping={true}
-                isMuted={videoMuted[item.id] ?? true}
-              />
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                style={styles.muteButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  toggleMute(item.id);
-                }}
-              >
-                <IonIcon 
-                  name={videoMuted[item.id] ? "volume-mute" : "volume-high"} 
-                  size={20} 
-                  color={colors.primaryText} 
+            <VisibilitySensor
+              onChange={(isVisible) => handleVideoVisibilityChange(item.id, isVisible)}
+              threshold={{ top: 360, bottom: 380 }}
+            >
+              <View style={styles.videoContainer}>
+                <Video
+                  ref={(ref) => { videoRefs.current[item.id] = ref; }}
+                  source={{ uri: item.uri }}
+                  style={styles.mediaImage}
+                  useNativeControls={false}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay={visibleVideos.has(item.id) && viewMode === 'list'}
+                  isLooping={true}
+                  isMuted={videoMuted[item.id] ?? true}
                 />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  activeOpacity={0.5} 
+                  style={styles.muteButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    toggleMute(item.id);
+                  }}
+                >
+                  <IonIcon 
+                    name={videoMuted[item.id] ? "volume-mute" : "volume-high"} 
+                    size={20} 
+                    color={colors.primaryText} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </VisibilitySensor>
           ) : (
             <CachedImage
               path={item.uri}
@@ -402,7 +419,7 @@ export default function MediaScreen() {
         )}
       </View>
     );
-  }, [playingVideoIndex, viewMode, videoMuted, handleMediaPress, toggleMute, router]);
+  }, [visibleVideos, viewMode, videoMuted, handleMediaPress, toggleMute, handleVideoVisibilityChange, router]);
 
   const renderGridMediaItem = useCallback(({ item, index }: { item: any, index: number }) => {
     const itemSize = (width - 4) / 3; // 3 columns with 1px gaps (2px total gap space)
@@ -437,22 +454,7 @@ export default function MediaScreen() {
     );
   }, [handleMediaPress]);
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
-    if (viewableItems.length > 0 && viewMode === 'list' && !shouldAutoScroll) {
-      const newIndex = viewableItems[0].index || 0;
-      if (newIndex !== currentIndex) {
-        setCurrentIndex(newIndex);
-        // Only update playing video index if the change is significant
-        setPlayingVideoIndex(newIndex);
-      }
-    }
-  }, [currentIndex, viewMode, shouldAutoScroll]);
 
-  const viewabilityConfig = useMemo(() => ({
-    itemVisiblePercentThreshold: 15, // Video continues playing until only 15% is visible
-    waitForInteraction: false,
-    minimumViewTime: 200, // Increased to prevent rapid switching
-  }), []);
 
   const onScrollToIndexFailed = useCallback((info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
     // Handle scroll failures by scrolling to the nearest measured frame
@@ -481,6 +483,22 @@ export default function MediaScreen() {
     };
   }, []);
 
+  // Track current visible item for counter (separate from video playback)
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
+    if (viewableItems.length > 0 && viewMode === 'list' && !shouldAutoScroll) {
+      const newIndex = viewableItems[0].index || 0;
+      if (newIndex !== currentIndex) {
+        setCurrentIndex(newIndex);
+      }
+    }
+  }, [currentIndex, viewMode, shouldAutoScroll]);
+
+  const viewabilityConfig = useMemo(() => ({
+    itemVisiblePercentThreshold: 50, // For counter purposes
+    waitForInteraction: false,
+    minimumViewTime: 100,
+  }), []);
+
   return (
     <>
       <Stack.Screen
@@ -499,7 +517,7 @@ export default function MediaScreen() {
             <View style={styles.headerRight}>
               {viewMode === 'list' && (
                 <Text style={styles.counterText}>
-                  {playingVideoIndex + 1} / {media.length}
+                  {currentIndex + 1} / {media.length}
                 </Text>
               )}
             </View>
@@ -773,6 +791,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderRadius: 8,
     overflow: 'hidden',
+    paddingBottom: 400,
   },
   mediaWrapper: {
     position: 'relative',
@@ -815,10 +834,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingHorizontal: 6,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
