@@ -102,6 +102,7 @@ export default function RoutineDetail() {
           default_reps_min,
           default_reps_max,
           default_rpe,
+          rep_mode,
           exercises (
             id,
             name,
@@ -346,6 +347,7 @@ export default function RoutineDetail() {
         default_reps_min: exercise.default_reps_min,
         default_reps_max: exercise.default_reps_max,
         default_rpe: exercise.default_rpe, // Copy RPE as it's part of the routine design
+        rep_mode: exercise.rep_mode || 'single', // Copy the rep mode
       }));
 
       const { error: exercisesError } = await supabase
@@ -520,20 +522,29 @@ export default function RoutineDetail() {
       useWorkoutStore.getState().startNewWorkout({
         name: routine.name,
         routineId: routine.id,
-        exercises: routine.routine_exercises.map((exercise: any) => ({
-          id: Date.now() + Math.random(), // Temporary ID for workout instance
-          exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
-          name: exercise.exercises?.name || exercise.name,
-          image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
-          sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
-            id: Date.now() + Math.random() + i,
-            weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
-            reps: exercise.default_reps_min || exercise.default_reps, // Use rep range minimum or legacy default
-            rpe: exercise.default_rpe, // Always inherit RPE defaults
-            isCompleted: false
-          })),
-          notes: ""
-        }))
+        exercises: routine.routine_exercises.map((exercise: any) => {
+          // Use explicit rep_mode if available, otherwise determine based on data
+          const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+          
+          return {
+            id: Date.now() + Math.random(), // Temporary ID for workout instance
+            exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
+            name: exercise.exercises?.name || exercise.name,
+            image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
+            sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
+              id: Date.now() + Math.random() + i,
+              weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
+              reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
+              repsMin: repMode === 'range' ? exercise.default_reps_min : null,
+              repsMax: repMode === 'range' ? exercise.default_reps_max : null,
+              isRange: repMode === 'range',
+              rpe: exercise.default_rpe, // Always inherit RPE defaults
+              isCompleted: false
+            })),
+            notes: "",
+            repMode: repMode
+          };
+        })
       });
 
       // Update the routine's last used info if it's the user's routine
@@ -1015,7 +1026,7 @@ export default function RoutineDetail() {
                   ) : (
                     <View style={styles.exerciseImagePlaceholder}>
                       <Ionicons 
-                        name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "fitness-outline"} 
+                        name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
                         size={20} 
                         color={colors.secondaryText} 
                       />
@@ -1037,14 +1048,19 @@ export default function RoutineDetail() {
                     <View style={styles.exerciseItemDetails}>
                       <Text style={styles.exerciseItemDetailsText}>
                         {exercise.total_sets} sets
-                        {exercise.default_reps_min && exercise.default_reps_max
-                          ? ` • ${exercise.default_reps_min}-${exercise.default_reps_max} reps`
-                          : exercise.default_reps_min 
-                          ? ` • ${exercise.default_reps_min} reps`
-                          : exercise.default_reps 
-                          ? ` • ${exercise.default_reps} reps`
-                          : ''
-                        }
+                        {(() => {
+                          // Use explicit rep_mode if available, otherwise determine based on data
+                          const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+                          
+                          if (repMode === 'range' && exercise.default_reps_min && exercise.default_reps_max) {
+                            return ` • ${exercise.default_reps_min}-${exercise.default_reps_max} reps`;
+                          } else if (exercise.default_reps_min) {
+                            return ` • ${exercise.default_reps_min} reps`;
+                          } else if (exercise.default_reps) {
+                            return ` • ${exercise.default_reps} reps`;
+                          }
+                          return '';
+                        })()}
                       </Text>
                     </View>
                   </View>

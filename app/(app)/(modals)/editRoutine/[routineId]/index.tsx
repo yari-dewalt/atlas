@@ -175,8 +175,8 @@ export default function EditRoutine() {
                 rpe: exercise.default_rpe || null,
               }],
               defaultWeight: null,
-              defaultRepsMin: exercise.default_reps || 8,
-              defaultRepsMax: exercise.default_reps || 12,
+              defaultRepsMin: exercise.default_reps || null,
+              defaultRepsMax: null, // Start with no max for new exercises
               defaultRPE: exercise.default_rpe || null,
               image_url: exercise.image_url || null,
               isNew: true, // Flag to identify new exercises
@@ -264,8 +264,9 @@ export default function EditRoutine() {
         const repsMin = exercise.default_reps_min ?? exercise.default_reps ?? null;
         const repsMax = exercise.default_reps_max ?? null;
         
-        // Determine rep mode based on whether we have rep range values
-        const isRangeMode = !!(repsMin && repsMax);
+        // Use explicit rep_mode if available, otherwise determine based on data
+        const repMode = exercise.rep_mode || (repsMin && repsMax ? 'range' : 'single');
+        const isRangeMode = repMode === 'range';
         
         // Create initial sets based on the saved total_sets count
         for (let i = 0; i < totalSets; i++) {
@@ -290,7 +291,7 @@ export default function EditRoutine() {
           defaultRepsMax: repsMax,
           defaultRPE: exercise.default_rpe || null,
           image_url: exercise.exercises?.image_url || null,
-          repMode: (isRangeMode ? 'range' : 'single') as 'single' | 'range',
+          repMode: repMode as 'single' | 'range',
         };
       });
 
@@ -623,6 +624,35 @@ export default function EditRoutine() {
         // Handle custom exercises vs. database exercises
         const isCustomExercise = !exercise.exerciseId || exercise.exerciseId.startsWith('custom-');
         
+        // Calculate default values from the first set or exercise defaults
+        const firstSet = exercise.sets[0];
+        let defaultRepsMin = null;
+        let defaultRepsMax = null;
+        let defaultWeight = null;
+        let defaultRpe = null;
+        
+        if (exercise.repMode === 'range') {
+          // For range mode, use the first set's range values or exercise defaults
+          defaultRepsMin = firstSet?.repsMin || exercise.defaultRepsMin;
+          defaultRepsMax = firstSet?.repsMax || exercise.defaultRepsMax;
+        } else {
+          // For single mode, use the first set's reps value or exercise default
+          defaultRepsMin = firstSet?.reps || exercise.defaultRepsMin;
+          defaultRepsMax = null; // No max for single mode
+        }
+        
+        // Calculate default weight from first set or exercise default
+        defaultWeight = firstSet?.weight || exercise.defaultWeight;
+        
+        // Calculate default RPE from first set or exercise default
+        defaultRpe = firstSet?.rpe || exercise.defaultRPE;
+        
+        // Ensure values are properly converted to correct types
+        defaultRepsMin = defaultRepsMin ? (typeof defaultRepsMin === 'string' ? parseInt(defaultRepsMin) || null : defaultRepsMin) : null;
+        defaultRepsMax = defaultRepsMax ? (typeof defaultRepsMax === 'string' ? parseInt(defaultRepsMax) || null : defaultRepsMax) : null;
+        defaultWeight = defaultWeight ? (typeof defaultWeight === 'string' ? parseFloat(defaultWeight) || null : defaultWeight) : null;
+        defaultRpe = defaultRpe ? (typeof defaultRpe === 'string' ? parseInt(defaultRpe) || null : defaultRpe) : null;
+        
         if (isCustomExercise) {
           // This is a custom exercise - don't include exercise_id
           return {
@@ -630,10 +660,11 @@ export default function EditRoutine() {
             name: exercise.name,
             order_position: index,
             total_sets: exercise.sets.length,
-            default_weight: typeof exercise.defaultWeight === 'string' ? parseFloat(exercise.defaultWeight) || null : exercise.defaultWeight,
-            default_reps_min: exercise.defaultRepsMin ? (typeof exercise.defaultRepsMin === 'string' ? parseInt(exercise.defaultRepsMin) || null : exercise.defaultRepsMin) : null,
-            default_reps_max: exercise.defaultRepsMax ? (typeof exercise.defaultRepsMax === 'string' ? parseInt(exercise.defaultRepsMax) || null : exercise.defaultRepsMax) : null,
-            default_rpe: typeof exercise.defaultRPE === 'string' ? parseInt(exercise.defaultRPE) || null : exercise.defaultRPE,
+            default_weight: defaultWeight,
+            default_reps_min: defaultRepsMin,
+            default_reps_max: defaultRepsMax,
+            default_rpe: defaultRpe,
+            rep_mode: exercise.repMode || 'single',
             // exercise_id is intentionally omitted for custom exercises
           };
         } else {
@@ -644,10 +675,11 @@ export default function EditRoutine() {
             name: exercise.name,
             order_position: index,
             total_sets: exercise.sets.length,
-            default_weight: typeof exercise.defaultWeight === 'string' ? parseFloat(exercise.defaultWeight) || null : exercise.defaultWeight,
-            default_reps_min: exercise.defaultRepsMin ? (typeof exercise.defaultRepsMin === 'string' ? parseInt(exercise.defaultRepsMin) || null : exercise.defaultRepsMin) : null,
-            default_reps_max: exercise.defaultRepsMax ? (typeof exercise.defaultRepsMax === 'string' ? parseInt(exercise.defaultRepsMax) || null : exercise.defaultRepsMax) : null,
-            default_rpe: typeof exercise.defaultRPE === 'string' ? parseInt(exercise.defaultRPE) || null : exercise.defaultRPE,
+            default_weight: defaultWeight,
+            default_reps_min: defaultRepsMin,
+            default_reps_max: defaultRepsMax,
+            default_rpe: defaultRpe,
+            rep_mode: exercise.repMode || 'single',
           };
         }
       });
@@ -713,6 +745,35 @@ export default function EditRoutine() {
         // Handle custom exercises vs. database exercises
         const isCustomExercise = !exercise.exerciseId || exercise.exerciseId.startsWith('custom-');
         
+        // Calculate default values from the first set or exercise defaults
+        const firstSet = exercise.sets[0];
+        let defaultRepsMin = null;
+        let defaultRepsMax = null;
+        let defaultWeight = null;
+        let defaultRpe = null;
+        
+        if (exercise.repMode === 'range') {
+          // For range mode, use the first set's range values or exercise defaults
+          defaultRepsMin = firstSet?.repsMin || exercise.defaultRepsMin;
+          defaultRepsMax = firstSet?.repsMax || exercise.defaultRepsMax;
+        } else {
+          // For single mode, use the first set's reps value or exercise default
+          defaultRepsMin = firstSet?.reps || exercise.defaultRepsMin;
+          defaultRepsMax = null; // No max for single mode
+        }
+        
+        // Calculate default weight from first set or exercise default
+        defaultWeight = firstSet?.weight || exercise.defaultWeight;
+        
+        // Calculate default RPE from first set or exercise default
+        defaultRpe = firstSet?.rpe || exercise.defaultRPE;
+        
+        // Ensure values are properly converted to correct types
+        defaultRepsMin = defaultRepsMin ? (typeof defaultRepsMin === 'string' ? parseInt(defaultRepsMin) || null : defaultRepsMin) : null;
+        defaultRepsMax = defaultRepsMax ? (typeof defaultRepsMax === 'string' ? parseInt(defaultRepsMax) || null : defaultRepsMax) : null;
+        defaultWeight = defaultWeight ? (typeof defaultWeight === 'string' ? parseFloat(defaultWeight) || null : defaultWeight) : null;
+        defaultRpe = defaultRpe ? (typeof defaultRpe === 'string' ? parseInt(defaultRpe) || null : defaultRpe) : null;
+        
         if (isCustomExercise) {
           // This is a custom exercise - don't include exercise_id
           return {
@@ -720,10 +781,11 @@ export default function EditRoutine() {
             name: exercise.name,
             order_position: index,
             total_sets: exercise.sets.length,
-            default_weight: typeof exercise.defaultWeight === 'string' ? parseFloat(exercise.defaultWeight) || null : exercise.defaultWeight,
-            default_reps_min: exercise.defaultRepsMin ? (typeof exercise.defaultRepsMin === 'string' ? parseInt(exercise.defaultRepsMin) || null : exercise.defaultRepsMin) : null,
-            default_reps_max: exercise.defaultRepsMax ? (typeof exercise.defaultRepsMax === 'string' ? parseInt(exercise.defaultRepsMax) || null : exercise.defaultRepsMax) : null,
-            default_rpe: typeof exercise.defaultRPE === 'string' ? parseInt(exercise.defaultRPE) || null : exercise.defaultRPE,
+            default_weight: defaultWeight,
+            default_reps_min: defaultRepsMin,
+            default_reps_max: defaultRepsMax,
+            default_rpe: defaultRpe,
+            rep_mode: exercise.repMode || 'single',
             // exercise_id is intentionally omitted for custom exercises
           };
         } else {
@@ -734,10 +796,11 @@ export default function EditRoutine() {
             name: exercise.name,
             order_position: index,
             total_sets: exercise.sets.length,
-            default_weight: typeof exercise.defaultWeight === 'string' ? parseFloat(exercise.defaultWeight) || null : exercise.defaultWeight,
-            default_reps_min: exercise.defaultRepsMin ? (typeof exercise.defaultRepsMin === 'string' ? parseInt(exercise.defaultRepsMin) || null : exercise.defaultRepsMin) : null,
-            default_reps_max: exercise.defaultRepsMax ? (typeof exercise.defaultRepsMax === 'string' ? parseInt(exercise.defaultRepsMax) || null : exercise.defaultRepsMax) : null,
-            default_rpe: typeof exercise.defaultRPE === 'string' ? parseInt(exercise.defaultRPE) || null : exercise.defaultRPE,
+            default_weight: defaultWeight,
+            default_reps_min: defaultRepsMin,
+            default_reps_max: defaultRepsMax,
+            default_rpe: defaultRpe,
+            rep_mode: exercise.repMode || 'single',
           };
         }
       });
