@@ -440,10 +440,12 @@ export default function WorkoutDetailScreen() {
           // Create exercise ID
           const exerciseId = `exercise-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           
-          // Prepare sets without weight and completion status
+          // Prepare sets with conditional weight copying based on ownership
           const preparedSets = exercise.sets.map((originalSet: any, index: number) => ({
             id: `set-${Date.now()}-${index}-${Math.floor(Math.random() * 1000)}`,
-            weight: null, // Don't copy weight
+            weight: isCurrentUser && originalSet.weight ? 
+              parseFloat(displayWeightForUser(originalSet.weight, 'kg', userWeightUnit, false)) : 
+              null, // Copy and convert weight only if it's user's own workout
             reps: originalSet.reps, // Copy reps
             rpe: originalSet.rpe, // Copy RPE
             isCompleted: false // Start as not completed
