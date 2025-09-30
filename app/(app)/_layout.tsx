@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import { View, Text, SafeAreaView, Pressable, StyleSheet, Animated, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, SafeAreaView, Pressable, StyleSheet, Animated, ActivityIndicator, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +10,7 @@ import { useClubStore } from '../../stores/clubStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { useMessageStore } from '../../stores/messagesStore';
 import { useEditProfileStore } from '../../stores/editProfileStore';
+import { useProgressStore } from '../../stores/progressStore';
 import CachedAvatar from '../../components/CachedAvatar';
 
 // Unified TopNavBar with dynamic content
@@ -26,9 +27,21 @@ const TopNavBar = () => {
   const [supportHasText, setSupportHasText] = useState(false);
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  
   // Edit Profile Store
   const { hasChanges, isValid, isLoading, handleSave } = useEditProfileStore();
+  
+  // Progress Store
+  const { progress, isVisible } = useProgressStore();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate progress bar
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
   
   const totalUnreadMessages = conversations.reduce(
     (total, convo) => total + convo.unread_count, 
@@ -600,6 +613,20 @@ const TopNavBar = () => {
             </>
           )}
         </View>
+
+        {/* Progress Bar */}
+        {isVisible && (
+          <Animated.View 
+            style={[
+              styles.progressBar, 
+              { width: progressAnim.interpolate({
+                inputRange: [0, 100],
+                outputRange: ['0%', '105%'],
+                extrapolate: 'clamp',
+              })}
+            ]} 
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -708,11 +735,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  markAllText: {
-    color: colors.brand,
-    fontSize: 14,
-    fontWeight: '500',
-  },
   clearAllText: {
     color: colors.brand,
     fontSize: 15,
@@ -780,5 +802,12 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: colors.secondaryText,
+  },
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 1,
+    backgroundColor: colors.brand,
   },
 });

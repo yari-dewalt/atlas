@@ -3,6 +3,7 @@ import { colors } from "../../../../../constants/colors";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "../../../../../stores/authStore";
 import { useProfileStore } from "../../../../../stores/profileStore";
+import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../../stores/progressStore";
 import { getUserWeightUnit, displayWeightForUser } from "../../../../../utils/weightUtils";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fetchPostById, updatePost, uploadPostMedia } from "../../../../../utils/postUtils";
@@ -24,6 +25,19 @@ export default function EditPost() {
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
+  
+  // Progress bar state
+  const { progress, isVisible } = useProgressStore();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate progress bar
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
   
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -243,6 +257,7 @@ export default function EditPost() {
     }
   }, [postTitle, description, media, newMedia, selectedWorkout]);
 
+
   // Keyboard listener effect for bottom toolbar padding animation
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(
@@ -447,14 +462,47 @@ export default function EditPost() {
     }
     
     setIsSubmitting(true);
+    let loadingInterval: any = null;
+    
     try {
+      // Start progress tracking
+      if (isNewPost) {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.SAVING_POST);
+      } else {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.EDITING_POST);
+      }
+
+      // Step 1: Preparing data
+      progressUtils.stepProgress(1, 3, 'Preparing post data...');
+
+      // Step 2: Saving/Updating
+      progressUtils.stepProgress(2, 3, isNewPost ? 'Publishing post...' : 'Updating post...');
+      
       if (isNewPost) {
         await createNewPost();
       } else {
         await updateExistingPost();
       }
+
+      // Step 3: Finalizing
+      progressUtils.stepProgress(3, 3, 'Finalizing...');
+      
+      // Complete the progress
+      progressUtils.completeLoading();
+      
+      // Clear the loading interval
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+      }
     } catch (err) {
       console.error('Error saving post:', err);
+      
+      // Cancel progress on error
+      progressUtils.cancelLoading();
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+      }
+      
       Alert.alert('Error', 'Failed to save post. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -831,6 +879,21 @@ export default function EditPost() {
               <Text style={styles.saveText}>{isNewPost ? 'Publish' : 'Save'}</Text>
             )}
           </TouchableOpacity>
+        {/* Progress Bar */}
+        {isVisible && (
+          <Animated.View 
+            style={[
+              styles.progressBar,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '110%'],
+                }),
+              }
+            ]}
+          />
+        )}
+
         </View>
         
         <ScrollView 
@@ -1690,4 +1753,12 @@ const styles = StyleSheet.create({
     padding: 10,
     zIndex: 1,
   },
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 1,
+    backgroundColor: colors.brand,
+  },
+
 });

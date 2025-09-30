@@ -15,6 +15,7 @@ import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
 import { useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser } from "../../utils/weightUtils";
+import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 
 const Post = ({ data, onDelete, isDetailView = false }) => {
   const [liked, setLiked] = useState(data.is_liked || false);
@@ -429,12 +430,34 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            let loadingInterval: any = null;
+            
             try {
+              // Start progress tracking
+              loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.DELETING_POST);
+              
+              // Step 1: Preparing deletion
+              progressUtils.stepProgress(1, 3, 'Preparing to delete post...');
+              
+              // Step 2: Deleting post
+              progressUtils.stepProgress(2, 3, 'Deleting post...');
+              
               await deletePost(data.id, session.user.id);
+              
+              // Step 3: Finalizing
+              progressUtils.stepProgress(3, 3, 'Finalizing...');
               
               // Update profile posts count if this is the current user's profile
               if (isCurrentUser && data.user.id === session.user.id) {
                 updatePostsCount(-1);
+              }
+              
+              // Complete the progress
+              progressUtils.completeLoading();
+              
+              // Clear the loading interval
+              if (loadingInterval) {
+                clearInterval(loadingInterval);
               }
               
               // Call the onDelete callback to update UI
@@ -445,6 +468,13 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
               Alert.alert('Success', 'Post deleted successfully');
             } catch (error) {
               console.error('Error deleting post:', error);
+              
+              // Cancel progress on error
+              progressUtils.cancelLoading();
+              if (loadingInterval) {
+                clearInterval(loadingInterval);
+              }
+              
               Alert.alert('Error', 'Failed to delete post. Please try again.');
             }
           }

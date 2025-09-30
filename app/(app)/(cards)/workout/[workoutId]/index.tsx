@@ -20,6 +20,7 @@ import WorkoutDetailSkeleton from '../../../../../components/WorkoutDetailSkelet
 import { useAuthStore } from '../../../../../stores/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWorkoutStore } from '../../../../../stores/workoutStore';
+import { progressUtils, PROGRESS_LABELS } from '../../../../../stores/progressStore';
 import { getUserWeightUnit, displayWeightForUser } from '../../../../../utils/weightUtils';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
@@ -559,6 +560,9 @@ export default function WorkoutDetailScreen() {
 
   const createRoutineWithName = async (routineName: string) => {
     try {
+      // Step 1: Start progress
+      progressUtils.stepProgress(1, 3, PROGRESS_LABELS.SAVING_ROUTINE);
+
       // Create a new routine from the workout
       const { data: newRoutine, error: routineError } = await supabase
         .from('routines')
@@ -572,6 +576,9 @@ export default function WorkoutDetailScreen() {
         .single();
 
       if (routineError) throw routineError;
+
+      // Step 2: Adding exercises
+      progressUtils.stepProgress(2, 3, 'Adding exercises...');
 
       // Copy all exercises to the routine
       const exercisesToCopy = workout.workout_exercises.map((exercise: any, index: number) => {
@@ -618,6 +625,10 @@ export default function WorkoutDetailScreen() {
 
       if (exercisesError) throw exercisesError;
 
+      // Step 3: Complete
+      progressUtils.stepProgress(3, 3, 'Routine created!');
+      progressUtils.completeLoading();
+
       // Show success message and navigate to the new routine
       Alert.alert(
         "Success!", 
@@ -632,6 +643,7 @@ export default function WorkoutDetailScreen() {
       );
     } catch (error) {
       console.error('Error creating routine:', error);
+      progressUtils.cancelLoading();
       Alert.alert("Error", "Failed to create routine from workout");
     }
   };
@@ -748,8 +760,19 @@ export default function WorkoutDetailScreen() {
           text: 'Delete',
           onPress: async () => {
             try {
+              // Step 1: Start deletion process
+              progressUtils.stepProgress(1, 3, PROGRESS_LABELS.DELETING_WORKOUT);
+
+              // Step 2: Deleting workout
+              progressUtils.stepProgress(2, 3, 'Removing workout data...');
+              
               const success = await deleteWorkout(workout.id);
+              
               if (success) {
+                // Step 3: Complete
+                progressUtils.stepProgress(3, 3, 'Workout deleted!');
+                progressUtils.completeLoading();
+
                 Alert.alert(
                   'Workout Deleted',
                   'Your workout has been successfully deleted.',
@@ -764,6 +787,7 @@ export default function WorkoutDetailScreen() {
                   ]
                 );
               } else {
+                progressUtils.cancelLoading();
                 Alert.alert(
                   'Delete Failed',
                   'Failed to delete the workout. Please try again.',
@@ -772,6 +796,7 @@ export default function WorkoutDetailScreen() {
               }
             } catch (error) {
               console.error('Error deleting workout:', error);
+              progressUtils.cancelLoading();
               Alert.alert(
                 'Delete Failed',
                 'An error occurred while deleting the workout. Please try again.',

@@ -11,6 +11,7 @@ import { useAuthStore } from '../../../../../stores/authStore';
 import { format } from 'date-fns';
 import { useWorkoutStore } from '../../../../../stores/workoutStore';
 import { useRoutineStore } from '../../../../../stores/routineStore';
+import { progressUtils, PROGRESS_LABELS } from '../../../../../stores/progressStore';
 import CachedAvatar from '../../../../../components/CachedAvatar';
 import RoutineDetailSkeleton from '../../../../../components/RoutineDetailSkeleton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -265,6 +266,9 @@ export default function RoutineDetail() {
 
     try {
       if (isSaved) {
+        // Step 1: Start unsaving process
+        progressUtils.stepProgress(1, 3, 'Removing from saved...');
+
         // Remove from saved routines
         const { error: deleteError } = await supabase
           .from('saved_routines')
@@ -273,6 +277,9 @@ export default function RoutineDetail() {
           .eq('user_id', session.user.id);
 
         if (deleteError) throw deleteError;
+
+        // Step 2: Updating statistics
+        progressUtils.stepProgress(2, 3, 'Updating statistics...');
 
         // Decrement the save count on the original routine using the safer function
         const { error: updateError } = await supabase
@@ -283,11 +290,18 @@ export default function RoutineDetail() {
 
         if (updateError) throw updateError;
 
+        // Step 3: Complete
+        progressUtils.stepProgress(3, 3, 'Removed from saved!');
+        progressUtils.completeLoading();
+
         setIsSaved(false);
         setSaveCount(prev => Math.max(0, prev - 1));
         Alert.alert("Success", "Routine removed from saved!");
         return;
       }
+
+      // Step 1: Start saving process
+      progressUtils.stepProgress(1, 3, 'Saving routine...');
 
       // Save the routine to saved_routines table
       const { error: saveError } = await supabase
@@ -299,6 +313,9 @@ export default function RoutineDetail() {
 
       if (saveError) throw saveError;
 
+      // Step 2: Updating statistics
+      progressUtils.stepProgress(2, 3, 'Updating statistics...');
+
       // Increment the save count on the original routine using the safer function
       const { error: updateError } = await supabase
         .rpc('update_routine_statistics', {
@@ -308,11 +325,16 @@ export default function RoutineDetail() {
 
       if (updateError) throw updateError;
 
+      // Step 3: Complete
+      progressUtils.stepProgress(3, 3, 'Routine saved!');
+      progressUtils.completeLoading();
+
       setIsSaved(true);
       setSaveCount(prev => prev + 1);
       Alert.alert("Success", "Routine saved to your collection!");
     } catch (error) {
       console.error('Error saving routine:', error);
+      progressUtils.cancelLoading();
       Alert.alert("Error", "Failed to save routine");
     }
   };
@@ -320,6 +342,9 @@ export default function RoutineDetail() {
   const handleCopyRoutine = async () => {
     try {
       if (!routine || !session?.user?.id) return;
+
+      // Step 1: Start copying process
+      progressUtils.stepProgress(1, 3, 'Creating copy...');
 
       // Create a copy of the routine for the current user
       const { data: newRoutine, error: routineError } = await supabase
@@ -334,6 +359,9 @@ export default function RoutineDetail() {
         .single();
 
       if (routineError) throw routineError;
+
+      // Step 2: Copying exercises
+      progressUtils.stepProgress(2, 3, 'Copying exercises...');
 
       // Copy all exercises (excluding personal defaults like weight)
       const exercisesToCopy = routine.routine_exercises.map((exercise: any) => ({
@@ -356,11 +384,16 @@ export default function RoutineDetail() {
 
       if (exercisesError) throw exercisesError;
 
+      // Step 3: Complete
+      progressUtils.stepProgress(3, 3, 'Copy created!');
+      progressUtils.completeLoading();
+
       Alert.alert("Success", "Routine copied to your collection!");
       // Close the bottom sheet
       optionsBottomSheetRef.current?.close();
     } catch (error) {
       console.error('Error copying routine:', error);
+      progressUtils.cancelLoading();
       Alert.alert("Error", "Failed to copy routine");
     }
   };
@@ -454,6 +487,9 @@ export default function RoutineDetail() {
 
   const deleteRoutine = async () => {
     try {
+      // Step 1: Start deletion process
+      progressUtils.stepProgress(1, 3, PROGRESS_LABELS.DELETING_ROUTINE);
+
       // First, remove the routine reference from any workouts that use it
       // This preserves workout history while removing the foreign key constraint
       const { error: updateError } = await supabase
@@ -466,6 +502,9 @@ export default function RoutineDetail() {
         // Continue with deletion even if this fails - the main delete might still work
       }
 
+      // Step 2: Removing routine data
+      progressUtils.stepProgress(2, 3, 'Removing routine data...');
+
       // Now delete the routine
       const { error } = await supabase
         .from('routines')
@@ -473,6 +512,10 @@ export default function RoutineDetail() {
         .eq('id', routineId);
 
       if (error) throw error;
+
+      // Step 3: Complete
+      progressUtils.stepProgress(3, 3, 'Routine deleted!');
+      progressUtils.completeLoading();
 
       Alert.alert("Success", "Routine deleted successfully", [
         {
@@ -485,6 +528,7 @@ export default function RoutineDetail() {
       ]);
     } catch (error) {
       console.error('Error deleting routine:', error);
+      progressUtils.cancelLoading();
       Alert.alert("Error", "Failed to delete routine");
     }
   };

@@ -278,10 +278,10 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         
         console.log('Successfully saved exercise:', exerciseData.id);
         
-        // 4. Create all sets for this exercise (only include sets with weight AND reps)
+        // 4. Create all sets for this exercise
         if (exercise.sets.length > 0) {
           const validSets = exercise.sets.filter(set => 
-            set.weight !== null && set.weight !== undefined && set.weight !== 0 &&
+            set.weight !== null && set.weight !== undefined &&
             set.reps !== null && set.reps !== undefined && set.reps !== 0 &&
             set.isCompleted === true // Only save completed sets
           );

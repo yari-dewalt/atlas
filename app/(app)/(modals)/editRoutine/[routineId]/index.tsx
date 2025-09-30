@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from "../../../../../constants/colors";
 import { supabase } from "../../../../../lib/supabase";
 import { useAuthStore } from "../../../../../stores/authStore";
+import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../../stores/progressStore";
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
@@ -74,6 +75,20 @@ export default function EditRoutine() {
   const params = useLocalSearchParams();
   const { routineId } = params;
   const { session, profile } = useAuthStore();
+  
+  // Progress bar state
+  const { progress, isVisible } = useProgressStore();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate progress bar
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+  
   const [routineName, setRoutineName] = useState("");
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -199,6 +214,8 @@ export default function EditRoutine() {
 
     handleExerciseSelection();
   }, [params?.selectedExercises, params?.fromRoutineEdit]);
+
+
 
   const loadRoutineData = async () => {
     try {
@@ -553,8 +570,22 @@ export default function EditRoutine() {
     }
   
     setLoading(true);
+    let loadingInterval: any = null;
   
     try {
+      // Start progress tracking
+      if (routineId === 'new') {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.SAVING_ROUTINE);
+      } else {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.UPDATING_ROUTINE);
+      }
+
+      // Step 1: Validating data
+      progressUtils.stepProgress(1, 3, 'Validating routine data...');
+
+      // Step 2: Saving/Updating
+      progressUtils.stepProgress(2, 3, routineId === 'new' ? 'Creating routine...' : 'Updating routine...');
+      
       if (routineId === 'new') {
         // Create new routine
         await createNewRoutine();
@@ -562,9 +593,27 @@ export default function EditRoutine() {
         // Update existing routine - no need to check for duplicate names when editing
         await updateRoutine();
       }
+
+      // Step 3: Finalizing
+      progressUtils.stepProgress(3, 3, 'Finalizing...');
+      
+      // Complete the progress
+      progressUtils.completeLoading();
+      
+      // Clear the loading interval
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+      }
       
     } catch (error) {
       console.error("Error saving routine:", error);
+      
+      // Cancel progress on error
+      progressUtils.cancelLoading();
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+      }
+      
       Alert.alert("Error", "Failed to save routine. Please try again.");
       setLoading(false);
     }
@@ -1078,6 +1127,20 @@ export default function EditRoutine() {
               {routineId === 'new' ? 'Create' : 'Save'}
             </Text>
         </TouchableOpacity>
+
+        {/* Progress Bar */}
+        {isVisible && (
+          <Animated.View 
+            style={[
+              styles.progressBar, 
+              { width: progressAnim.interpolate({
+                inputRange: [0, 100],
+                outputRange: ['0%', '100%'],
+                extrapolate: 'clamp',
+              }) }
+            ]} 
+          />
+        )}
       </View>
 
       <KeyboardAvoidingView 
@@ -1947,6 +2010,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 53,
   },
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 1,
+    backgroundColor: colors.brand,
+  },
+
   headerButton: {
     padding: 8,
     minWidth: 60,

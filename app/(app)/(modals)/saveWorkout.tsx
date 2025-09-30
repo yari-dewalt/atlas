@@ -10,12 +10,14 @@ import {
   Switch,
   Platform,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
 import { useWorkoutStore } from '../../../stores/workoutStore';
 import { useAuthStore } from '../../../stores/authStore';
+import { progressUtils, PROGRESS_LABELS, useProgressStore } from '../../../stores/progressStore';
 import { getUserWeightUnit, displayWeightForUser, convertWeight } from '../../../utils/weightUtils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
@@ -32,6 +34,23 @@ export default function SaveWorkout() {
     isSaving 
   } = useWorkoutStore();
   const { profile } = useAuthStore();
+  
+  // Progress bar state
+  const { isVisible } = useProgressStore();
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isVisible) {
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      progressAnim.setValue(0);
+    }
+  }, [isVisible]);
+
 
   const [workoutTitle, setWorkoutTitle] = useState('');
   const [workoutDate, setWorkoutDate] = useState(new Date());
@@ -41,6 +60,8 @@ export default function SaveWorkout() {
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
+  
+
   
   // Bottom sheet refs
   const workoutVisibilityBottomSheetRef = useRef<BottomSheet>(null);
@@ -114,29 +135,65 @@ export default function SaveWorkout() {
   const stats = calculateWorkoutStats();
 
   const handleSaveWorkout = async () => {
+    const isEditing = activeWorkout?.isEditing;
+    let loadingInterval: any = null;
+    
     try {
-      // Update workout with final details
+      // Start progress tracking
+      if (isEditing) {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.UPDATING_WORKOUT);
+      } else {
+        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.SAVING_WORKOUT);
+      }
+
+      // Step 1: Update workout details
+      progressUtils.stepProgress(1, 3, 'Preparing workout data...');
       updateActiveWorkout({
         name: workoutTitle,
         startTime: workoutDate,
       });
 
+      // Step 2: Save to database
+      progressUtils.stepProgress(2, 3, isEditing ? 'Updating workout...' : 'Saving workout...');
       let success;
-      if (activeWorkout?.isEditing) {
+      if (isEditing) {
         success = await updateWorkoutToDatabase();
       } else {
         success = await saveWorkoutToDatabase();
       }
-      
+
       if (success) {
+        // Step 3: Finalizing
+        progressUtils.stepProgress(3, 3, 'Finalizing...');
+        
+        // Complete the progress
+        progressUtils.completeLoading();
+        
+        // Clear the loading interval
+        if (loadingInterval) {
+          clearInterval(loadingInterval);
+        }
+        
         endWorkout();
         router.back();
         router.back(); // Go back twice to return to the main screen
       } else {
-        Alert.alert('Error', `Failed to ${activeWorkout?.isEditing ? 'update' : 'save'} workout. Please try again.`);
+        // Cancel progress on failure
+        progressUtils.cancelLoading();
+        if (loadingInterval) {
+          clearInterval(loadingInterval);
+        }
+        Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'save'} workout. Please try again.`);
       }
     } catch (error) {
-      console.error(`Error ${activeWorkout?.isEditing ? 'updating' : 'finishing'} workout:`, error);
+      console.error(`Error ${isEditing ? 'updating' : 'finishing'} workout:`, error);
+      
+      // Cancel progress on error
+      progressUtils.cancelLoading();
+      if (loadingInterval) {
+        clearInterval(loadingInterval);
+      }
+      
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
@@ -160,11 +217,26 @@ export default function SaveWorkout() {
           style={styles.saveButton}
           disabled={isSaving}
         >
-          <Text style={[styles.saveButtonText, isSaving && { opacity: 0.5 }]}>
+          <Text style={[styles.saveButtonText, isSaving && styles.saveButtonTextDisabled]}>
             {activeWorkout?.isEditing ? 'Update' : 'Save'}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Progress Bar */}
+      {isVisible && (
+        <Animated.View 
+          style={[
+            styles.progressBar,
+            {
+              width: progressAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%'],
+              }),
+            },
+          ]}
+        />
+      )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Workout Title */}
@@ -414,6 +486,9 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
     fontWeight: '600',
   },
+  saveButtonTextDisabled: {
+    opacity: 0.5,
+  },
   content: {
     flex: 1,
     padding: 16,
@@ -580,4 +655,13 @@ const styles = StyleSheet.create({
   selectedOptionSubtitle: {
     color: colors.secondaryText,
   },
+  progressBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: 1,
+    backgroundColor: colors.brand,
+    zIndex: 1000,
+  },
+
 });
