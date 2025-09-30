@@ -22,6 +22,8 @@ import { colors } from "../../../../../constants/colors";
 import { supabase } from "../../../../../lib/supabase";
 import { useAuthStore } from "../../../../../stores/authStore";
 import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../../stores/progressStore";
+import { useWorkoutStore } from "../../../../../stores/workoutStore";
+import { useRoutineStore } from "../../../../../stores/routineStore";
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
@@ -75,6 +77,7 @@ export default function EditRoutine() {
   const params = useLocalSearchParams();
   const { routineId } = params;
   const { session, profile } = useAuthStore();
+  const { activeWorkout } = useWorkoutStore();
   
   // Progress bar state
   const { progress, isVisible } = useProgressStore();
@@ -860,13 +863,133 @@ export default function EditRoutine() {
 
       if (exercisesError) throw exercisesError;
 
+      // Handle workout start with proper logic
+      const handleStartWorkoutAfterCreate = async () => {
+        try {
+          // Check if there's already an active workout
+          if (activeWorkout) {
+            Alert.alert(
+              "Workout in Progress",
+              "You already have an active workout. What would you like to do?",
+              [
+                {
+                  text: "Resume Current",
+                  onPress: () => {
+                    router.back();
+                    router.push("/newWorkout");
+                  },
+                  style: "default",
+                },
+                {
+                  text: "Discard & Start New",
+                  onPress: async () => {
+                    useWorkoutStore.getState().endWorkout();
+                    await startNewWorkoutFromCreatedRoutine(newRoutineId);
+                  },
+                  style: "destructive",
+                },
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+              ]
+            );
+          } else {
+            await startNewWorkoutFromCreatedRoutine(newRoutineId);
+          }
+          router.push('/newWorkout');
+        } catch (error) {
+          console.error("Error starting workout:", error);
+          Alert.alert("Error", "Failed to start workout. Please try again.");
+        }
+      };
+
+      const startNewWorkoutFromCreatedRoutine = async (routineId: string) => {
+        try {
+          // Create routine object from the exercises data for workout startup
+          const routineForWorkout = {
+            id: routineId,
+            name: routineName.trim(),
+            routine_exercises: exercises.map((exercise, index) => ({
+              id: exercise.id,
+              exercise_id: exercise.exerciseId,
+              name: exercise.name,
+              order_position: index,
+              total_sets: exercise.sets.length,
+              default_weight: exercise.sets[0]?.weight || exercise.defaultWeight,
+              default_reps: exercise.repMode === 'single' ? (exercise.sets[0]?.reps || exercise.defaultRepsMin) : null,
+              default_reps_min: exercise.repMode === 'range' ? (exercise.sets[0]?.repsMin || exercise.defaultRepsMin) : (exercise.sets[0]?.reps || exercise.defaultRepsMin),
+              default_reps_max: exercise.repMode === 'range' ? (exercise.sets[0]?.repsMax || exercise.defaultRepsMax) : null,
+              default_rpe: exercise.sets[0]?.rpe || exercise.defaultRPE,
+              rep_mode: exercise.repMode,
+              exercises: {
+                id: exercise.exerciseId,
+                name: exercise.name,
+                image_url: exercise.image_url
+              }
+            }))
+          };
+
+          // Start a new workout with this routine
+          useWorkoutStore.getState().startNewWorkout({
+            name: routineForWorkout.name,
+            routineId: routineForWorkout.id,
+            exercises: routineForWorkout.routine_exercises.map((exercise: any) => {
+              // Use explicit rep_mode if available, otherwise determine based on data
+              const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+              
+              return {
+                id: `${Date.now()}_${Math.random()}`, // Temporary ID for workout instance
+                exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
+                name: exercise.exercises?.name || exercise.name,
+                image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
+                sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
+                  id: `${Date.now()}_${Math.random()}_${i}`,
+                  weight: exercise.default_weight, // Always inherit weight defaults from newly created routine
+                  reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
+                  repsMin: repMode === 'range' ? exercise.default_reps_min : null,
+                  repsMax: repMode === 'range' ? exercise.default_reps_max : null,
+                  isRange: repMode === 'range',
+                  rpe: exercise.default_rpe, // Always inherit RPE defaults
+                  isCompleted: false
+                })),
+                notes: "",
+                repMode: repMode
+              };
+            })
+          });
+
+          // Update the routine's last used info since user is the creator
+          try {
+            const routineStore = useRoutineStore.getState() as any;
+            if (routineStore.updateRoutineUsage) {
+              routineStore.updateRoutineUsage(routineId.toString());
+            }
+          } catch (error) {
+            console.log('Could not update routine usage:', error);
+          }
+
+          // Navigate to workout screen
+          router.back();
+          router.push("/newWorkout");
+        } catch (error) {
+          console.error("Error starting workout from routine:", error);
+          Alert.alert("Error", "Failed to start workout. Please try again.");
+        }
+      };
+
       Alert.alert(
-        "Success",
-        "Routine created successfully!",
+        "Routine Created!",
+        "Your routine has been created successfully. Would you like to start a workout from this routine now?",
         [
           {
-            text: "OK",
+            text: "Later",
+            style: "cancel",
             onPress: () => router.back()
+          },
+          {
+            text: "Start Workout",
+            onPress: handleStartWorkoutAfterCreate
           }
         ]
       );
