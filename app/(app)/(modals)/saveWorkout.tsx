@@ -27,6 +27,7 @@ export default function SaveWorkout() {
     activeWorkout, 
     endWorkout, 
     saveWorkoutToDatabase,
+    updateWorkoutToDatabase,
     updateActiveWorkout,
     isSaving 
   } = useWorkoutStore();
@@ -64,6 +65,11 @@ export default function SaveWorkout() {
   useEffect(() => {
     if (activeWorkout) {
       setWorkoutDate(new Date(activeWorkout.startTime));
+      
+      // If editing a workout, pre-populate the title from the original workout
+      if (activeWorkout.isEditing && activeWorkout.name) {
+        setWorkoutTitle(activeWorkout.name);
+      }
     }
   }, [activeWorkout]);
 
@@ -115,17 +121,22 @@ export default function SaveWorkout() {
         startTime: workoutDate,
       });
 
-      const success = await saveWorkoutToDatabase();
+      let success;
+      if (activeWorkout?.isEditing) {
+        success = await updateWorkoutToDatabase();
+      } else {
+        success = await saveWorkoutToDatabase();
+      }
       
       if (success) {
         endWorkout();
         router.back();
         router.back(); // Go back twice to return to the main screen
       } else {
-        Alert.alert('Error', 'Failed to save workout. Please try again.');
+        Alert.alert('Error', `Failed to ${activeWorkout?.isEditing ? 'update' : 'save'} workout. Please try again.`);
       }
     } catch (error) {
-      console.error('Error finishing workout:', error);
+      console.error(`Error ${activeWorkout?.isEditing ? 'updating' : 'finishing'} workout:`, error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
@@ -140,7 +151,7 @@ export default function SaveWorkout() {
         </TouchableOpacity>
         
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Save workout</Text>
+          <Text style={styles.headerTitle}>{activeWorkout?.isEditing ? 'Edit workout' : 'Save workout'}</Text>
         </View>
         
         <TouchableOpacity
@@ -150,7 +161,7 @@ export default function SaveWorkout() {
           disabled={isSaving}
         >
           <Text style={[styles.saveButtonText, isSaving && { opacity: 0.5 }]}>
-            {'Save'}
+            {activeWorkout?.isEditing ? 'Update' : 'Save'}
           </Text>
         </TouchableOpacity>
       </View>

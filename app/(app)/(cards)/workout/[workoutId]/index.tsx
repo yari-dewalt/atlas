@@ -10,7 +10,7 @@ import {
   Alert,
   TouchableOpacity
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../../constants/colors';
 import { supabase } from '../../../../../lib/supabase';
@@ -18,9 +18,9 @@ import { format } from 'date-fns';
 import CachedAvatar from '../../../../../components/CachedAvatar';
 import WorkoutDetailSkeleton from '../../../../../components/WorkoutDetailSkeleton';
 import { useAuthStore } from '../../../../../stores/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWorkoutStore } from '../../../../../stores/workoutStore';
 import { getUserWeightUnit, displayWeightForUser } from '../../../../../utils/weightUtils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import * as Haptics from 'expo-haptics';
@@ -29,7 +29,7 @@ export default function WorkoutDetailScreen() {
   const { workoutId } = useLocalSearchParams();
   const router = useRouter();
   const { session, profile } = useAuthStore();
-  const { startNewWorkout, activeWorkout, endWorkout } = useWorkoutStore();
+  const { startNewWorkout, activeWorkout, endWorkout, deleteWorkout } = useWorkoutStore();
   
   const [workout, setWorkout] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export default function WorkoutDetailScreen() {
   const optionsBottomSheetRef = useRef<BottomSheet>(null);
   
   // Bottom Sheet snap points
-  const optionsSnapPoints = useMemo(() => ['25%'], []);
+  const optionsSnapPoints = useMemo(() => isCurrentUser ? ['35%'] : ['25%'], [isCurrentUser]);
 
   // Bottom Sheet callbacks
   const handleOptionsSheetChanges = useCallback((index: number) => {
@@ -76,6 +76,13 @@ export default function WorkoutDetailScreen() {
   useEffect(() => {
     fetchWorkout();
   }, [workoutId]);
+
+  // Refresh workout data when screen comes into focus (e.g., returning from editing)
+  useFocusEffect(
+    useCallback(() => {
+      fetchWorkout();
+    }, [workoutId])
+  );
 
   // Setup global function for opening options
   useEffect(() => {
@@ -629,6 +636,155 @@ export default function WorkoutDetailScreen() {
     }
   };
 
+  const handleEditWorkout = async () => {
+    if (!workout?.workout_exercises) return;
+    
+    // Check if there's an active workout
+    if (activeWorkout) {
+      Alert.alert(
+        "Workout in Progress",
+        "You already have an active workout. What would you like to do?",
+        [
+          {
+            text: "Resume Current",
+            onPress: () => {
+              router.push("/newWorkout");
+            },
+            style: "default",
+          },
+          {
+            text: "Discard & Edit",
+            onPress: () => {
+              endWorkout();
+              // Continue with editing the workout
+              startEditingWorkout();
+            },
+            style: "destructive",
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+        ]
+      );
+      return;
+    }
+    
+    // No active workout, proceed with editing
+    await startEditingWorkout();
+  };
+
+  const startEditingWorkout = async () => {
+    try {
+      // Load custom exercises from local storage
+      let customExercises: any[] = [];
+      try {
+        const customExercisesData = await AsyncStorage.getItem('custom_exercises');
+        if (customExercisesData) {
+          customExercises = JSON.parse(customExercisesData);
+        }
+      } catch (error) {
+        console.error('Error loading custom exercises:', error);
+        customExercises = [];
+      }
+      
+      // Prepare exercises data for editing
+      const preparedExercises = workout.workout_exercises.map((exercise: any) => {
+        // Create exercise ID
+        const exerciseId = `exercise-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Prepare sets with existing data
+        const preparedSets = exercise.sets.map((originalSet: any, index: number) => ({
+          id: `set-${Date.now()}-${index}-${Math.floor(Math.random() * 1000)}`,
+          weight: originalSet.weight ? parseFloat(displayWeightForUser(originalSet.weight, 'kg', userWeightUnit, false)) : null,
+          reps: originalSet.reps,
+          rpe: originalSet.rpe,
+          isCompleted: originalSet.is_completed
+        }));
+        
+        return {
+          id: exerciseId,
+          exercise_id: exercise.exercise_id,
+          name: exercise.exercises?.name || exercise.name,
+          notes: exercise.notes || "",
+          sets: preparedSets,
+          image_url: exercise.exercises?.image_url || null,
+          superset_id: exercise.superset_id,
+        };
+      });
+      
+      // Start editing mode with the workout data
+      startNewWorkout({ 
+        name: workout.name, 
+        routineId: workout.routine_id || undefined,
+        exercises: preparedExercises,
+        isEditing: true,
+        editingWorkoutId: workout.id,
+        startTime: new Date(workout.start_time),
+        duration: workout.duration
+      });
+      
+      // Navigate to the workout screen
+      router.push('/newWorkout');
+      
+    } catch (error) {
+      console.error('Error editing workout:', error);
+      Alert.alert('Error', 'Failed to edit workout. Please try again.');
+    }
+  };
+
+  const handleDeleteWorkout = async () => {
+    if (!workout?.id) return;
+
+    Alert.alert(
+      'Delete Workout',
+      'Are you sure you want to delete this workout?\n\nThis action will:\n• Remove the workout from your profile\n• Remove all references to this workout in your posts\n• This cannot be undone',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              const success = await deleteWorkout(workout.id);
+              if (success) {
+                Alert.alert(
+                  'Workout Deleted',
+                  'Your workout has been successfully deleted.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Navigate back to the previous screen
+                        router.back();
+                      },
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  'Delete Failed',
+                  'Failed to delete the workout. Please try again.',
+                  [{ text: 'OK', style: 'default' }]
+                );
+              }
+            } catch (error) {
+              console.error('Error deleting workout:', error);
+              Alert.alert(
+                'Delete Failed',
+                'An error occurred while deleting the workout. Please try again.',
+                [{ text: 'OK', style: 'default' }]
+              );
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
   const renderExerciseItem = (exercise: any, supersetColor?: string) => {
     return (
       <View key={exercise.id} style={styles.exerciseItemWrapper}>
@@ -720,13 +876,13 @@ export default function WorkoutDetailScreen() {
                 styles.setData,
                 set.is_completed ? styles.setCompleted : styles.setIncomplete
               ]}>
-                {set.weight ? displayWeightForUser(set.weight, 'kg', userWeightUnit, true) : '-'}
+                {set.weight !== null && set.weight !== undefined ? displayWeightForUser(set.weight, 'kg', userWeightUnit, true) : '0'}
               </Text>
               <Text style={[
                 styles.setData,
                 set.is_completed ? styles.setCompleted : styles.setIncomplete
               ]}>
-                {set.reps || '-'}
+                {set.reps !== null && set.reps !== undefined ? set.reps : '0'}
               </Text>
               <Text style={[
                 styles.setData,
@@ -757,6 +913,15 @@ export default function WorkoutDetailScreen() {
         options={{
           title: workout.name,
           headerBackTitle: "Back",
+          headerRight: () => (
+            <TouchableOpacity
+                        activeOpacity={0.5} 
+              onPress={() => optionsBottomSheetRef.current?.snapToIndex(0)}
+              style={styles.headerRightButton}
+            >
+              <Ionicons name="ellipsis-horizontal" size={24} color={colors.primaryText} />
+            </TouchableOpacity>
+          ),
         }}
       />
       
@@ -934,7 +1099,7 @@ export default function WorkoutDetailScreen() {
         <BottomSheetView style={styles.optionsModalContent}>
           <View style={styles.bottomSheetHeader}>
             <Text style={styles.optionsTitle}>Workout Options</Text>
-            <Text style={styles.optionsSubtitle}>Create a routine from this workout</Text>
+            <Text style={styles.optionsSubtitle}>Create a routine template, or edit/delete this workout</Text>
           </View>
           
           <View style={styles.optionsContent}>
@@ -956,6 +1121,48 @@ export default function WorkoutDetailScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
             </TouchableOpacity>
+
+            {/* Edit Workout Option - Only show for current user */}
+            {isCurrentUser && (
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.optionItem} 
+                onPress={() => {
+                  optionsBottomSheetRef.current?.close();
+                  handleEditWorkout();
+                }}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="create-outline" size={24} color={colors.primaryText} />
+                </View>
+                <View style={styles.optionTextContainer}>
+                  <Text style={styles.optionTitle}>Edit Workout</Text>
+                  <Text style={styles.optionSubtitle}>Modify exercises and sets</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
+
+            {/* Delete Workout Option - Only show for current user */}
+            {isCurrentUser && (
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.optionItem} 
+                onPress={() => {
+                  optionsBottomSheetRef.current?.close();
+                  handleDeleteWorkout();
+                }}
+              >
+                <View style={styles.optionIcon}>
+                  <Ionicons name="trash-outline" size={24} color={colors.notification} />
+                </View>
+                <View style={styles.optionTextContainer}>
+                  <Text style={[styles.optionTitle, { color: colors.notification }]}>Delete Workout</Text>
+                  <Text style={styles.optionSubtitle}>Remove this workout permanently</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
           </View>
         </BottomSheetView>
       </BottomSheet>
@@ -1384,5 +1591,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.secondaryText,
     lineHeight: 20,
+  },
+  headerRightButton: {
+    marginRight: 15,
   },
 });

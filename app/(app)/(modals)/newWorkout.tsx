@@ -63,6 +63,7 @@ export default function NewWorkout() {
     updateActiveWorkout,
     workoutSettings,
     loadWorkoutSettings,
+    cancelEditWorkout,
   } = useWorkoutStore();
   
   // Get user's preferred weight unit
@@ -1126,7 +1127,7 @@ const handleTimerCompletion = async () => {
 
   useEffect(() => {
     // Initialize the workout
-    if (!activeWorkout) {
+    if (!activeWorkout && routineId) {
       startWorkout(routineId, 'routineName');
     }
     
@@ -1391,6 +1392,12 @@ const handleTimerCompletion = async () => {
                 activeOpacity={0.5} 
           onPress={() => {
             closeAllSwipeables();
+            
+            // If we're editing a workout, clear the active workout state
+            if (activeWorkout?.isEditing) {
+              cancelEditWorkout();
+            }
+            
             router.back();
           }} 
           style={styles.headerButton}
@@ -1433,32 +1440,38 @@ const handleTimerCompletion = async () => {
     </TouchableOpacity>
   ) : (
     // Default title when modal is open or no timers active
-    <Text style={styles.headerTitle}>Log workout</Text>
+    <Text style={styles.headerTitle}>
+      {activeWorkout?.isEditing ? 'Edit workout' : 'Log workout'}
+    </Text>
   )}
   
-  <TouchableOpacity
-                activeOpacity={0.5} 
-    onPress={() => {
-      closeAllSwipeables();
-      router.push('/(app)/(modals)/workoutSettings');
-    }} 
-    style={styles.settingsButton}
-  >
-    <IonIcon name="settings-outline" size={22} color={colors.secondaryText} />
-  </TouchableOpacity>
+  {!activeWorkout?.isEditing && (
+    <TouchableOpacity
+                  activeOpacity={0.5} 
+      onPress={() => {
+        closeAllSwipeables();
+        router.push('/(app)/(modals)/workoutSettings');
+      }} 
+      style={styles.settingsButton}
+    >
+      <IonIcon name="settings-outline" size={22} color={colors.secondaryText} />
+    </TouchableOpacity>
+  )}
 </View>
 
   <View style={styles.headerActions}>
-    <TouchableOpacity
-                activeOpacity={0.5} 
-      onPress={() => {
-        closeAllSwipeables();
-        toggleRestTimerModal();
-      }} 
-      style={styles.timerButton}
-    >
-      <IonIcon name="timer-outline" size={26} color={colors.primaryText} />
-    </TouchableOpacity>
+    {!activeWorkout?.isEditing && (
+      <TouchableOpacity
+                  activeOpacity={0.5} 
+        onPress={() => {
+          closeAllSwipeables();
+          toggleRestTimerModal();
+        }} 
+        style={styles.timerButton}
+      >
+        <IonIcon name="timer-outline" size={26} color={colors.primaryText} />
+      </TouchableOpacity>
+    )}
     <TouchableOpacity
       activeOpacity={0.5} 
       onPress={() => {
@@ -1474,7 +1487,7 @@ const handleTimerCompletion = async () => {
         styles.finishButtonText,
         !isWorkoutValid() && styles.finishButtonTextDisabled
       ]}>
-        Finish
+        {activeWorkout?.isEditing ? 'Save' : 'Finish'}
       </Text>
     </TouchableOpacity>
   </View>

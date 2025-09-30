@@ -29,6 +29,8 @@ interface Workout {
   exercises: WorkoutExercise[];
   duration: number;
   notes?: string;
+  isEditing?: boolean;
+  editingWorkoutId?: string;
 }
 
 interface WorkoutSettings {
@@ -70,11 +72,14 @@ interface WorkoutState {
   startWorkout: (routineId?: string, routineName?: string) => void;
   endWorkout: () => void;
   saveWorkoutToDatabase: () => Promise<boolean>;
+  updateWorkoutToDatabase: () => Promise<boolean>;
+  deleteWorkout: (workoutId: string) => Promise<boolean>;
   updateActiveWorkout: (data: Partial<Workout>) => void;
   updateWorkoutTime: (reset?: number) => void;
   pauseTimer: () => void;
   resumeTimer: () => void;
-  startNewWorkout: (workoutData: { name?: string, routineId?: string, exercises?: WorkoutExercise[] }) => void;
+  startNewWorkout: (workoutData: { name?: string, routineId?: string, exercises?: WorkoutExercise[], isEditing?: boolean, editingWorkoutId?: string, startTime?: Date, duration?: number }) => void;
+  cancelEditWorkout: () => void;
   
   // Auto-save functionality
   saveWorkoutState: () => Promise<void>;
@@ -300,11 +305,143 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         }
       }
       
-      // Success - workout is saved, clear the auto-saved state
+      // Success - workout is saved, clear the auto-saved state and active workout
       await get().clearSavedWorkoutState();
+      set({ activeWorkout: null, isPaused: true, pausedAt: null, accumulatedTime: 0 });
       return true;
     } catch (error) {
       console.error("Error saving workout:", error);
+      set({ saveError: error.message });
+      return false;
+    } finally {
+      set({ isSaving: false });
+    }
+  },
+
+  updateWorkoutToDatabase: async () => {
+    const { activeWorkout } = get();
+    if (!activeWorkout || !activeWorkout.editingWorkoutId) return false;
+    
+    set({ isSaving: true, saveError: null });
+    
+    try {
+      // 1. Get user session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      
+      if (!userId) {
+        throw new Error("User not authenticated");
+      }
+      
+      // 2. Get user's weight unit preference
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('weight_unit')
+        .eq('id', userId)
+        .single();
+      
+      const userWeightUnit: WeightUnit = userProfile?.weight_unit || 'lbs';
+      
+      // 3. Update the workout record
+      const { error: workoutError } = await supabase
+        .from('workouts')
+        .update({
+          name: activeWorkout.name,
+          notes: activeWorkout.notes || "",
+          // Keep original start_time, update end_time to now and duration
+          end_time: new Date().toISOString(),
+          duration: activeWorkout.duration,
+        })
+        .eq('id', activeWorkout.editingWorkoutId)
+        .eq('user_id', userId); // Ensure user can only edit their own workouts
+      
+      if (workoutError) throw workoutError;
+      
+      // 4. Delete existing workout exercises and sets
+      const { error: deleteError } = await supabase
+        .from('workout_exercises')
+        .delete()
+        .eq('workout_id', activeWorkout.editingWorkoutId);
+      
+      if (deleteError) throw deleteError;
+      
+      // 5. Create superset ID mapping (convert local numeric IDs to UUIDs)
+      const supersetIdMap = new Map();
+      
+      // First pass: identify unique superset IDs and create UUID mapping
+      for (const exercise of activeWorkout.exercises) {
+        if (exercise.superset_id !== null && exercise.superset_id !== undefined) {
+          if (!supersetIdMap.has(exercise.superset_id)) {
+            // Generate a proper UUID v4 for this superset
+            const supersetUuid = Crypto.randomUUID();
+            supersetIdMap.set(exercise.superset_id, supersetUuid);
+          }
+        }
+      }
+      
+      // 6. Create all exercises
+      for (const exercise of activeWorkout.exercises) {
+        // Convert local superset ID to UUID if it exists
+        const databaseSupersetId = exercise.superset_id !== null && exercise.superset_id !== undefined
+          ? supersetIdMap.get(exercise.superset_id) || null
+          : null;
+        
+        // Handle custom exercises vs. database exercises
+        let exerciseInsertData;
+        
+        if (exercise.exercise_id && exercise.exercise_id.startsWith('custom-')) {
+          // This is a custom exercise - don't include exercise_id
+          exerciseInsertData = {
+            workout_id: activeWorkout.editingWorkoutId,
+            name: exercise.name,
+            notes: exercise.notes || "",
+            superset_id: databaseSupersetId,
+          };
+        } else {
+          // This is a regular exercise from the database
+          exerciseInsertData = {
+            workout_id: activeWorkout.editingWorkoutId,
+            exercise_id: exercise.exercise_id,
+            name: exercise.name,
+            notes: exercise.notes || "",
+            superset_id: databaseSupersetId,
+          };
+        }
+        
+        const { data: exerciseData, error: exerciseError } = await supabase
+          .from('workout_exercises')
+          .insert(exerciseInsertData)
+          .select('id')
+          .single();
+        
+        if (exerciseError) throw exerciseError;
+        
+        // Create sets for this exercise
+        if (exercise.sets && exercise.sets.length > 0) {
+          const setsToCreate = exercise.sets.map((set, index) => ({
+            exercise_id: exerciseData.id,
+            weight: set.weight ? convertWeightForStorage(set.weight, userWeightUnit) : null,
+            reps: set.reps,
+            rpe: set.rpe,
+            is_completed: set.isCompleted,
+            order_index: index + 1
+          }));
+          
+          const { error: setsError } = await supabase
+            .from('workout_sets')
+            .insert(setsToCreate);
+          
+          if (setsError) throw setsError;
+        }
+      }
+      
+      // Success - workout is updated, clear the auto-saved state and active workout
+      await get().clearSavedWorkoutState();
+      set({ activeWorkout: null, isPaused: true, pausedAt: null, accumulatedTime: 0 });
+      console.log(activeWorkout);
+      return true;
+    } catch (error) {
+      console.error("Error updating workout:", error);
       set({ saveError: error.message });
       return false;
     } finally {
@@ -317,8 +454,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       activeWorkout: state.activeWorkout ? {...state.activeWorkout, ...data} : null
     }));
     
-    // Auto-save after updating workout
-    setTimeout(() => get().saveWorkoutState(), 100);
+    // Don't auto-save if we're currently saving the workout to database
+    const { isSaving } = get();
+    if (!isSaving) {
+      setTimeout(() => get().saveWorkoutState(), 100);
+    }
   },
   
   pauseTimer: () => {
@@ -585,24 +725,26 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   startNewWorkout: (workoutData) => {
-    const { name, routineId, exercises } = workoutData;
+    const { name, routineId, exercises, isEditing, editingWorkoutId, startTime, duration } = workoutData;
     const { workoutSettings } = get();
     const now = new Date().getTime();
     
     set({
       activeWorkout: {
-        id: Date.now().toString(),
-        startTime: new Date(),
+        id: isEditing && editingWorkoutId ? editingWorkoutId : Date.now().toString(),
+        startTime: startTime || new Date(),
         routineId,
         name: name || "Routine Workout",
         exercises: exercises || [],
-        duration: 0,
-        notes: ""
+        duration: duration || 0,
+        notes: "",
+        isEditing: isEditing || false,
+        editingWorkoutId: editingWorkoutId
       },
-      // Auto-start timer based on settings
-      isPaused: !workoutSettings.autoStartTimer,
-      pausedAt: workoutSettings.autoStartTimer ? null : now,
-      accumulatedTime: 0,
+      // For editing mode, start paused with the accumulated time
+      isPaused: isEditing ? true : !workoutSettings.autoStartTimer,
+      pausedAt: isEditing ? now : (workoutSettings.autoStartTimer ? null : now),
+      accumulatedTime: isEditing && duration ? duration * 1000 : 0, // Convert seconds to milliseconds
       saveError: null
     });
     
@@ -652,6 +794,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (!activeWorkout) {
       // No active workout, clear any saved state
       await get().clearSavedWorkoutState();
+      return;
+    }
+
+    // Don't auto-save when editing a workout - editing sessions shouldn't persist across app restarts
+    if (activeWorkout.isEditing) {
+      console.log('Skipping auto-save for workout editing session');
       return;
     }
 
@@ -723,5 +871,86 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     } catch (error) {
       console.error('Error clearing saved workout state:', error);
     }
+  },
+
+  deleteWorkout: async (workoutId: string): Promise<boolean> => {
+    if (!workoutId) {
+      console.error('No workout ID provided for deletion');
+      return false;
+    }
+
+    set({ isSaving: true, saveError: null });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // First verify that the user owns this workout
+      const { data: workout, error: verifyError } = await supabase
+        .from('workouts')
+        .select('user_id')
+        .eq('id', workoutId)
+        .single();
+
+      if (verifyError) throw verifyError;
+
+      if (workout.user_id !== user.id) {
+        throw new Error('Unauthorized: Cannot delete workout that does not belong to you');
+      }
+
+      // Remove workout references from posts (set workout_id to null)
+      const { error: updatePostsError } = await supabase
+        .from('posts')
+        .update({ workout_id: null })
+        .eq('workout_id', workoutId);
+
+      if (updatePostsError) {
+        console.warn('Warning: Could not update posts referencing this workout:', updatePostsError);
+        // Continue with deletion even if posts update fails
+      }
+
+      // Delete workout exercises and sets first (foreign key constraints)
+      const { error: deleteExercisesError } = await supabase
+        .from('workout_exercises')
+        .delete()
+        .eq('workout_id', workoutId);
+
+      if (deleteExercisesError) throw deleteExercisesError;
+
+      // Delete the workout itself
+      const { error: deleteWorkoutError } = await supabase
+        .from('workouts')
+        .delete()
+        .eq('id', workoutId)
+        .eq('user_id', user.id); // Additional safety check
+
+      if (deleteWorkoutError) throw deleteWorkoutError;
+
+      set({ isSaving: false });
+      console.log('Workout deleted successfully');
+      return true;
+
+    } catch (error) {
+      console.error('Error deleting workout:', error);
+      set({ 
+        isSaving: false, 
+        saveError: error instanceof Error ? error.message : 'Failed to delete workout' 
+      });
+      return false;
+    }
+  },
+
+  cancelEditWorkout: () => {
+    set({
+      activeWorkout: null,
+      isPaused: true,
+      pausedAt: null,
+      accumulatedTime: 0,
+    });
+    
+    // Clear any saved workout state when canceling edit
+    setTimeout(() => get().clearSavedWorkoutState(), 100);
   },
 }));
