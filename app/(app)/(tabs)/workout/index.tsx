@@ -358,22 +358,31 @@ export default function Workout() {
       // Start a new workout with this routine
       useWorkoutStore.getState().startNewWorkout({
         name: routine.name,
-        routineId: routine.id, // Make sure this is included
-        exercises: routine.routine_exercises.map((exercise: any) => ({
-          id: Date.now() + Math.random(), // Temporary ID for workout instance
-          exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
-          name: exercise.name,
-          image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
-          sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
-            id: Date.now() + Math.random() + i,
-            weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
-            reps: exercise.default_reps_min || exercise.default_reps, // Use rep range minimum or legacy default
-            rpe: exercise.default_rpe, // Always inherit RPE defaults
-            isCompleted: false
-          })),
-          notes: "",
-          superset_id: exercise.superset_id || null, // Include superset ID if exists
-        }))
+        routineId: routine.id,
+        exercises: routine.routine_exercises.map((exercise: any) => {
+          // Use explicit rep_mode if available, otherwise determine based on data
+          const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+          
+          return {
+            id: Date.now() + Math.random(), // Temporary ID for workout instance
+            exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
+            name: exercise.exercises?.name || exercise.name,
+            image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
+            sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
+              id: Date.now() + Math.random() + i,
+              weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
+              reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
+              repsMin: repMode === 'range' ? exercise.default_reps_min : null,
+              repsMax: repMode === 'range' ? exercise.default_reps_max : null,
+              isRange: repMode === 'range',
+              rpe: exercise.default_rpe, // Always inherit RPE defaults
+              isCompleted: false
+            })),
+            notes: "",
+            repMode: repMode,
+            superset_id: exercise.superset_id || null, // Include superset ID if exists
+          };
+        })
       });
       
       // Update the routine's last used info

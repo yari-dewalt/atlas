@@ -17,20 +17,40 @@ export const useRoutineStore = create((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('routines')
-        .select(`
+.select(`
+        id,
+        name,
+        user_id,
+        original_creator_id,
+        created_at,
+        updated_at,
+        usage_count,
+        like_count,
+        save_count,
+        is_official,
+        category,
+        routine_exercises (
           id,
+          exercise_id,
           name,
-          created_at,
-          routine_exercises (
+          order_position,
+          total_sets,
+          default_weight,
+          default_reps,
+          default_reps_min,
+          default_reps_max,
+          default_rpe,
+          rep_mode,
+          exercises (
             id,
             name,
-            order_position,
-            total_sets,
-            default_weight,
-            default_reps,
-            default_rpe
+            image_url,
+            primary_muscle_group,
+            equipment_required,
+            difficulty_level
           )
-        `)
+        )
+      `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       
@@ -59,36 +79,43 @@ export const useRoutineStore = create((set, get) => ({
     
     try {
       const { data, error } = await supabase
-        .from('routines')
-        .select(`
+.from('routines')
+      .select(`
+        id,
+        name,
+        user_id,
+        original_creator_id,
+        created_at,
+        updated_at,
+        usage_count,
+        like_count,
+        save_count,
+        is_official,
+        category,
+        routine_exercises (
           id,
+          exercise_id,
           name,
-          user_id,
-          original_creator_id,
-          usage_count,
-          like_count,
-          is_official,
-          category,
-          routine_exercises (
+          order_position,
+          total_sets,
+          default_weight,
+          default_reps,
+          default_reps_min,
+          default_reps_max,
+          default_rpe,
+          rep_mode,
+          exercises (
             id,
             name,
-            exercise_id,
-            order_position,
-            total_sets,
-            default_weight,
-            default_reps,
-            default_rpe,
-            exercises (
-              id,
-              name,
-              image_url,
-              primary_muscle_group,
-              equipment_required
-            )
+            image_url,
+            primary_muscle_group,
+            equipment_required,
+            difficulty_level
           )
-        `)
-        .eq('id', routineId)
-        .single();
+        )
+      `)
+      .eq('id', routineId)
+      .single();
       
       if (error) throw error;
       
