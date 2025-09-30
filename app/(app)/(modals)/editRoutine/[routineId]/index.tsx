@@ -1687,6 +1687,7 @@ export default function EditRoutine() {
                       placeholder="-"
                       placeholderTextColor="rgba(255,255,255,0.3)"
                       keyboardType="numeric"
+                      selectTextOnFocus={true}
                     />
                   </View>
                   
@@ -1725,6 +1726,7 @@ export default function EditRoutine() {
                           placeholder="-"
                           placeholderTextColor="rgba(255,255,255,0.3)"
                           keyboardType="numeric"
+                          selectTextOnFocus={true}
                         />
                       </View>
                     ) : (
@@ -1740,6 +1742,7 @@ export default function EditRoutine() {
                         placeholder="-"
                         placeholderTextColor="rgba(255,255,255,0.3)"
                         keyboardType="numeric"
+                        selectTextOnFocus={true}
                       />
                     )}
                   </View>

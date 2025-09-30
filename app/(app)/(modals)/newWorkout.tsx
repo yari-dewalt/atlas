@@ -3258,6 +3258,7 @@ Animated.timing(deletionAnim, {
                   placeholder="-"
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   keyboardType="numeric"
+                  selectTextOnFocus={true}
                 />
               </View>
               
@@ -3284,6 +3285,7 @@ Animated.timing(deletionAnim, {
                   placeholder="-"
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   keyboardType="numeric"
+                  selectTextOnFocus={true}
                 />
               </View>
               
