@@ -889,7 +889,7 @@ export default function ExerciseSelection() {
         }
       });
     }} 
-    style={styles.headerButton}
+    style={[styles.headerButton, { backgroundColor: 'rgba(155, 89, 182, 0.5)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(155, 89, 182, 0.5)', }]}
   >
     <Text style={styles.customText}>Custom</Text>
   </TouchableOpacity>
@@ -1219,7 +1219,7 @@ const styles = StyleSheet.create({
 },
 
 headerButton: {
-  padding: 8,
+  padding: 6,
   minWidth: 60,
   alignItems: 'center',
 },
@@ -1240,7 +1240,7 @@ cancelText: {
 
 customText: {
   fontSize: 16,
-  color: colors.brand,
+  color: colors.primaryText,
   fontWeight: '400',
 },
   searchFilterContainer: {

@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Platform,
+  Image,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../../constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 
 const CUSTOM_EXERCISES_KEY = 'custom_exercises';
 const RECENT_EXERCISES_KEY = 'recent_exercises';
@@ -40,22 +43,204 @@ export default function CreateCustomExercise() {
   const [primaryMuscleModalVisible, setPrimaryMuscleModalVisible] = useState(false);
   const [secondaryMuscleModalVisible, setSecondaryMuscleModalVisible] = useState(false);
   const [equipmentModalVisible, setEquipmentModalVisible] = useState(false);
+  const [failedImages, setFailedImages] = useState(new Set()); // Track failed image loads
   
   // Bottom Sheet refs
   const primaryMuscleBottomSheetRef = useRef(null);
   const secondaryMuscleBottomSheetRef = useRef(null);
   const equipmentBottomSheetRef = useRef(null);
 
+  // Helper function to get fallback icon for muscle groups
+  const getMuscleGroupFallbackIcon = (muscleGroupValue) => {
+    const iconMap = {
+      'None': 'close-outline',
+      'Abdominals': 'body-outline',
+      'Abductors': 'body-outline',
+      'Adductors': 'body-outline',
+      'Biceps': 'fitness-outline',
+      'Calves': 'body-outline',
+      'Chest': 'body-outline',
+      'Forearms': 'fitness-outline',
+      'Glutes': 'body-outline',
+      'Hamstrings': 'body-outline',
+      'Lats': 'body-outline',
+      'Lower Back': 'body-outline',
+      'Quadriceps': 'body-outline',
+      'Shoulders': 'fitness-outline',
+      'Traps': 'body-outline',
+      'Triceps': 'fitness-outline',
+      'Upper Back': 'body-outline',
+    };
+    return iconMap[muscleGroupValue] || 'body-outline';
+  };
+
+  // Helper function to get fallback icon for equipment
+  const getEquipmentFallbackIcon = (equipmentValue) => {
+    const iconMap = {
+      'None': 'close-outline',
+      'Barbell': 'barbell-outline',
+      'Dumbbell': 'fitness-outline',
+      'Kettlebell': 'fitness-outline',
+      'Machine': 'hardware-chip-outline',
+      'Bench': 'bed-outline',
+      'Plate': 'disc-outline',
+      'Bands': 'git-branch-outline',
+      'Other': 'ellipsis-horizontal-outline',
+    };
+    return iconMap[equipmentValue] || 'fitness-outline';
+  };
+
+  // Get filtered secondary muscle groups (exclude primary selection)
+  const getSecondaryMuscleGroups = () => {
+    return muscleGroups.filter(muscle => muscle.value !== primaryMuscleGroup);
+  };
+
   // Bottom Sheet snap points
-  const selectionSnapPoints = useMemo(() => ['60%'], []);
+  const selectionSnapPoints = useMemo(() => [600], []);
 
   const muscleGroups = [
-    'None', 'Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio'
+    { 
+      label: "None", 
+      value: "None",
+      imageUrl: null, // Use icon for "None" option
+      iconName: "close-outline" as const
+    },
+    { 
+      label: "Abdominals", 
+      value: "Abdominals",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/abs_0.jpg"
+    },
+    { 
+      label: "Abductors", 
+      value: "Abductors",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/abductors.jpg"
+    },
+    { 
+      label: "Adductors", 
+      value: "Adductors",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/adductors.jpg"
+    },
+    { 
+      label: "Biceps", 
+      value: "Biceps",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/biceps_0.jpg"
+    },
+    { 
+      label: "Calves", 
+      value: "Calves",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/calves_0.jpg"
+    },
+    { 
+      label: "Chest", 
+      value: "Chest",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/chest_0.jpg"
+    },
+    { 
+      label: "Forearms", 
+      value: "Forearms",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/forearms_0.jpg"
+    },
+    { 
+      label: "Glutes", 
+      value: "Glutes",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/glutes_0.jpg"
+    },
+    { 
+      label: "Hamstrings", 
+      value: "Hamstrings",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/hamstrings_0.jpg"
+    },
+    { 
+      label: "Lats", 
+      value: "Lats",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/lats_0.jpg"
+    },
+    { 
+      label: "Lower Back", 
+      value: "Lower Back",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/lowerback.jpg"
+    },
+    { 
+      label: "Quadriceps", 
+      value: "Quadriceps",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/quads_1.jpg"
+    },
+    { 
+      label: "Shoulders", 
+      value: "Shoulders",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/shoulders_0.jpg"
+    },
+    { 
+      label: "Traps", 
+      value: "Traps",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/traps_0.jpg"
+    },
+    { 
+      label: "Triceps", 
+      value: "Triceps",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/triceps_0.jpg"
+    },
+    { 
+      label: "Upper Back", 
+      value: "Upper Back",
+      imageUrl: "https://cdn.muscleandstrength.com/sites/default/files/taxonomy/image/videos/upperback.jpg"
+    },
   ];
 
   const equipmentOptions = [
-    'None', 'Barbell', 'Dumbbell', 'Bodyweight', 'Cable', 'Machine', 
-    'Resistance Band', 'Kettlebell', 'Smith Machine', 'Other'
+    { 
+      label: "None", 
+      value: "None",
+      iconName: "close-outline" as const,
+      imageUrl: null // Use icon for "None" option
+    },
+    { 
+      label: "Barbell", 
+      value: "Barbell",
+      iconName: "barbell-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/110/110495.png"
+    },
+    { 
+      label: "Dumbbell", 
+      value: "Dumbbell",
+      iconName: "fitness-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/10788/10788186.png"
+    },
+    { 
+      label: "Kettlebell", 
+      value: "Kettlebell",
+      iconName: "fitness-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/2309/2309904.png"
+    },
+    { 
+      label: "Machine", 
+      value: "Machine",
+      iconName: "hardware-chip-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/8023/8023313.png"
+    },
+    { 
+      label: "Bench", 
+      value: "Bench",
+      iconName: "bed-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/113/113750.png"
+    },
+    { 
+      label: "Plate", 
+      value: "Plate",
+      iconName: "disc-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/2324/2324717.png"
+    },
+    { 
+      label: "Bands", 
+      value: "Bands",
+      iconName: "git-branch-outline" as const,
+      imageUrl: "https://cdn-icons-png.flaticon.com/512/18868/18868921.png"
+    },
+    { 
+      label: "Other", 
+      value: "Other",
+      iconName: "ellipsis-horizontal-outline" as const,
+    },
   ];
 
   // Bottom Sheet callbacks
@@ -147,41 +332,43 @@ export default function CreateCustomExercise() {
   };
 
   const handlePrimaryMuscleGroupSelect = (muscle) => {
-    setPrimaryMuscleGroup(muscle);
+    setPrimaryMuscleGroup(muscle.value);
+    // Reset secondary if it's the same as the new primary
+    if (secondaryMuscleGroup === muscle.value) {
+      setSecondaryMuscleGroup('None');
+    }
     primaryMuscleBottomSheetRef.current?.close();
   };
 
   const handleSecondaryMuscleGroupSelect = (muscle) => {
-    setSecondaryMuscleGroup(muscle);
+    setSecondaryMuscleGroup(muscle.value);
     secondaryMuscleBottomSheetRef.current?.close();
   };
 
-  const handlePrimaryEquipmentSelect = (equipment) => {
-    setEquipment(equipment);
-    equipmentBottomSheetRef.current?.close();
-  };
-
-  const handleSecondaryEquipmentSelect = (equipment) => {
-    setEquipment(equipment);
+  const handleEquipmentSelect = (equipmentItem) => {
+    setEquipment(equipmentItem.value);
     equipmentBottomSheetRef.current?.close();
   };
 
   const openPrimaryMuscleGroupSelection = () => {
+    Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setPrimaryMuscleModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    primaryMuscleBottomSheetRef.current?.expand();
+    primaryMuscleBottomSheetRef.current?.snapToIndex(0);
   };
 
   const openSecondaryMuscleGroupSelection = () => {
+    Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setSecondaryMuscleModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    secondaryMuscleBottomSheetRef.current?.expand();
+    secondaryMuscleBottomSheetRef.current?.snapToIndex(0);
   };
 
   const openEquipmentSelection = () => {
+    Keyboard.dismiss(); // Dismiss keyboard when opening bottom sheet
     setEquipmentModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    equipmentBottomSheetRef.current?.expand();
+    equipmentBottomSheetRef.current?.snapToIndex(0);
   };
 
   const handleSaveCustomExercise = async () => {
@@ -191,10 +378,7 @@ export default function CreateCustomExercise() {
       return;
     }
 
-    if (primaryMuscleGroup === 'None') {
-      Alert.alert('Error', 'Please select at least a primary muscle group');
-      return;
-    }
+    // No muscle group validation needed since both are optional now
 
     setSaving(true);
 
@@ -258,7 +442,7 @@ export default function CreateCustomExercise() {
     }
   };
 
-  const isFormValid = exerciseName.trim() && primaryMuscleGroup !== 'None';
+  const isFormValid = exerciseName.trim(); // Only exercise name is required now
   console.log(Platform.OS === 'android' && isInFullScreenModal);
 
   return (
@@ -291,7 +475,8 @@ export default function CreateCustomExercise() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Exercise Name */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Exercise Name *</Text>
@@ -314,7 +499,7 @@ export default function CreateCustomExercise() {
             <Text style={styles.sectionTitle}>Description</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
-              placeholder="Describe this exercise (optional)"
+              placeholder="Describe this exercise"
               placeholderTextColor={colors.secondaryText}
               value={exerciseDescription}
               onChangeText={setExerciseDescription}
@@ -331,7 +516,7 @@ export default function CreateCustomExercise() {
 
           {/* Muscle Groups */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Muscle Groups *</Text>
+            <Text style={styles.sectionTitle}>Muscle Groups</Text>
             <View style={styles.dualSelectorContainer}>
               <View style={styles.selectorHalf}>
                 <Text style={styles.subSectionTitle}>Primary</Text>
@@ -342,7 +527,7 @@ export default function CreateCustomExercise() {
                   disabled={saving}
                 >
                   <Text style={styles.selectionButtonText}>
-                    {primaryMuscleGroup}
+                    {muscleGroups.find(mg => mg.value === primaryMuscleGroup)?.label || 'None'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -350,18 +535,27 @@ export default function CreateCustomExercise() {
                 <Text style={styles.subSectionTitle}>Secondary</Text>
                 <TouchableOpacity
                 activeOpacity={0.5} 
-                  style={styles.selectionButton}
+                  style={[
+                    styles.selectionButton,
+                    primaryMuscleGroup === 'None' && styles.disabledSelectionButton
+                  ]}
                   onPress={openSecondaryMuscleGroupSelection}
-                  disabled={saving}
+                  disabled={saving || primaryMuscleGroup === 'None'}
                 >
-                  <Text style={styles.selectionButtonText}>
-                    {secondaryMuscleGroup}
+                  <Text style={[
+                    styles.selectionButtonText,
+                    primaryMuscleGroup === 'None' && styles.disabledSelectionButtonText
+                  ]}>
+                    {primaryMuscleGroup === 'None' 
+                      ? 'None' 
+                      : muscleGroups.find(mg => mg.value === secondaryMuscleGroup)?.label || 'None'
+                    }
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
             <Text style={styles.helperText}>
-              Select the primary muscle group (required) and secondary muscle group (optional)
+              Select the primary muscle group and secondary muscle group (both optional)
             </Text>
           </View>
 
@@ -375,7 +569,7 @@ export default function CreateCustomExercise() {
               disabled={saving}
             >
               <Text style={styles.selectionButtonText}>
-                {equipment}
+                {equipmentOptions.find(eq => eq.value === equipment)?.label || 'None'}
               </Text>
             </TouchableOpacity>
             <Text style={styles.helperText}>
@@ -383,8 +577,9 @@ export default function CreateCustomExercise() {
             </Text>
           </View>
 
-          <View style={styles.bottomPadding} />
-        </ScrollView>
+            <View style={styles.bottomPadding} />
+          </ScrollView>
+        </TouchableWithoutFeedback>
 
         {/* Primary Muscle Group Bottom Sheet */}
         {primaryMuscleModalVisible && (
@@ -393,40 +588,65 @@ export default function CreateCustomExercise() {
             index={0}
             snapPoints={selectionSnapPoints}
             onChange={handlePrimaryMuscleSheetChanges}
-            backdropComponent={renderBackdrop}
+            enablePanDownToClose={true}
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
+            backdropComponent={renderBackdrop}
+            maxDynamicContentSize={600}
           >
-            <View style={styles.bottomSheetContent}>
+            <BottomSheetView style={styles.bottomSheetContent}>
               <View style={styles.bottomSheetHeader}>
                 <Text style={styles.bottomSheetTitle}>Primary Muscle Group</Text>
                 <Text style={styles.bottomSheetSubtitle}>Select the primary muscle group for this exercise</Text>
               </View>
-              <BottomSheetFlatList
-                data={muscleGroups}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                activeOpacity={0.5}
-                    style={[
-                      styles.bottomSheetItem,
-                      primaryMuscleGroup === item && styles.selectedBottomSheetItem
-                    ]}
-                    onPress={() => handlePrimaryMuscleGroupSelect(item)}
-                  >
-                    <Text style={[
-                      styles.bottomSheetItemText,
-                      primaryMuscleGroup === item && styles.selectedBottomSheetItemText
-                    ]}>
-                      {item}
-                    </Text>
-                    {primaryMuscleGroup === item && (
-                      <Ionicons name="checkmark" size={20} color={colors.brand} />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
+              
+              <View style={styles.bottomSheetScrollViewContainer}>
+                <ScrollView
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={styles.bottomSheetList}
+                  style={styles.bottomSheetScrollView}
+                >
+                  {muscleGroups.map((item, index) => (
+                    <View key={item.value}>
+                      <TouchableOpacity
+                        activeOpacity={0.5}
+                        style={styles.bottomSheetItem}
+                        onPress={() => handlePrimaryMuscleGroupSelect(item)}
+                      >
+                        <View style={styles.bottomSheetItemIcon}>
+                          {item.imageUrl && !failedImages.has(item.value) ? (
+                            <Image 
+                              source={{ uri: item.imageUrl }}
+                              resizeMode="contain"
+                              style={styles.bottomSheetItemImage}
+                              onError={() => {
+                                setFailedImages(prev => new Set(prev).add(item.value));
+                              }}
+                            />
+                          ) : (
+                            <Ionicons 
+                              name={item.iconName || getMuscleGroupFallbackIcon(item.value)}
+                              size={24} 
+                              color={colors.background} 
+                            />
+                          )}
+                        </View>
+                        <Text style={[
+                          styles.bottomSheetItemText,
+                          primaryMuscleGroup === item.value && styles.selectedBottomSheetItemText
+                        ]}>
+                          {item.label}
+                        </Text>
+                        {primaryMuscleGroup === item.value && (
+                          <Ionicons name="checkmark" size={20} color={colors.brand} />
+                        )}
+                      </TouchableOpacity>
+                      {index < muscleGroups.length - 1 && <View style={styles.bottomSheetDivider} />}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </BottomSheetView>
           </BottomSheet>
         )}
 
@@ -437,40 +657,65 @@ export default function CreateCustomExercise() {
             index={0}
             snapPoints={selectionSnapPoints}
             onChange={handleSecondaryMuscleSheetChanges}
-            backdropComponent={renderBackdrop}
+            enablePanDownToClose={true}
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
+            backdropComponent={renderBackdrop}
+            maxDynamicContentSize={600}
           >
-            <View style={styles.bottomSheetContent}>
+            <BottomSheetView style={styles.bottomSheetContent}>
               <View style={styles.bottomSheetHeader}>
                 <Text style={styles.bottomSheetTitle}>Secondary Muscle Group</Text>
                 <Text style={styles.bottomSheetSubtitle}>Select a secondary muscle group (optional)</Text>
               </View>
-              <BottomSheetFlatList
-                data={muscleGroups}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                activeOpacity={0.5}
-                    style={[
-                      styles.bottomSheetItem,
-                      secondaryMuscleGroup === item && styles.selectedBottomSheetItem
-                    ]}
-                    onPress={() => handleSecondaryMuscleGroupSelect(item)}
-                  >
-                    <Text style={[
-                      styles.bottomSheetItemText,
-                      secondaryMuscleGroup === item && styles.selectedBottomSheetItemText
-                    ]}>
-                      {item}
-                    </Text>
-                    {secondaryMuscleGroup === item && (
-                      <Ionicons name="checkmark" size={20} color={colors.brand} />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
+              
+              <View style={styles.bottomSheetScrollViewContainer}>
+                <ScrollView
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={styles.bottomSheetList}
+                  style={styles.bottomSheetScrollView}
+                >
+                  {getSecondaryMuscleGroups().map((item, index) => (
+                    <View key={item.value}>
+                      <TouchableOpacity
+                        activeOpacity={0.5}
+                        style={styles.bottomSheetItem}
+                        onPress={() => handleSecondaryMuscleGroupSelect(item)}
+                      >
+                        <View style={styles.bottomSheetItemIcon}>
+                          {item.imageUrl && !failedImages.has(item.value) ? (
+                            <Image 
+                              source={{ uri: item.imageUrl }}
+                              resizeMode="contain"
+                              style={styles.bottomSheetItemImage}
+                              onError={() => {
+                                setFailedImages(prev => new Set(prev).add(item.value));
+                              }}
+                            />
+                          ) : (
+                            <Ionicons 
+                              name={item.iconName || getMuscleGroupFallbackIcon(item.value)}
+                              size={24} 
+                              color={colors.background} 
+                            />
+                          )}
+                        </View>
+                        <Text style={[
+                          styles.bottomSheetItemText,
+                          secondaryMuscleGroup === item.value && styles.selectedBottomSheetItemText
+                        ]}>
+                          {item.label}
+                        </Text>
+                        {secondaryMuscleGroup === item.value && (
+                          <Ionicons name="checkmark" size={20} color={colors.brand} />
+                        )}
+                      </TouchableOpacity>
+                      {index < getSecondaryMuscleGroups().length - 1 && <View style={styles.bottomSheetDivider} />}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </BottomSheetView>
           </BottomSheet>
         )}
 
@@ -481,40 +726,65 @@ export default function CreateCustomExercise() {
             index={0}
             snapPoints={selectionSnapPoints}
             onChange={handlePrimaryEquipmentSheetChanges}
-            backdropComponent={renderBackdrop}
+            enablePanDownToClose={true}
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
+            backdropComponent={renderBackdrop}
+            maxDynamicContentSize={600}
           >
-            <View style={styles.bottomSheetContent}>
+            <BottomSheetView style={styles.bottomSheetContent}>
               <View style={styles.bottomSheetHeader}>
                 <Text style={styles.bottomSheetTitle}>Equipment</Text>
                 <Text style={styles.bottomSheetSubtitle}>Select the equipment needed for this exercise</Text>
               </View>
-              <BottomSheetFlatList
-                data={equipmentOptions}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                activeOpacity={0.5}
-                    style={[
-                      styles.bottomSheetItem,
-                      equipment === item && styles.selectedBottomSheetItem
-                    ]}
-                    onPress={() => handlePrimaryEquipmentSelect(item)}
-                  >
-                    <Text style={[
-                      styles.bottomSheetItemText,
-                      equipment === item && styles.selectedBottomSheetItemText
-                    ]}>
-                      {item}
-                    </Text>
-                    {equipment === item && (
-                      <Ionicons name="checkmark" size={20} color={colors.brand} />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
+              
+              <View style={styles.bottomSheetScrollViewContainer}>
+                <ScrollView
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={styles.bottomSheetList}
+                  style={styles.bottomSheetScrollView}
+                >
+                  {equipmentOptions.map((item, index) => (
+                    <View key={item.value}>
+                      <TouchableOpacity
+                        activeOpacity={0.5}
+                        style={styles.bottomSheetItem}
+                        onPress={() => handleEquipmentSelect(item)}
+                      >
+                        <View style={styles.bottomSheetItemIcon}>
+                          {item.imageUrl && !failedImages.has(item.value) ? (
+                            <Image 
+                              source={{ uri: item.imageUrl }}
+                              resizeMode="contain"
+                              style={styles.bottomSheetEquipmentImage}
+                              onError={() => {
+                                setFailedImages(prev => new Set(prev).add(item.value));
+                              }}
+                            />
+                          ) : (
+                            <Ionicons 
+                              name={item.iconName || getEquipmentFallbackIcon(item.value)}
+                              size={24} 
+                              color={colors.background} 
+                            />
+                          )}
+                        </View>
+                        <Text style={[
+                          styles.bottomSheetItemText,
+                          equipment === item.value && styles.selectedBottomSheetItemText
+                        ]}>
+                          {item.label}
+                        </Text>
+                        {equipment === item.value && (
+                          <Ionicons name="checkmark" size={20} color={colors.brand} />
+                        )}
+                      </TouchableOpacity>
+                      {index < equipmentOptions.length - 1 && <View style={styles.bottomSheetDivider} />}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </BottomSheetView>
           </BottomSheet>
         )}
       </View>
@@ -550,7 +820,7 @@ headerButton: {
 
 headerTitle: {
   fontSize: 16, // Reduced from 18 to match workoutSettings
-  fontWeight: '600', // Changed from 'bold' to match workoutSettings
+  fontWeight: '500', // Changed from 'bold' to match workoutSettings
   color: colors.primaryText,
   flex: 1,
   textAlign: 'center',
@@ -646,7 +916,6 @@ disabledText: {
     width: 40,
   },
   bottomSheetContent: {
-    flex: 1,
     padding: 10,
   },
   bottomSheetHeader: {
@@ -668,26 +937,62 @@ disabledText: {
     textAlign: 'center',
     opacity: 0.8,
   },
+  bottomSheetList: {
+    backgroundColor: colors.secondaryAccent,
+  },
+  bottomSheetScrollViewContainer: {
+    maxHeight: '100%',
+    minHeight: 580,
+    paddingBottom: 140,
+  },
+  bottomSheetScrollView: {
+    borderRadius: 12,
+  },
+
   bottomSheetItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: colors.whiteOverlayLight,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  selectedBottomSheetItem: {
-    backgroundColor: colors.brand,
+  bottomSheetItemIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#d4d4d4', // Match background color of currently used images
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  bottomSheetItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bottomSheetEquipmentImage: {
+    width: '70%',
+    height: '70%',
+  },
+  bottomSheetDivider: {
+    height: 1,
+    backgroundColor: colors.whiteOverlay,
+    marginHorizontal: 16,
   },
   bottomSheetItemText: {
     fontSize: 16,
     color: colors.primaryText,
-    fontWeight: '500',
+    fontWeight: '400',
+    flex: 1,
   },
   selectedBottomSheetItemText: {
-    color: colors.primaryText,
+    color: colors.brand,
     fontWeight: '600',
+  },
+  disabledSelectionButton: {
+    opacity: 0.5,
+  },
+  disabledSelectionButtonText: {
+    color: colors.secondaryText,
   },
   bottomPadding: {
     height: 40,
