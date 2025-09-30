@@ -169,7 +169,7 @@ const Posts = () => {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={styles.postsContentContainer}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -192,6 +192,10 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     alignItems: 'center',
+    gap: 6,
+    paddingBottom: 20,
+  },
+  postsContentContainer: {
     gap: 6,
     paddingBottom: 20,
   },
