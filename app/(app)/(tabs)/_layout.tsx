@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import CachedAvatar from '../../../components/CachedAvatar';
 import { useWorkoutStore } from '../../../stores/workoutStore';
+import * as Haptics from 'expo-haptics';
 
 // Global scroll references for each tab
 const scrollRefs = {
@@ -25,7 +26,9 @@ export const setTabScrollRef = (tabName, ref) => {
 
 // Function to scroll to top for a specific tab
 export const scrollToTop = (tabName) => {
+  console.log(scrollRefs[tabName])
   if (scrollRefs[tabName]?.current) {
+    console.log('Scrolling to top of', tabName);
     scrollRefs[tabName].current.scrollTo({ y: 0, animated: true });
   }
 };
@@ -41,6 +44,7 @@ export default function AppLayout() {
   
   useEffect(() => {
     // Extract the screen name from the pathname
+    console.log('Current pathname:', pathname);
     const segments = pathname.split('/');
     const currentScreen = segments[segments.length - 1];
     
@@ -51,6 +55,7 @@ export default function AppLayout() {
       setIsProfileRoute(true);
     } else {
       setIsProfileRoute(false);
+
       
       // Update the active tab title for non-profile routes
       let title;
@@ -71,9 +76,10 @@ export default function AppLayout() {
           title = 'profile';
           break;
         default:
-          title = 'home';
+          title = 'profile';
+          break;
       }
-      
+
       setActiveTab(title);
     }
   }, [pathname]);
@@ -85,7 +91,8 @@ export default function AppLayout() {
   
   // Handle tab press - scroll to top if already on that tab
   const handleTabPress = (tabName) => {
-    if (activeTab === tabName) {
+    if (activeTab === tabName || pathname.includes('/profile')) {
+      console.log(tabName);
       scrollToTop(tabName);
     }
   };
@@ -276,6 +283,10 @@ export default function AppLayout() {
           }}
           listeners={{
             tabPress: (e) => {
+              // Only provide haptic feedback if we're not already on the profile tab
+              if (pathname !== '/profile') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }
               handleTabPress('profile');
             }
           }}
