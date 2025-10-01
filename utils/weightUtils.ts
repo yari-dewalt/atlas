@@ -87,3 +87,19 @@ export function convertWeightForStorage(
 ): number {
   return convertWeight(inputWeight, userUnit, storageUnit);
 }
+
+/**
+ * Convert weight for display purposes, rounded to whole numbers to avoid precision issues
+ * @param storedWeight - The weight as stored in the database
+ * @param storageUnit - The unit used for storage (typically 'kg')
+ * @param displayUnit - The user's preferred display unit
+ * @returns The weight converted and rounded to the nearest whole number
+ */
+export function convertWeightForDisplay(
+  storedWeight: number, 
+  storageUnit: WeightUnit, 
+  displayUnit: WeightUnit
+): number {
+  const convertedWeight = convertWeight(storedWeight, storageUnit, displayUnit);
+  return Math.round(convertedWeight);
+}

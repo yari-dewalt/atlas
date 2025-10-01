@@ -901,7 +901,7 @@ export default function WorkoutDetailScreen() {
                 styles.setData,
                 set.is_completed ? styles.setCompleted : styles.setIncomplete
               ]}>
-                {set.weight !== null && set.weight !== undefined ? displayWeightForUser(set.weight, 'kg', userWeightUnit, true) : '0'}
+                {set.weight !== null && set.weight !== undefined ? displayWeightForUser(set.weight, 'kg', userWeightUnit, true) : displayWeightForUser(0, 'kg', userWeightUnit, true)}
               </Text>
               <Text style={[
                 styles.setData,

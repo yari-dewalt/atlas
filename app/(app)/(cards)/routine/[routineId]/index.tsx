@@ -17,6 +17,7 @@ import RoutineDetailSkeleton from '../../../../../components/RoutineDetailSkelet
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons as IonIcon } from '@expo/vector-icons';
+import { displayWeightForUser, convertWeight, convertWeightForDisplay, getUserWeightUnit, type WeightUnit } from '../../../../../utils/weightUtils';
 
 export default function RoutineDetail() {
   const [routine, setRoutine] = useState<any>(null);
@@ -29,6 +30,7 @@ export default function RoutineDetail() {
   const [likeCount, setLikeCount] = useState(0);
   const [saveCount, setSaveCount] = useState(0);
   const [failedImages, setFailedImages] = useState(new Set<string>());
+  const [userWeightUnit, setUserWeightUnit] = useState<WeightUnit>('lbs');
   const router = useRouter();
   const { routineId } = useLocalSearchParams();
   const { session } = useAuthStore();
@@ -52,6 +54,30 @@ export default function RoutineDetail() {
       fetchRoutine();
     }
   }, [routineId]);
+
+  // Load user's weight preference
+  useEffect(() => {
+    const loadUserWeightUnit = async () => {
+      if (session?.user?.id) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('weight_unit')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profile) {
+            setUserWeightUnit(getUserWeightUnit(profile));
+          }
+        } catch (error) {
+          console.log('Could not load user weight preference:', error);
+          // Keep default 'lbs'
+        }
+      }
+    };
+    
+    loadUserWeightUnit();
+  }, [session?.user?.id]);
 
   // Separate useEffect to handle global function updates when ownership changes
   useEffect(() => { 
@@ -111,6 +137,15 @@ export default function RoutineDetail() {
             primary_muscle_group,
             equipment_required,
             difficulty_level
+          ),
+          routine_sets (
+            id,
+            set_number,
+            weight,
+            reps,
+            reps_min,
+            reps_max,
+            rpe
           )
         )
       `)
@@ -378,14 +413,50 @@ export default function RoutineDetail() {
         rep_mode: exercise.rep_mode || 'single', // Copy the rep mode
       }));
 
-      const { error: exercisesError } = await supabase
+      const { data: insertedExercises, error: exercisesError } = await supabase
         .from('routine_exercises')
-        .insert(exercisesToCopy);
+        .insert(exercisesToCopy)
+        .select('id, order_position');
 
       if (exercisesError) throw exercisesError;
 
-      // Step 3: Complete
-      progressUtils.stepProgress(3, 3, 'Copy created!');
+      // Step 3: Copying individual sets
+      progressUtils.stepProgress(3, 4, 'Copying set configurations...');
+
+      // Copy individual sets for each exercise (excluding personal weight data)
+      const allSetsToCopy: any[] = [];
+      
+      routine.routine_exercises.forEach((originalExercise: any, exerciseIndex: number) => {
+        const correspondingInsertedExercise = insertedExercises.find(
+          (inserted: any) => inserted.order_position === originalExercise.order_position
+        );
+        
+        if (correspondingInsertedExercise && originalExercise.routine_sets && originalExercise.routine_sets.length > 0) {
+          const setsToCopy = originalExercise.routine_sets.map((set: any) => ({
+            routine_exercise_id: correspondingInsertedExercise.id,
+            set_number: set.set_number,
+            weight: null, // Don't copy personal weight data
+            reps: set.reps,
+            reps_min: set.reps_min,
+            reps_max: set.reps_max,
+            rpe: set.rpe, // Copy RPE as it's part of the routine design
+          }));
+          
+          allSetsToCopy.push(...setsToCopy);
+        }
+      });
+
+      // Insert all sets if there are any to copy
+      if (allSetsToCopy.length > 0) {
+        const { error: setsError } = await supabase
+          .from('routine_sets')
+          .insert(allSetsToCopy);
+
+        if (setsError) throw setsError;
+      }
+
+      // Step 4: Complete
+      progressUtils.stepProgress(4, 4, 'Copy created!');
       progressUtils.completeLoading();
 
       Alert.alert("Success", "Routine copied to your collection!");
@@ -583,21 +654,58 @@ export default function RoutineDetail() {
           // Use explicit rep_mode if available, otherwise determine based on data
           const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
           
+          // Use individual set data if available, otherwise fall back to default generation
+          let workoutSets;
+          if (exercise.routine_sets && exercise.routine_sets.length > 0) {
+            // Use individual set data from routine_sets table
+            workoutSets = exercise.routine_sets
+              .sort((a: any, b: any) => a.set_number - b.set_number)
+              .map((routineSet: any, i: number) => {
+                // Convert stored weight from kg to user's preferred unit (rounded to whole number)
+                let convertedWeight = 0;
+                if (isOwner && routineSet.weight) {
+                  convertedWeight = convertWeightForDisplay(routineSet.weight, 'kg', userWeightUnit);
+                }
+                
+                return {
+                  id: `${Date.now()}_${Math.random()}_${i}`,
+                  weight: convertedWeight, // Convert from storage unit (kg) to user's preferred unit
+                  reps: repMode === 'range' ? (routineSet.reps_max || routineSet.reps || 0) : (routineSet.reps || 0), // For ranges, start with maximum if available
+                  repsMin: repMode === 'range' ? (routineSet.reps_min || null) : null,
+                  repsMax: repMode === 'range' ? (routineSet.reps_max || null) : null,
+                  isRange: repMode === 'range',
+                  rpe: routineSet.rpe || 0, // Always inherit RPE from individual sets
+                  isCompleted: false
+                };
+              });
+          } else {
+            // Fallback: generate sets from default values (for migration compatibility)
+            workoutSets = Array.from({ length: exercise.total_sets }).map((_, i) => {
+              // Convert stored default weight from kg to user's preferred unit (rounded to whole number)
+              let convertedWeight = 0;
+              if (isOwner && exercise.default_weight) {
+                convertedWeight = convertWeightForDisplay(exercise.default_weight, 'kg', userWeightUnit);
+              }
+              
+              return {
+                id: `${Date.now()}_${Math.random()}_${i}`,
+                weight: convertedWeight, // Convert from storage unit (kg) to user's preferred unit
+                reps: repMode === 'range' ? (exercise.default_reps_max || exercise.default_reps_min || exercise.default_reps || 0) : (exercise.default_reps_min || exercise.default_reps || 0), // For ranges, start with maximum
+                repsMin: repMode === 'range' ? (exercise.default_reps_min || null) : null,
+                repsMax: repMode === 'range' ? (exercise.default_reps_max || null) : null,
+                isRange: repMode === 'range',
+                rpe: exercise.default_rpe || 0, // Always inherit RPE defaults
+                isCompleted: false
+              };
+            });
+          }
+          
           return {
-            id: Date.now() + Math.random(), // Temporary ID for workout instance
+            id: `${Date.now()}_${Math.random()}`, // Temporary ID for workout instance
             exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
             name: exercise.exercises?.name || exercise.name,
             image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
-            sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
-              id: Date.now() + Math.random() + i,
-              weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
-              reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
-              repsMin: repMode === 'range' ? exercise.default_reps_min : null,
-              repsMax: repMode === 'range' ? exercise.default_reps_max : null,
-              isRange: repMode === 'range',
-              rpe: exercise.default_rpe, // Always inherit RPE defaults
-              isCompleted: false
-            })),
+            sets: workoutSets,
             notes: "",
             repMode: repMode
           };
@@ -803,6 +911,11 @@ export default function RoutineDetail() {
       flexDirection: 'row',
       alignItems: 'center',
     },
+    exerciseImageAndName: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
     exerciseImage: {
       width: 40,
       height: 40,
@@ -831,7 +944,7 @@ export default function RoutineDetail() {
     },
     exerciseItemName: {
       fontSize: 16,
-      color: colors.primaryText,
+      color: colors.brand,
       fontWeight: '500',
     },
     customBadge: {
@@ -848,14 +961,7 @@ export default function RoutineDetail() {
       fontSize: 10,
       fontWeight: '600',
     },
-    exerciseItemDetails: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    exerciseItemDetailsText: {
-      fontSize: 14,
-      color: colors.secondaryText,
-    },
+
     infoButton: {
       padding: 12,
       justifyContent: 'center',
@@ -934,6 +1040,44 @@ export default function RoutineDetail() {
     },
     destructiveText: {
       color: colors.notification,
+    },
+    // Sets display styles
+    setsContainer: {
+      backgroundColor: colors.background,
+      overflow: 'hidden',
+    },
+    setsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    setHeaderText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.secondaryText,
+      flex: 1,
+      textAlign: 'center',
+    },
+    setRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+    },
+    setRowAlternate: {
+      backgroundColor: colors.primaryAccent,
+    },
+    setNumber: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.primaryText,
+      flex: 1,
+      textAlign: 'center',
+    },
+    setData: {
+      fontSize: 14,
+      color: colors.primaryText,
+      flex: 1,
+      textAlign: 'center',
     },
   });
 
@@ -1071,54 +1215,39 @@ export default function RoutineDetail() {
                 onPress={() => handleViewExerciseDetails(exercise)}
               >
                 <View style={styles.exerciseSelectableArea}>
-                  {exercise.exercises?.image_url && !failedImages.has(exercise.id) ? (
-                    <Image 
-                      source={{ uri: exercise.exercises.image_url }}
-                      style={styles.exerciseImage}
-                      resizeMode="cover"
-                      onError={() => {
-                        setFailedImages(prev => new Set(prev).add(exercise.id));
-                      }}
-                    />
-                  ) : (
-                    <View style={styles.exerciseImagePlaceholder}>
-                      <Ionicons 
-                        name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
-                        size={20} 
-                        color={colors.secondaryText} 
+                  <View style={styles.exerciseImageAndName}>
+                    {/* Exercise image */}
+                    {exercise.exercises?.image_url && !failedImages.has(exercise.id) ? (
+                      <Image 
+                        source={{ uri: exercise.exercises.image_url }}
+                        style={styles.exerciseImage}
+                        resizeMode="cover"
+                        onError={() => {
+                          setFailedImages(prev => new Set(prev).add(exercise.id));
+                        }}
                       />
-                    </View>
-                  )}
-                  
-                  <View style={styles.exerciseInfo}>
-                    <View style={styles.exerciseNameRow}>
-                      <Text style={styles.exerciseItemName}>
-                        {exercise.exercises?.name || exercise.name}
-                      </Text>
-                      {/* Custom Exercise Badge */}
-                      {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
-                        <View style={styles.customBadge}>
-                          <Text style={styles.customBadgeText}>Custom</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.exerciseItemDetails}>
-                      <Text style={styles.exerciseItemDetailsText}>
-                        {exercise.total_sets} sets
-                        {(() => {
-                          // Use explicit rep_mode if available, otherwise determine based on data
-                          const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
-                          
-                          if (repMode === 'range' && exercise.default_reps_min && exercise.default_reps_max) {
-                            return ` • ${exercise.default_reps_min}-${exercise.default_reps_max} reps`;
-                          } else if (exercise.default_reps_min) {
-                            return ` • ${exercise.default_reps_min} reps`;
-                          } else if (exercise.default_reps) {
-                            return ` • ${exercise.default_reps} reps`;
-                          }
-                          return '';
-                        })()}
-                      </Text>
+                    ) : (
+                      <View style={styles.exerciseImagePlaceholder}>
+                        <Ionicons 
+                          name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
+                          size={20} 
+                          color={colors.secondaryText} 
+                        />
+                      </View>
+                    )}
+                    
+                    <View style={styles.exerciseInfo}>
+                      <View style={styles.exerciseNameRow}>
+                        <Text style={styles.exerciseItemName}>
+                          {exercise.exercises?.name || exercise.name}
+                        </Text>
+                        {/* Custom Exercise Badge */}
+                        {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
+                          <View style={styles.customBadge}>
+                            <Text style={styles.customBadgeText}>Custom</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
                 </View>
@@ -1127,6 +1256,97 @@ export default function RoutineDetail() {
                   <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
                 </View>
               </TouchableOpacity>
+              
+              {/* Sets details - outside the touchable area for full width */}
+              <View style={styles.setsContainer}>
+                {/* Sets header */}
+                <View style={styles.setsHeader}>
+                  <Text style={styles.setHeaderText}>SET</Text>
+                  <Text style={styles.setHeaderText}>WEIGHT</Text>
+                  <Text style={styles.setHeaderText}>REPS</Text>
+                  <Text style={styles.setHeaderText}>RPE</Text>
+                </View>
+                
+                {/* Sets data */}
+                {exercise.routine_sets && exercise.routine_sets.length > 0 ? (
+                  exercise.routine_sets
+                    .sort((a: any, b: any) => a.set_number - b.set_number)
+                    .map((set: any, setIndex: number) => {
+                      const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+                      
+                      return (
+                        <View key={set.id || setIndex} style={[
+                          styles.setRow,
+                          setIndex % 2 === 1 && styles.setRowAlternate
+                        ]}>
+                          <Text style={styles.setNumber}>{set.set_number}</Text>
+                          
+                          {/* Weight */}
+                          <Text style={styles.setData}>
+                            {set.weight && isOwner ? 
+                              displayWeightForUser(set.weight, 'kg', userWeightUnit, true) : 
+                              '-'
+                            }
+                          </Text>
+                          
+                          {/* Reps */}
+                          <Text style={styles.setData}>
+                            {repMode === 'range' ? (
+                              set.reps_min && set.reps_max 
+                                ? `${set.reps_min}-${set.reps_max}` 
+                                : set.reps_min || set.reps_max || '-'
+                            ) : (
+                              set.reps || '-'
+                            )}
+                          </Text>
+                          
+                          {/* RPE */}
+                          <Text style={styles.setData}>
+                            {set.rpe || '-'}
+                          </Text>
+                        </View>
+                      );
+                    })
+                ) : (
+                  // Fallback: show default values for all sets
+                  Array.from({ length: exercise.total_sets }).map((_, setIndex) => {
+                    const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
+                    
+                    return (
+                      <View key={setIndex} style={[
+                        styles.setRow,
+                        setIndex % 2 === 1 && styles.setRowAlternate
+                      ]}>
+                        <Text style={styles.setNumber}>{setIndex + 1}</Text>
+                        
+                        {/* Weight */}
+                        <Text style={styles.setData}>
+                          {exercise.default_weight && isOwner ? 
+                            displayWeightForUser(exercise.default_weight, 'kg', userWeightUnit, true) : 
+                            '-'
+                          }
+                        </Text>
+                        
+                        {/* Reps */}
+                        <Text style={styles.setData}>
+                          {repMode === 'range' ? (
+                            exercise.default_reps_min && exercise.default_reps_max 
+                              ? `${exercise.default_reps_min}-${exercise.default_reps_max}` 
+                              : exercise.default_reps_min || exercise.default_reps_max || exercise.default_reps || '-'
+                          ) : (
+                            exercise.default_reps_min || exercise.default_reps || '-'
+                          )}
+                        </Text>
+                        
+                        {/* RPE */}
+                        <Text style={styles.setData}>
+                          {exercise.default_rpe || '-'}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
             </View>
           ))}
         </View>

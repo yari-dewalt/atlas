@@ -31,7 +31,7 @@ import * as Haptics from 'expo-haptics';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Animated } from 'react-native';
 import { useAnimatedStyle } from "react-native-reanimated";
-import { getUserWeightUnit } from "../../../../../utils/weightUtils";
+import { getUserWeightUnit, convertWeightForStorage, convertWeightForDisplay, type WeightUnit } from "../../../../../utils/weightUtils";
 
 // Create a simple exercise selection interface since the main one might have complex dependencies
 interface ExerciseSelectionProps {
@@ -98,6 +98,7 @@ export default function EditRoutine() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [userWeightUnit, setUserWeightUnit] = useState<WeightUnit>('lbs');
   const [originalRoutineName, setOriginalRoutineName] = useState("");
   const [originalRoutineData, setOriginalRoutineData] = useState<any>(null);
   const nameInputRef = useRef<TextInput>(null);
@@ -169,6 +170,30 @@ export default function EditRoutine() {
       setInitialLoading(false);
     }
   }, [routineId]);
+
+  // Load user's weight preference
+  useEffect(() => {
+    const loadUserWeightUnit = async () => {
+      if (session?.user?.id) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('weight_unit')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profile) {
+            setUserWeightUnit(getUserWeightUnit(profile));
+          }
+        } catch (error) {
+          console.log('Could not load user weight preference:', error);
+          // Keep default 'lbs'
+        }
+      }
+    };
+    
+    loadUserWeightUnit();
+  }, [session?.user?.id]);
 
   // Handle exercise selection from the exercise selection screen
   useEffect(() => {
@@ -261,13 +286,22 @@ export default function EditRoutine() {
       setOriginalRoutineName(routineData.name);
       setOriginalRoutineData(routineData);
 
-      // Fetch routine exercises with exercise details including image
+      // Fetch routine exercises with exercise details including image and sets
       const { data: exercisesData, error: exercisesError } = await supabase
         .from('routine_exercises')
         .select(`
           *,
           exercises (
             image_url
+          ),
+          routine_sets (
+            id,
+            set_number,
+            weight,
+            reps,
+            reps_min,
+            reps_max,
+            rpe
           )
         `)
         .eq('routine_id', routineId)
@@ -277,9 +311,6 @@ export default function EditRoutine() {
 
       // Transform exercises data to match the state structure
       const transformedExercises = exercisesData.map((exercise) => {
-        const totalSets = exercise.total_sets || 1;
-        const sets: ExerciseSet[] = [];
-        
         // Handle migration: use default_reps_min/max if available, fallback to legacy default_reps
         const repsMin = exercise.default_reps_min ?? exercise.default_reps ?? null;
         const repsMax = exercise.default_reps_max ?? null;
@@ -288,17 +319,36 @@ export default function EditRoutine() {
         const repMode = exercise.rep_mode || (repsMin && repsMax ? 'range' : 'single');
         const isRangeMode = repMode === 'range';
         
-        // Create initial sets based on the saved total_sets count
-        for (let i = 0; i < totalSets; i++) {
-          sets.push({
-            id: `${exercise.id}-${i}`,
-            weight: exercise.default_weight || null,
-            reps: isRangeMode ? null : repsMin,
-            repsMin: isRangeMode ? repsMin : null,
-            repsMax: isRangeMode ? repsMax : null,
-            isRange: isRangeMode,
-            rpe: exercise.default_rpe || null,
-          });
+        // Load sets from routine_sets table if available, otherwise create default sets
+        let sets: ExerciseSet[] = [];
+        
+        if (exercise.routine_sets && exercise.routine_sets.length > 0) {
+          // Sort sets by set_number and create set objects
+          sets = exercise.routine_sets
+            .sort((a, b) => a.set_number - b.set_number)
+            .map((routineSet) => ({
+              id: `${exercise.id}-${routineSet.set_number}`,
+              weight: routineSet.weight ? convertWeightForDisplay(routineSet.weight, 'kg', userWeightUnit) : null,
+              reps: isRangeMode ? null : routineSet.reps,
+              repsMin: isRangeMode ? routineSet.reps_min : null,
+              repsMax: isRangeMode ? routineSet.reps_max : null,
+              isRange: isRangeMode,
+              rpe: routineSet.rpe,
+            }));
+        } else {
+          // Fallback: create sets based on total_sets and default values (for migration compatibility)
+          const totalSets = exercise.total_sets || 1;
+          for (let i = 0; i < totalSets; i++) {
+            sets.push({
+              id: `${exercise.id}-${i + 1}`,
+              weight: exercise.default_weight ? convertWeightForDisplay(exercise.default_weight, 'kg', userWeightUnit) : null,
+              reps: isRangeMode ? null : repsMin,
+              repsMin: isRangeMode ? repsMin : null,
+              repsMax: isRangeMode ? repsMax : null,
+              isRange: isRangeMode,
+              rpe: exercise.default_rpe || null,
+            });
+          }
         }
         
         return {
@@ -306,7 +356,7 @@ export default function EditRoutine() {
           exerciseId: exercise.exercise_id,
           name: exercise.name,
           sets,
-          defaultWeight: exercise.default_weight,
+          defaultWeight: exercise.default_weight ? convertWeightForDisplay(exercise.default_weight, 'kg', userWeightUnit) : null,
           defaultRepsMin: repsMin,
           defaultRepsMax: repsMax,
           defaultRPE: exercise.default_rpe || null,
@@ -702,7 +752,19 @@ export default function EditRoutine() {
         // Ensure values are properly converted to correct types
         defaultRepsMin = defaultRepsMin ? (typeof defaultRepsMin === 'string' ? parseInt(defaultRepsMin) || null : defaultRepsMin) : null;
         defaultRepsMax = defaultRepsMax ? (typeof defaultRepsMax === 'string' ? parseInt(defaultRepsMax) || null : defaultRepsMax) : null;
-        defaultWeight = defaultWeight ? (typeof defaultWeight === 'string' ? parseFloat(defaultWeight) || null : defaultWeight) : null;
+        
+        // Convert default weight for storage (from user's unit to kg)
+        if (defaultWeight) {
+          const weightValue = typeof defaultWeight === 'string' ? parseFloat(defaultWeight) : defaultWeight;
+          if (weightValue && !isNaN(weightValue)) {
+            defaultWeight = convertWeightForStorage(weightValue, weightUnit);
+          } else {
+            defaultWeight = null;
+          }
+        } else {
+          defaultWeight = null;
+        }
+        
         defaultRpe = defaultRpe ? (typeof defaultRpe === 'string' ? parseInt(defaultRpe) || null : defaultRpe) : null;
         
         if (isCustomExercise) {
@@ -736,11 +798,55 @@ export default function EditRoutine() {
         }
       });
 
-      const { error: exercisesError } = await supabase
+      const { data: insertedExercises, error: exercisesError } = await supabase
         .from('routine_exercises')
-        .insert(exercisesData);
+        .insert(exercisesData)
+        .select('id, order_position');
 
       if (exercisesError) throw exercisesError;
+
+      // Now insert individual set data for each exercise
+      const setsData: any[] = [];
+      
+      exercises.forEach((exercise, exerciseIndex) => {
+        const routineExerciseId = insertedExercises.find(re => re.order_position === exerciseIndex)?.id;
+        if (!routineExerciseId) return;
+        
+        exercise.sets.forEach((set, setIndex) => {
+          // Convert set data to proper types and handle weight conversion for storage
+          let weight = null;
+          if (set.weight) {
+            const weightValue = typeof set.weight === 'string' ? parseFloat(set.weight) : set.weight;
+            if (weightValue && !isNaN(weightValue)) {
+              // Convert weight from user's unit to storage unit (kg)
+              weight = convertWeightForStorage(weightValue, weightUnit);
+            }
+          }
+          
+          const reps = set.reps ? (typeof set.reps === 'string' ? parseInt(set.reps) || null : set.reps) : null;
+          const repsMin = set.repsMin ? (typeof set.repsMin === 'string' ? parseInt(set.repsMin) || null : set.repsMin) : null;
+          const repsMax = set.repsMax ? (typeof set.repsMax === 'string' ? parseInt(set.repsMax) || null : set.repsMax) : null;
+          const rpe = set.rpe ? (typeof set.rpe === 'string' ? parseInt(set.rpe) || null : set.rpe) : null;
+          
+          setsData.push({
+            routine_exercise_id: routineExerciseId,
+            set_number: setIndex + 1,
+            weight: weight,
+            reps: exercise.repMode === 'single' ? reps : null,
+            reps_min: exercise.repMode === 'range' ? repsMin : null,
+            reps_max: exercise.repMode === 'range' ? repsMax : null,
+            rpe: rpe
+          });
+        });
+      });
+
+      if (setsData.length > 0) {
+        const { error: setsError } = await supabase
+          .from('routine_sets')
+          .insert(setsData);
+
+        if (setsError) throw setsError;
+      }
 
       Alert.alert(
         "Success",
@@ -823,7 +929,19 @@ export default function EditRoutine() {
         // Ensure values are properly converted to correct types
         defaultRepsMin = defaultRepsMin ? (typeof defaultRepsMin === 'string' ? parseInt(defaultRepsMin) || null : defaultRepsMin) : null;
         defaultRepsMax = defaultRepsMax ? (typeof defaultRepsMax === 'string' ? parseInt(defaultRepsMax) || null : defaultRepsMax) : null;
-        defaultWeight = defaultWeight ? (typeof defaultWeight === 'string' ? parseFloat(defaultWeight) || null : defaultWeight) : null;
+        
+        // Convert default weight for storage (from user's unit to kg)
+        if (defaultWeight) {
+          const weightValue = typeof defaultWeight === 'string' ? parseFloat(defaultWeight) : defaultWeight;
+          if (weightValue && !isNaN(weightValue)) {
+            defaultWeight = convertWeightForStorage(weightValue, weightUnit);
+          } else {
+            defaultWeight = null;
+          }
+        } else {
+          defaultWeight = null;
+        }
+        
         defaultRpe = defaultRpe ? (typeof defaultRpe === 'string' ? parseInt(defaultRpe) || null : defaultRpe) : null;
         
         if (isCustomExercise) {
@@ -857,11 +975,47 @@ export default function EditRoutine() {
         }
       });
 
-      const { error: exercisesError } = await supabase
+      const { data: insertedExercises, error: exercisesError } = await supabase
         .from('routine_exercises')
-        .insert(exercisesData);
+        .insert(exercisesData)
+        .select('id, order_position');
 
       if (exercisesError) throw exercisesError;
+
+      // Now insert individual set data for each exercise
+      const setsData: any[] = [];
+      
+      exercises.forEach((exercise, exerciseIndex) => {
+        const routineExerciseId = insertedExercises.find(re => re.order_position === exerciseIndex)?.id;
+        if (!routineExerciseId) return;
+        
+        exercise.sets.forEach((set, setIndex) => {
+          // Convert set data to proper types
+          const weight = set.weight ? (typeof set.weight === 'string' ? parseFloat(set.weight) || null : set.weight) : null;
+          const reps = set.reps ? (typeof set.reps === 'string' ? parseInt(set.reps) || null : set.reps) : null;
+          const repsMin = set.repsMin ? (typeof set.repsMin === 'string' ? parseInt(set.repsMin) || null : set.repsMin) : null;
+          const repsMax = set.repsMax ? (typeof set.repsMax === 'string' ? parseInt(set.repsMax) || null : set.repsMax) : null;
+          const rpe = set.rpe ? (typeof set.rpe === 'string' ? parseInt(set.rpe) || null : set.rpe) : null;
+          
+          setsData.push({
+            routine_exercise_id: routineExerciseId,
+            set_number: setIndex + 1,
+            weight: weight,
+            reps: exercise.repMode === 'single' ? reps : null,
+            reps_min: exercise.repMode === 'range' ? repsMin : null,
+            reps_max: exercise.repMode === 'range' ? repsMax : null,
+            rpe: rpe
+          });
+        });
+      });
+
+      if (setsData.length > 0) {
+        const { error: setsError } = await supabase
+          .from('routine_sets')
+          .insert(setsData);
+
+        if (setsError) throw setsError;
+      }
 
       // Handle workout start with proper logic
       const handleStartWorkoutAfterCreate = async () => {
@@ -906,55 +1060,30 @@ export default function EditRoutine() {
 
       const startNewWorkoutFromCreatedRoutine = async (routineId: string) => {
         try {
-          // Create routine object from the exercises data for workout startup
-          const routineForWorkout = {
-            id: routineId,
-            name: routineName.trim(),
-            routine_exercises: exercises.map((exercise, index) => ({
-              id: exercise.id,
-              exercise_id: exercise.exerciseId,
-              name: exercise.name,
-              order_position: index,
-              total_sets: exercise.sets.length,
-              default_weight: exercise.sets[0]?.weight || exercise.defaultWeight,
-              default_reps: exercise.repMode === 'single' ? (exercise.sets[0]?.reps || exercise.defaultRepsMin) : null,
-              default_reps_min: exercise.repMode === 'range' ? (exercise.sets[0]?.repsMin || exercise.defaultRepsMin) : (exercise.sets[0]?.reps || exercise.defaultRepsMin),
-              default_reps_max: exercise.repMode === 'range' ? (exercise.sets[0]?.repsMax || exercise.defaultRepsMax) : null,
-              default_rpe: exercise.sets[0]?.rpe || exercise.defaultRPE,
-              rep_mode: exercise.repMode,
-              exercises: {
-                id: exercise.exerciseId,
-                name: exercise.name,
-                image_url: exercise.image_url
-              }
-            }))
-          };
-
-          // Start a new workout with this routine
+          // Start a new workout with this routine using actual set data
           useWorkoutStore.getState().startNewWorkout({
-            name: routineForWorkout.name,
-            routineId: routineForWorkout.id,
-            exercises: routineForWorkout.routine_exercises.map((exercise: any) => {
-              // Use explicit rep_mode if available, otherwise determine based on data
-              const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
-              
+            name: routineName.trim(),
+            routineId: routineId,
+            exercises: exercises.map((exercise) => {
               return {
                 id: `${Date.now()}_${Math.random()}`, // Temporary ID for workout instance
-                exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
-                name: exercise.exercises?.name || exercise.name,
-                image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
-                sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
+                exercise_id: exercise.exerciseId, // Original exercise ID for database relationship
+                name: exercise.name,
+                image_url: exercise.image_url || null, // Include image
+                sets: exercise.sets.map((set, i) => ({
                   id: `${Date.now()}_${Math.random()}_${i}`,
-                  weight: exercise.default_weight, // Always inherit weight defaults from newly created routine
-                  reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
-                  repsMin: repMode === 'range' ? exercise.default_reps_min : null,
-                  repsMax: repMode === 'range' ? exercise.default_reps_max : null,
-                  isRange: repMode === 'range',
-                  rpe: exercise.default_rpe, // Always inherit RPE defaults
+                  weight: typeof set.weight === 'string' ? (Math.round(parseFloat(set.weight)) || 0) : (Math.round(set.weight) || 0), // Convert to number and round
+                  reps: exercise.repMode === 'range' 
+                    ? (typeof set.repsMax === 'string' ? (parseInt(set.repsMax) || 0) : (set.repsMax || 0))
+                    : (typeof set.reps === 'string' ? (parseInt(set.reps) || 0) : (set.reps || 0)), // For ranges, start with maximum if available
+                  repsMin: exercise.repMode === 'range' ? (typeof set.repsMin === 'string' ? (parseInt(set.repsMin) || null) : set.repsMin) : null,
+                  repsMax: exercise.repMode === 'range' ? (typeof set.repsMax === 'string' ? (parseInt(set.repsMax) || null) : set.repsMax) : null,
+                  isRange: exercise.repMode === 'range',
+                  rpe: typeof set.rpe === 'string' ? (parseInt(set.rpe) || 0) : (set.rpe || 0), // Convert to number
                   isCompleted: false
                 })),
                 notes: "",
-                repMode: repMode
+                repMode: exercise.repMode
               };
             })
           });

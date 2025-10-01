@@ -1,0 +1,34 @@
+-- Migration instructions for routine sets support
+-- 
+-- This migration adds support for individual set configurations in routines.
+-- Each set in a routine exercise can now have its own weight, reps, and RPE values.
+--
+-- STEPS TO APPLY THIS MIGRATION:
+--
+-- 1. Connect to your Supabase dashboard
+-- 2. Go to SQL Editor
+-- 3. Copy and paste the contents of add_routine_sets_table.sql
+-- 4. Execute the migration
+-- 
+-- WHAT THIS MIGRATION DOES:
+--
+-- 1. Creates a new `routine_sets` table to store individual set configurations
+-- 2. Migrates existing routine data from routine_exercises to routine_sets
+-- 3. Adds proper indexes and constraints for performance and data integrity
+-- 4. Preserves all existing routine data during the migration
+--
+-- AFTER MIGRATION:
+--
+-- - Users can configure different values for each set in a routine
+-- - Existing routines will continue to work with their current values
+-- - New routines will support per-set configurations
+-- - The app code has been updated to work with both old and new data structures
+--
+-- ROLLBACK (if needed):
+--
+-- If you need to rollback this migration, you can drop the routine_sets table:
+-- DROP TABLE IF EXISTS public.routine_sets CASCADE;
+--
+-- Note: This will lose any per-set configurations created after the migration.
+
+-- The migration file is: database_migrations/add_routine_sets_table.sql

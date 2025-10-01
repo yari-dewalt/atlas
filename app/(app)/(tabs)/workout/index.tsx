@@ -14,7 +14,7 @@ import { Link, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from "../../../../constants/colors";
 import { useAuthStore } from "../../../../stores/authStore";
-import { getUserWeightUnit, displayWeightForUser } from "../../../../utils/weightUtils";
+import { getUserWeightUnit, displayWeightForUser, convertWeightForDisplay } from "../../../../utils/weightUtils";
 import { supabase } from "../../../../lib/supabase";
 import { format, parseISO } from "date-fns";
 import { useWorkoutStore } from "../../../../stores/workoutStore";
@@ -344,40 +344,112 @@ export default function Workout() {
   
   const startNewWorkoutFromRoutine = async (routineId: any) => {
     try {
-      // Get the routine with exercises
-      const routine = await (useRoutineStore.getState() as any).getRoutine(routineId);
+      // Get the routine with exercises and individual set data
+      const { data: routineData, error: routineError } = await supabase
+        .from('routines')
+        .select(`
+          id,
+          name,
+          user_id,
+          routine_exercises (
+            id,
+            exercise_id,
+            name,
+            order_position,
+            total_sets,
+            default_weight,
+            default_reps,
+            default_reps_min,
+            default_reps_max,
+            default_rpe,
+            rep_mode,
+            exercises (
+              id,
+              name,
+              image_url
+            ),
+            routine_sets (
+              id,
+              set_number,
+              weight,
+              reps,
+              reps_min,
+              reps_max,
+              rpe
+            )
+          )
+        `)
+        .eq('id', routineId)
+        .single();
       
-      if (!routine) {
+      if (routineError || !routineData) {
         Alert.alert("Error", "Could not load routine");
         return;
       }
       
       // Check if this routine belongs to the current user
-      const isOwner = routine.user_id === session?.user?.id;
+      const isOwner = routineData.user_id === session?.user?.id;
       
       // Start a new workout with this routine
       useWorkoutStore.getState().startNewWorkout({
-        name: routine.name,
-        routineId: routine.id,
-        exercises: routine.routine_exercises.map((exercise: any) => {
+        name: routineData.name,
+        routineId: routineData.id,
+        exercises: routineData.routine_exercises.map((exercise: any) => {
           // Use explicit rep_mode if available, otherwise determine based on data
           const repMode = exercise.rep_mode || (exercise.default_reps_min && exercise.default_reps_max ? 'range' : 'single');
           
+          // Use individual set data if available, otherwise fall back to default generation
+          let workoutSets;
+          if (exercise.routine_sets && exercise.routine_sets.length > 0) {
+            // Use individual set data from routine_sets table
+            workoutSets = exercise.routine_sets
+              .sort((a: any, b: any) => a.set_number - b.set_number)
+              .map((routineSet: any, i: number) => {
+                // Convert stored weight from kg to user's preferred unit (rounded to whole number)
+                let convertedWeight = 0;
+                if (isOwner && routineSet.weight) {
+                  convertedWeight = convertWeightForDisplay(routineSet.weight, 'kg', userWeightUnit);
+                }
+                
+                return {
+                  id: `${Date.now()}_${Math.random()}_${i}`,
+                  weight: convertedWeight, // Convert from storage unit (kg) to user's preferred unit
+                  reps: repMode === 'range' ? (routineSet.reps_max || routineSet.reps || 0) : (routineSet.reps || 0), // For ranges, start with maximum if available
+                  repsMin: repMode === 'range' ? (routineSet.reps_min || null) : null,
+                  repsMax: repMode === 'range' ? (routineSet.reps_max || null) : null,
+                  isRange: repMode === 'range',
+                  rpe: routineSet.rpe || 0, // Always inherit RPE from individual sets
+                  isCompleted: false
+                };
+              });
+          } else {
+            // Fallback: generate sets from default values (for migration compatibility)
+            workoutSets = Array.from({ length: exercise.total_sets }).map((_, i) => {
+              // Convert stored default weight from kg to user's preferred unit (rounded to whole number)
+              let convertedWeight = 0;
+              if (isOwner && exercise.default_weight) {
+                convertedWeight = convertWeightForDisplay(exercise.default_weight, 'kg', userWeightUnit);
+              }
+              
+              return {
+                id: `${Date.now()}_${Math.random()}_${i}`,
+                weight: convertedWeight, // Convert from storage unit (kg) to user's preferred unit
+                reps: repMode === 'range' ? (exercise.default_reps_max || exercise.default_reps_min || exercise.default_reps || 0) : (exercise.default_reps_min || exercise.default_reps || 0), // For ranges, start with maximum
+                repsMin: repMode === 'range' ? (exercise.default_reps_min || null) : null,
+                repsMax: repMode === 'range' ? (exercise.default_reps_max || null) : null,
+                isRange: repMode === 'range',
+                rpe: exercise.default_rpe || 0, // Always inherit RPE defaults
+                isCompleted: false
+              };
+            });
+          }
+          
           return {
-            id: Date.now() + Math.random(), // Temporary ID for workout instance
+            id: `${Date.now()}_${Math.random()}`, // Temporary ID for workout instance
             exercise_id: exercise.exercise_id, // Original exercise ID for database relationship
             name: exercise.exercises?.name || exercise.name,
             image_url: exercise.exercises?.image_url || null, // Include image from joined exercises table
-            sets: Array.from({ length: exercise.total_sets }).map((_, i) => ({
-              id: Date.now() + Math.random() + i,
-              weight: isOwner ? exercise.default_weight : null, // Only inherit weight defaults from own routines
-              reps: repMode === 'range' ? exercise.default_reps_max : (exercise.default_reps_min || exercise.default_reps), // For ranges, start with maximum
-              repsMin: repMode === 'range' ? exercise.default_reps_min : null,
-              repsMax: repMode === 'range' ? exercise.default_reps_max : null,
-              isRange: repMode === 'range',
-              rpe: exercise.default_rpe, // Always inherit RPE defaults
-              isCompleted: false
-            })),
+            sets: workoutSets,
             notes: "",
             repMode: repMode,
             superset_id: exercise.superset_id || null, // Include superset ID if exists
