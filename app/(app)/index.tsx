@@ -9,7 +9,7 @@ export default function Index() {
     if (session) {
       return <Redirect href="/(app)/home" />;
     } else {
-      return <Redirect href="/(auth)/login" />;
+      return <Redirect href="/(auth)/auth" />;
     }
   }
   

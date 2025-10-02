@@ -111,7 +111,7 @@ export default function RootLayout() {
         }
       }
     }
-  }, [session, segments, loading]);
+  }, [session, segments, loading, profile]);
 
   // Handle fade-in animation when loading completes
   useEffect(() => {
