@@ -354,9 +354,8 @@ export default function MediaScreen() {
   }, []);
 
   const renderListMediaItem = useCallback(({ item, index }: { item: any, index: number }) => {
-    const aspectRatio = item.width && item.height ? item.width / item.height : 1;
-    const containerWidth = width - 32; // 16px padding on each side
-    const itemHeight = containerWidth / aspectRatio;
+    // Use fixed height like MediaGallery component
+    const itemHeight = 400;
     
     return (
       <View style={styles.listMediaContainer}>
@@ -405,18 +404,18 @@ export default function MediaScreen() {
             />
           )}
         </TouchableOpacity>
-        {item.post_description && (
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.descriptionContainer}
-            onPress={() => router.push(`/post/${item.post_id}`)}
-          >
+        <TouchableOpacity
+              activeOpacity={0.5} 
+          style={styles.descriptionContainer}
+          onPress={() => router.push(`/post/${item.post_id}`)}
+        >
+          {item.post_description && (
             <Text style={styles.descriptionText} numberOfLines={2} ellipsizeMode="tail">
               {item.post_description}
             </Text>
-            <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
-          </TouchableOpacity>
-        )}
+          )}
+          <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
       </View>
     );
   }, [visibleVideos, viewMode, videoMuted, handleMediaPress, toggleMute, handleVideoVisibilityChange, router]);
@@ -791,7 +790,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderRadius: 8,
     overflow: 'hidden',
-    paddingBottom: 400,
   },
   mediaWrapper: {
     position: 'relative',
