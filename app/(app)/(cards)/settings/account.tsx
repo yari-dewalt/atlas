@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
 import { useAuthStore } from '../../../../stores/authStore';
 import { supabase } from '../../../../lib/supabase';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../stores/bannerStore';
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
@@ -15,7 +16,8 @@ export default function AccountSettingsScreen() {
 
   const handleDeleteAccount = async () => {
     if (!deleteUsername || deleteUsername !== authProfile?.username) {
-      Alert.alert('Invalid Username', 'Please enter your username correctly to confirm account deletion.');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter your username correctly to confirm account deletion.');
       return;
     }
 
@@ -42,10 +44,12 @@ export default function AccountSettingsScreen() {
       await signOut();
       router.replace('/login');
       
-      Alert.alert('Account Deleted', 'Your account has been successfully deleted.');
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Your account has been successfully deleted.');
     } catch (error) {
       console.error('Error deleting account:', error);
-      Alert.alert('Delete Failed', 'Failed to delete account. Please try again or contact support.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to delete account. Please try again or contact support.');
     } finally {
       setDeletingAccount(false);
       setDeleteModalVisible(false);

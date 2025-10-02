@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { colors } from '../../../constants/colors';
 import Post from '../../../components/Post/Post';
 import FeedSkeleton from '../../../components/Post/FeedSkeleton';
 import { useAuthStore } from '../../../stores/authStore';
 import { useProfileStore } from '../../../stores/profileStore';
+import { useBannerStore } from '../../../stores/bannerStore';
 import { supabase } from '../../../lib/supabase';
 import { checkIfUserLikedPost } from '../../../utils/postUtils';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ import { setTabScrollRef } from './_layout';
 export default function Home() {
   const { session } = useAuthStore();
   const { initializeFollowedUsers } = useProfileStore();
+  const { showError } = useBannerStore();
   const scrollViewRef = useRef(null);
   
   const [feedPosts, setFeedPosts] = useState([]);
@@ -130,7 +132,7 @@ export default function Home() {
       setFeedPosts(formattedPosts);
     } catch (error) {
       console.error("Error loading feed:", error);
-      Alert.alert("Error", "Failed to load your feed");
+      showError("Failed to load your feed");
     } finally {
       setLoading(false);
     }

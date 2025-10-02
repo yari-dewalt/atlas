@@ -22,6 +22,7 @@ import { colors } from "../../../../../constants/colors";
 import { supabase } from "../../../../../lib/supabase";
 import { useAuthStore } from "../../../../../stores/authStore";
 import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../../stores/progressStore";
+import { useBannerStore, BANNER_MESSAGES } from "../../../../../stores/bannerStore";
 import { useWorkoutStore } from "../../../../../stores/workoutStore";
 import { useRoutineStore } from "../../../../../stores/routineStore";
 import DraggableFlatList from 'react-native-draggable-flatlist';
@@ -265,19 +266,16 @@ export default function EditRoutine() {
         : routineData.user_id === session?.user?.id;
 
       if (!isOriginalCreator) {
-        Alert.alert(
-          "Cannot Edit Routine", 
-          "You can only edit routines that you originally created. This routine was created by someone else.",
-          [
-            { text: "OK", onPress: () => router.back() }
-          ]
-        );
+        const { showError } = useBannerStore.getState();
+        showError("You can only edit routines that you originally created. This routine was created by someone else.");
+        router.back();
         return;
       }
 
       // Also check if user owns this routine (current user_id)
       if (routineData.user_id !== session?.user?.id) {
-        Alert.alert("Error", "You don't have permission to edit this routine");
+        const { showError } = useBannerStore.getState();
+        showError("You don't have permission to edit this routine");
         router.back();
         return;
       }
@@ -368,7 +366,9 @@ export default function EditRoutine() {
       setExercises(transformedExercises);
     } catch (error) {
       console.error("Error loading routine:", error);
-      Alert.alert("Error", "Failed to load routine data");
+      
+      const { showError } = useBannerStore.getState();
+      showError("Failed to load routine data");
       router.back();
     } finally {
       setInitialLoading(false);
@@ -523,7 +523,8 @@ export default function EditRoutine() {
   const validateExercises = () => {
     for (const exercise of exercises) {
       if (exercise.sets.length === 0) {
-        Alert.alert("Validation Error", `Exercise "${exercise.name}" must have at least 1 set.`);
+        const { showError } = useBannerStore.getState();
+        showError(`Exercise "${exercise.name}" must have at least 1 set.`);
         return false;
       }
 
@@ -537,22 +538,26 @@ export default function EditRoutine() {
           const repsMax = typeof set.repsMax === 'string' ? parseInt(set.repsMax) : set.repsMax;
           
           if (!repsMin || isNaN(repsMin) || repsMin < 1) {
-            Alert.alert("Validation Error", `Exercise "${exercise.name}" set ${i + 1} must have a valid minimum reps value.`);
+            const { showError } = useBannerStore.getState();
+            showError(`Exercise "${exercise.name}" set ${i + 1} must have a valid minimum reps value.`);
             return false;
           }
           if (!repsMax || isNaN(repsMax) || repsMax < 1) {
-            Alert.alert("Validation Error", `Exercise "${exercise.name}" set ${i + 1} must have a valid maximum reps value.`);
+            const { showError } = useBannerStore.getState();
+            showError(`Exercise "${exercise.name}" set ${i + 1} must have a valid maximum reps value.`);
             return false;
           }
           if (repsMax <= repsMin) {
-            Alert.alert("Validation Error", `Exercise "${exercise.name}" set ${i + 1} maximum reps (${repsMax}) must be greater than the minimum reps (${repsMin}).`);
+            const { showError } = useBannerStore.getState();
+            showError(`Exercise "${exercise.name}" set ${i + 1} maximum reps (${repsMax}) must be greater than the minimum reps (${repsMin}).`);
             return false;
           }
         } else {
           // For single rep counts, a valid rep count is required
           const reps = typeof set.reps === 'string' ? parseInt(set.reps) : set.reps;
           if (!reps || isNaN(reps) || reps < 1) {
-            Alert.alert("Validation Error", `Exercise "${exercise.name}" set ${i + 1} must have a valid rep count.`);
+            const { showError } = useBannerStore.getState();
+            showError(`Exercise "${exercise.name}" set ${i + 1} must have a valid rep count.`);
             return false;
           }
         }
@@ -608,12 +613,14 @@ export default function EditRoutine() {
   const handleSaveRoutine = async () => {
     // Validate routine data
     if (routineName.trim() === "") {
-      Alert.alert("Error", "Please enter a routine name");
+      const { showError } = useBannerStore.getState();
+      showError("Please enter a routine name");
       return;
     }
   
     if (exercises.length === 0) {
-      Alert.alert("Error", "Please add at least one exercise to your routine");
+      const { showError } = useBannerStore.getState();
+      showError("Please add at least one exercise to your routine");
       return;
     }
 
@@ -667,7 +674,8 @@ export default function EditRoutine() {
         clearInterval(loadingInterval);
       }
       
-      Alert.alert("Error", "Failed to save routine. Please try again.");
+      const { showError } = useBannerStore.getState();
+      showError("Failed to save routine. Please try again.");
       setLoading(false);
     }
   };
@@ -686,7 +694,8 @@ export default function EditRoutine() {
           text: "Save",
           onPress: (newName) => {
             if (!newName || newName.trim() === "") {
-              Alert.alert("Error", "Please enter a valid name");
+              const { showError } = useBannerStore.getState();
+              showError("Please enter a valid name");
               return;
             }
             
@@ -848,19 +857,16 @@ export default function EditRoutine() {
         if (setsError) throw setsError;
       }
 
-      Alert.alert(
-        "Success",
-        "Routine updated successfully!",
-        [
-          {
-            text: "OK",
-            onPress: () => router.back()
-          }
-        ]
-      );
+      // Show success banner
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(BANNER_MESSAGES.ROUTINE_SAVED);
+      
+      // Navigate back
+      router.back();
     } catch (error) {
       console.error("Error updating routine:", error);
-      Alert.alert("Error", "Failed to update routine. Please try again.");
+      const { showError } = useBannerStore.getState();
+      showError("Failed to update routine. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -990,8 +996,16 @@ export default function EditRoutine() {
         if (!routineExerciseId) return;
         
         exercise.sets.forEach((set, setIndex) => {
-          // Convert set data to proper types
-          const weight = set.weight ? (typeof set.weight === 'string' ? parseFloat(set.weight) || null : set.weight) : null;
+          // Convert set data to proper types and handle weight conversion for storage
+          let weight = null;
+          if (set.weight) {
+            const weightValue = typeof set.weight === 'string' ? parseFloat(set.weight) : set.weight;
+            if (weightValue && !isNaN(weightValue)) {
+              // Convert weight from user's unit to storage unit (kg)
+              weight = convertWeightForStorage(weightValue, weightUnit);
+            }
+          }
+          
           const reps = set.reps ? (typeof set.reps === 'string' ? parseInt(set.reps) || null : set.reps) : null;
           const repsMin = set.repsMin ? (typeof set.repsMin === 'string' ? parseInt(set.repsMin) || null : set.repsMin) : null;
           const repsMax = set.repsMax ? (typeof set.repsMax === 'string' ? parseInt(set.repsMax) || null : set.repsMax) : null;
@@ -1054,7 +1068,9 @@ export default function EditRoutine() {
           router.push('/newWorkout');
         } catch (error) {
           console.error("Error starting workout:", error);
-          Alert.alert("Error", "Failed to start workout. Please try again.");
+          
+          const { showError } = useBannerStore.getState();
+          showError("Failed to start workout. Please try again.");
         }
       };
 
@@ -1097,34 +1113,32 @@ export default function EditRoutine() {
           } catch (error) {
             console.log('Could not update routine usage:', error);
           }
-
-          // Navigate to workout screen
-          router.back();
-          router.push("/newWorkout");
         } catch (error) {
           console.error("Error starting workout from routine:", error);
-          Alert.alert("Error", "Failed to start workout. Please try again.");
+          
+          const { showError } = useBannerStore.getState();
+          showError("Failed to start workout. Please try again.");
         }
       };
 
-      Alert.alert(
-        "Routine Created!",
-        "Your routine has been created successfully. Would you like to start a workout from this routine now?",
-        [
-          {
-            text: "Later",
-            style: "cancel",
-            onPress: () => router.back()
-          },
-          {
-            text: "Start Workout",
-            onPress: handleStartWorkoutAfterCreate
-          }
-        ]
+      // Show success banner with action to start workout
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(
+        BANNER_MESSAGES.ROUTINE_SAVED,
+        4000,
+        {
+          text: 'Start Workout',
+          onPress: handleStartWorkoutAfterCreate
+        }
       );
+      
+      // Navigate back
+      router.back();
     } catch (error) {
       console.error("Error creating routine:", error);
-      Alert.alert("Error", "Failed to create routine. Please try again.");
+      
+      const { showError } = useBannerStore.getState();
+      showError("Failed to create routine. Please try again.");
     } finally {
       setLoading(false);
     }

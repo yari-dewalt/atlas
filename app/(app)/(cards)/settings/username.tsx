@@ -6,6 +6,7 @@ import { colors } from '../../../../constants/colors';
 import { useAuthStore } from '../../../../stores/authStore';
 import { useProfileStore } from '../../../../stores/profileStore';
 import { supabase } from '../../../../lib/supabase';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../stores/bannerStore';
 
 export default function UsernameSettingsScreen() {
   const router = useRouter();
@@ -76,7 +77,8 @@ export default function UsernameSettingsScreen() {
 
   const handleSave = async () => {
     if (!username) {
-      Alert.alert('Username Required', 'Please enter a username');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter a username');
       return;
     }
 
@@ -86,7 +88,8 @@ export default function UsernameSettingsScreen() {
     }
 
     if (!usernameAvailable) {
-      Alert.alert('Invalid Username', usernameError);
+      const { showError } = useBannerStore.getState();
+      showError(usernameError);
       return;
     }
 
@@ -118,12 +121,13 @@ export default function UsernameSettingsScreen() {
         });
       }
       
-      Alert.alert('Success', 'Username updated successfully', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Username updated successfully');
+      router.back();
     } catch (error) {
       console.error('Error updating username:', error);
-      Alert.alert('Update Failed', 'Failed to update username. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update username. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import { supabase } from '../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBannerStore } from '../../stores/bannerStore';
 
 interface ExercisesListProps {
   exercises: Array<any>;
@@ -39,6 +40,7 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
   const router = useRouter();
   const { session, profile } = useAuthStore();
   const { startNewWorkout, activeWorkout, endWorkout } = useWorkoutStore();
+  const { showError, showSuccess, showWarning } = useBannerStore();
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
 
   // Superset colors - cycle through these (matching newWorkout.tsx)
@@ -181,22 +183,14 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
       
       // Check if we have any exercises left after filtering
       if (preparedExercises.length === 0) {
-        Alert.alert(
-          'No Available Exercises',
-          'This workout contains only custom exercises that are not available in your exercise library.',
-          [{ text: 'OK', style: 'default' }]
-        );
+        showError('This workout contains only custom exercises that are not available in your exercise library.');
         return;
       }
       
       // Show info if some exercises were skipped
       const skippedCount = exercises.length - preparedExercises.length;
       if (skippedCount > 0) {
-        Alert.alert(
-          'Custom Exercises Skipped',
-          `${skippedCount} custom exercise${skippedCount === 1 ? '' : 's'} from the original workout ${skippedCount === 1 ? 'was' : 'were'} not included because ${skippedCount === 1 ? 'it is' : 'they are'} not in your exercise library.`,
-          [{ text: 'Continue', style: 'default' }]
-        );
+        showWarning(`${skippedCount} custom exercise${skippedCount === 1 ? '' : 's'} from the original workout ${skippedCount === 1 ? 'was' : 'were'} not included because ${skippedCount === 1 ? 'it is' : 'they are'} not in your exercise library.`);
       }
       
       // Start a new workout with the prepared exercises
@@ -212,7 +206,7 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
       
     } catch (error) {
       console.error('Error starting workout:', error);
-      Alert.alert('Error', 'Failed to start workout. Please try again.');
+      showError('Failed to start workout. Please try again.');
     } finally {
       setIsStartingWorkout(false);
     }
@@ -220,7 +214,7 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
 
   const handleCreateRoutine = async () => {
     if (!session?.user?.id || !exercises || exercises.length === 0) {
-      Alert.alert('Error', 'You must be logged in to create a routine.');
+      showError('You must be logged in to create a routine.');
       return;
     }
 
@@ -237,7 +231,7 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
           text: 'Continue',
           onPress: (routineName) => {
             if (!routineName || routineName.trim() === '') {
-              Alert.alert('Error', 'Please enter a routine name.');
+              showError('Please enter a routine name.');
               return;
             }
             confirmCreateRoutine(routineName.trim());
@@ -329,20 +323,17 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
       if (exercisesError) throw exercisesError;
 
       // Show success message and navigate to the new routine
-      Alert.alert(
-        "Success!", 
+      showSuccess(
         `Routine "${routineName}" was successfully created with ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}!`,
-        [
-          {
-            text: "View Routine",
-            onPress: () => router.push(`/routine/${newRoutine.id}`),
-            style: "default",
-          }
-        ]
+        5000,
+        {
+          text: "View Routine",
+          onPress: () => router.push(`/routine/${newRoutine.id}`)
+        }
       );
     } catch (error) {
       console.error('Error creating routine:', error);
-      Alert.alert("Error", "Failed to create routine from workout");
+      showError("Failed to create routine from workout");
     }
   };
 

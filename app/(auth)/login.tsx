@@ -1,4 +1,4 @@
-import { Alert, View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
 import { useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
@@ -6,12 +6,14 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { createProfileWithGoogleAvatar } from '../../utils/profileUtils';
+import { useBannerStore } from '../../stores/bannerStore';
 
 export default function Login() {
   const [email, onChangeEmail] = useState('');
   const [password, onChangePassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showError } = useBannerStore();
 
   async function signInWithEmail() {
     Keyboard.dismiss();
@@ -23,7 +25,7 @@ export default function Login() {
       });
   
       if (error) {
-        Alert.alert(error.message);
+        showError(error.message);
       }
       setLoading(false);
     }
@@ -35,7 +37,7 @@ export default function Login() {
       const { data, error, googleUserInfo } = await signInWithGoogle();
       
       if (error) {
-        Alert.alert('Google Sign-In Error', error.message || 'Failed to sign in with Google');
+        showError(error.message || 'Failed to sign in with Google');
         return;
       }
 
@@ -44,7 +46,7 @@ export default function Login() {
         await createProfileWithGoogleAvatar(data.user, googleUserInfo);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      showError(error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

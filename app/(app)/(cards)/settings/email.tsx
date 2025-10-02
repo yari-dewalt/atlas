@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
 import { useAuthStore } from '../../../../stores/authStore';
 import { supabase } from '../../../../lib/supabase';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../stores/bannerStore';
 
 export default function EmailSettingsScreen() {
   const router = useRouter();
@@ -27,12 +28,14 @@ export default function EmailSettingsScreen() {
 
   const handleSave = async () => {
     if (!email) {
-      Alert.alert('Email Required', 'Please enter an email address');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter an email address');
       return;
     }
 
     if (!isValidEmail(email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter a valid email address');
       return;
     }
 
@@ -50,14 +53,13 @@ export default function EmailSettingsScreen() {
       
       if (error) throw error;
       
-      Alert.alert(
-        'Confirmation Email Sent', 
-        'We\'ve sent a confirmation email to your new address. Please check your inbox and click the link to complete the change.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Confirmation email sent! Please check your inbox and click the link to complete the change.', 5000);
+      router.back();
     } catch (error) {
       console.error('Error updating email:', error);
-      Alert.alert('Update Failed', 'Failed to update email. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update email. Please try again.');
     } finally {
       setLoading(false);
     }

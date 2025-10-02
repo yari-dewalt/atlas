@@ -71,7 +71,7 @@ interface WorkoutState {
   
   startWorkout: (routineId?: string, routineName?: string) => void;
   endWorkout: () => void;
-  saveWorkoutToDatabase: () => Promise<boolean>;
+  saveWorkoutToDatabase: () => Promise<string | false>;
   updateWorkoutToDatabase: () => Promise<boolean>;
   deleteWorkout: (workoutId: string) => Promise<boolean>;
   updateActiveWorkout: (data: Partial<Workout>) => void;
@@ -146,7 +146,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         id: Date.now().toString(),
         startTime: new Date(),
         routineId,
-        name: routineName || (routineId ? "Routine Workout" : "New Workout"),
+        name: routineName + " Workout",
         exercises: [],
         duration: 0,
       },
@@ -308,7 +308,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       // Success - workout is saved, clear the auto-saved state and active workout
       await get().clearSavedWorkoutState();
       set({ activeWorkout: null, isPaused: true, pausedAt: null, accumulatedTime: 0 });
-      return true;
+      return workoutData.id;
     } catch (error) {
       console.error("Error saving workout:", error);
       set({ saveError: error.message });
@@ -734,7 +734,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         id: isEditing && editingWorkoutId ? editingWorkoutId : Date.now().toString(),
         startTime: startTime || new Date(),
         routineId,
-        name: name || "Routine Workout",
+        name: name,
         exercises: exercises || [],
         duration: duration || 0,
         notes: "",

@@ -25,6 +25,7 @@ import { getUserWeightUnit, displayWeightForUser } from '../../../../../utils/we
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import * as Haptics from 'expo-haptics';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
 
 export default function WorkoutDetailScreen() {
   const { workoutId } = useLocalSearchParams();
@@ -258,27 +259,17 @@ export default function WorkoutDetailScreen() {
           if (customExercise) {
             exerciseId = customExercise.id;
           } else {
-            // Show modal about custom exercise not in library
+            // Show banner about custom exercise not in library
             const creatorUsername = user?.username || 'Unknown User';
-            Alert.alert(
-              "Custom Exercise", 
-              `This custom exercise was created by ${creatorUsername} and is not in your exercise library.`,
-              [
-                { text: "OK", style: "default" }
-              ]
-            );
+            const { showInfo } = useBannerStore.getState();
+            showInfo(`This custom exercise was created by ${creatorUsername} and is not in your exercise library.`);
             return;
           }
         } else {
-          // Show modal about custom exercise not in library
+          // Show banner about custom exercise not in library
           const creatorUsername = user?.username || 'Unknown User';
-          Alert.alert(
-            "Custom Exercise", 
-            `This custom exercise was created by ${creatorUsername} and is not in your exercise library.`,
-            [
-              { text: "OK", style: "default" }
-            ]
-          );
+          const { showInfo } = useBannerStore.getState();
+          showInfo(`This custom exercise was created by ${creatorUsername} and is not in your exercise library.`);
           return;
         }
       } catch (error) {
@@ -472,22 +463,16 @@ export default function WorkoutDetailScreen() {
       
       // Check if we have any exercises left after filtering
       if (preparedExercises.length === 0) {
-        Alert.alert(
-          'No Available Exercises',
-          'This workout contains only custom exercises that are not available in your exercise library.',
-          [{ text: 'OK', style: 'default' }]
-        );
+        const { showError } = useBannerStore.getState();
+        showError('This workout contains only custom exercises that are not available in your exercise library.');
         return;
       }
       
       // Show info if some exercises were skipped
       const skippedCount = workout.workout_exercises.length - preparedExercises.length;
       if (skippedCount > 0) {
-        Alert.alert(
-          'Custom Exercises Skipped',
-          `${skippedCount} custom exercise${skippedCount === 1 ? '' : 's'} from the original workout ${skippedCount === 1 ? 'was' : 'were'} not included because ${skippedCount === 1 ? 'it is' : 'they are'} not in your exercise library.`,
-          [{ text: 'Continue', style: 'default' }]
-        );
+        const { showWarning } = useBannerStore.getState();
+        showWarning(`${skippedCount} custom exercise${skippedCount === 1 ? '' : 's'} from the original workout ${skippedCount === 1 ? 'was' : 'were'} not included because ${skippedCount === 1 ? 'it is' : 'they are'} not in your exercise library.`);
       }
       
       // Start a new workout with the prepared exercises
@@ -503,7 +488,8 @@ export default function WorkoutDetailScreen() {
       
     } catch (error) {
       console.error('Error starting workout:', error);
-      Alert.alert('Error', 'Failed to start workout. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to start workout. Please try again.');
     } finally {
       setIsStartingWorkout(false);
     }
@@ -511,7 +497,8 @@ export default function WorkoutDetailScreen() {
 
   const handleCreateRoutine = async () => {
     if (!session?.user?.id || !workout?.workout_exercises || workout.workout_exercises.length === 0) {
-      Alert.alert('Error', 'You must be logged in to create a routine.');
+      const { showError } = useBannerStore.getState();
+      showError('You must be logged in to create a routine.');
       return;
     }
 
@@ -528,7 +515,8 @@ export default function WorkoutDetailScreen() {
           text: 'Continue',
           onPress: (routineName) => {
             if (!routineName || routineName.trim() === '') {
-              Alert.alert('Error', 'Please enter a routine name.');
+              const { showError } = useBannerStore.getState();
+              showError('Please enter a routine name.');
               return;
             }
             confirmCreateRoutine(routineName.trim());
@@ -629,22 +617,23 @@ export default function WorkoutDetailScreen() {
       progressUtils.stepProgress(3, 3, 'Routine created!');
       progressUtils.completeLoading();
 
-      // Show success message and navigate to the new routine
-      Alert.alert(
-        "Success!", 
-        `Routine "${routineName}" was successfully created with ${workout.workout_exercises.length} exercise${workout.workout_exercises.length === 1 ? '' : 's'}!`,
-        [
-          {
-            text: "View Routine",
-            onPress: () => router.push(`/routine/${newRoutine.id}`),
-            style: "default",
+      // Show success banner with action to view routine
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(
+        `Routine "${routineName}" was successfully created!`,
+        4000,
+        {
+          text: 'View Routine',
+          onPress: () => {
+            router.push(`/(app)/(cards)/routine/${newRoutine.id}`);
           }
-        ]
+        }
       );
     } catch (error) {
       console.error('Error creating routine:', error);
       progressUtils.cancelLoading();
-      Alert.alert("Error", "Failed to create routine from workout");
+      const { showError } = useBannerStore.getState();
+      showError(BANNER_MESSAGES.ERROR_SAVE_FAILED);
     }
   };
 
@@ -741,7 +730,8 @@ export default function WorkoutDetailScreen() {
       
     } catch (error) {
       console.error('Error editing workout:', error);
-      Alert.alert('Error', 'Failed to edit workout. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to edit workout. Please try again.');
     }
   };
 
@@ -773,35 +763,21 @@ export default function WorkoutDetailScreen() {
                 progressUtils.stepProgress(3, 3, 'Workout deleted!');
                 progressUtils.completeLoading();
 
-                Alert.alert(
-                  'Workout Deleted',
-                  'Your workout has been successfully deleted.',
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => {
-                        // Navigate back to the previous screen
-                        router.back();
-                      },
-                    },
-                  ]
-                );
+                const { showSuccess } = useBannerStore.getState();
+                showSuccess(BANNER_MESSAGES.WORKOUT_DELETED);
+                
+                // Navigate back to the previous screen
+                router.back();
               } else {
                 progressUtils.cancelLoading();
-                Alert.alert(
-                  'Delete Failed',
-                  'Failed to delete the workout. Please try again.',
-                  [{ text: 'OK', style: 'default' }]
-                );
+                const { showError } = useBannerStore.getState();
+                showError('Failed to delete the workout. Please try again.');
               }
             } catch (error) {
               console.error('Error deleting workout:', error);
               progressUtils.cancelLoading();
-              Alert.alert(
-                'Delete Failed',
-                'An error occurred while deleting the workout. Please try again.',
-                [{ text: 'OK', style: 'default' }]
-              );
+              const { showError } = useBannerStore.getState();
+              showError(BANNER_MESSAGES.ERROR_GENERIC);
             }
           },
           style: 'destructive',

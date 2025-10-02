@@ -1,23 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Alert,
-  Switch,
-  Platform,
-  TouchableOpacity,
-  Animated,
-} from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, TextInput, KeyboardAvoidingView, Platform, StatusBar, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
 import { useWorkoutStore } from '../../../stores/workoutStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { progressUtils, PROGRESS_LABELS, useProgressStore } from '../../../stores/progressStore';
+import { useBannerStore, BANNER_MESSAGES } from '../../../stores/bannerStore';
 import { getUserWeightUnit, displayWeightForUser, convertWeight } from '../../../utils/weightUtils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
@@ -174,6 +163,30 @@ export default function SaveWorkout() {
           clearInterval(loadingInterval);
         }
         
+        // Show success banner with action to view the workout
+        const { showSuccess } = useBannerStore.getState();
+        const message = isEditing ? BANNER_MESSAGES.WORKOUT_UPDATED : BANNER_MESSAGES.WORKOUT_SAVED;
+        // For editing: use editingWorkoutId (database ID)
+        // For new workouts: success now contains the database ID (string) or false
+        const workoutId = isEditing ? activeWorkout?.editingWorkoutId : success;
+        
+        if (workoutId) {
+          showSuccess(
+            message,
+            4000,
+            {
+              text: 'View',
+              onPress: () => {
+                // Navigate to the workout detail screen using the correct database ID
+                router.push(`/(app)/(cards)/workout/${workoutId}`);
+              }
+            }
+          );
+        } else {
+          // Show success without action if we don't have a valid ID
+          showSuccess(message, 3000);
+        }
+        
         endWorkout();
         router.back();
         router.back(); // Go back twice to return to the main screen
@@ -183,7 +196,9 @@ export default function SaveWorkout() {
         if (loadingInterval) {
           clearInterval(loadingInterval);
         }
-        Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'save'} workout. Please try again.`);
+        
+        const { showError } = useBannerStore.getState();
+        showError(`Failed to ${isEditing ? 'update' : 'save'} workout. Please try again.`);
       }
     } catch (error) {
       console.error(`Error ${isEditing ? 'updating' : 'finishing'} workout:`, error);
@@ -194,7 +209,8 @@ export default function SaveWorkout() {
         clearInterval(loadingInterval);
       }
       
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError(BANNER_MESSAGES.ERROR_GENERIC);
     }
   };
 
@@ -221,9 +237,7 @@ export default function SaveWorkout() {
             {activeWorkout?.isEditing ? 'Update' : 'Save'}
           </Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Progress Bar */}
+              {/* Progress Bar */}
       {isVisible && (
         <Animated.View 
           style={[
@@ -237,6 +251,7 @@ export default function SaveWorkout() {
           ]}
         />
       )}
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Workout Title */}
@@ -657,7 +672,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     height: 1,
     backgroundColor: colors.brand,

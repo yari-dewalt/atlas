@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { createProfileWithGoogleAvatar } from '../../utils/profileUtils';
+import { useBannerStore } from '../../stores/bannerStore';
 
 export default function Signup() {
   const [email, onChangeEmail] = useState('');
@@ -13,6 +14,7 @@ export default function Signup() {
   const [confirmPassword, onChangeConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showError } = useBannerStore();
 
   const handleTermsPress = () => {
     router.push('/(legal)/terms');
@@ -28,7 +30,7 @@ export default function Signup() {
       const { data, error, googleUserInfo } = await signInWithGoogle();
       
       if (error) {
-        Alert.alert('Google Sign-In Error', error.message || 'Failed to sign in with Google');
+        showError(error.message || 'Failed to sign in with Google');
         return;
       }
 
@@ -37,7 +39,7 @@ export default function Signup() {
         await createProfileWithGoogleAvatar(data.user, googleUserInfo);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      showError(error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -46,7 +48,7 @@ export default function Signup() {
   async function signUpWithEmail() {
     Keyboard.dismiss();
     if (password !== confirmPassword) {
-      Alert.alert("Passwords do not match")
+      showError("Passwords do not match");
       return;
     }
 
@@ -61,12 +63,12 @@ export default function Signup() {
       });
   
       if (error) {
-        Alert.alert(error.message);
+        showError(error.message);
         setLoading(false);
         return;
       }
       if (user && user.identities && user.identities.length === 0) {
-        Alert.alert('This email is already registered');
+        showError('This email is already registered');
         setLoading(false);
         return;
       }

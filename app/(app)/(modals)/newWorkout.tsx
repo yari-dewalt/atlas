@@ -18,6 +18,7 @@ import {
   Keyboard,
   TouchableOpacity,
 } from "react-native";
+import { useBannerStore } from '../../../stores/bannerStore';
 import Svg, { Circle } from 'react-native-svg';
 import { Vibration, Animated } from "react-native";
 import * as Haptics from 'expo-haptics';
@@ -65,6 +66,9 @@ export default function NewWorkout() {
     loadWorkoutSettings,
     cancelEditWorkout,
   } = useWorkoutStore();
+  
+  // Get banner store functions
+  const { showError } = useBannerStore();
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -400,6 +404,7 @@ const handleRemoveExercise = () => {
 
   const handleCreateSuperset = () => {
     if (selectedExercisesForSuperset.size > 0) {
+      const exerciseCount = selectedExercisesForSuperset.size + 1; // +1 for the target exercise
       addMultipleToSuperset(Array.from(selectedExercisesForSuperset), selectedExerciseForSuperset.id);
       supersetBottomSheetRef.current?.close();
       setSelectedExerciseForSuperset(null);
@@ -425,6 +430,7 @@ const handleRemoveExercise = () => {
         router.setParams({ selectedExercise: undefined });
       } catch (error) {
         console.error('Error parsing selected exercise:', error);
+        showError('Failed to add exercise to workout. Please try again.');
       }
     }
     
@@ -446,6 +452,7 @@ const handleRemoveExercise = () => {
         });
       } catch (error) {
         console.error('Error parsing selected exercises:', error);
+        showError('Failed to add exercises to workout. Please try again.');
       }
     }
   }, [params?.selectedExercise, params?.selectedExercises, params?.isMultiple]);
@@ -1214,16 +1221,7 @@ const handleTimerCompletion = async () => {
   const handleSaveWorkout = () => {
     // First, check if we have any exercises at all
     if (!activeWorkout?.exercises || activeWorkout.exercises.length === 0) {
-      Alert.alert(
-        "No Exercises Added",
-        "You must add at least one exercise to finish your workout.",
-        [
-          {
-            text: "OK",
-            style: "default"
-          }
-        ]
-      );
+      showError("You must add at least one exercise to finish your workout.");
       return;
     }
 
@@ -1233,16 +1231,7 @@ const handleTimerCompletion = async () => {
     );
 
     if (!hasValidWorkout) {
-      Alert.alert(
-        "No Valid Sets Found",
-        "You must complete at least one set in at least one exercise to finish your workout. Enter weight and reps (greater than 0) for at least one set, then mark it as complete.",
-        [
-          {
-            text: "OK",
-            style: "default"
-          }
-        ]
-      );
+      showError("You must complete at least one set in at least one exercise to finish your workout. Enter weight and reps (greater than 0) for at least one set, then mark it as complete.");
       return;
     }
 

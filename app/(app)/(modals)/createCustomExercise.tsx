@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { colors } from '../../../constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { useBannerStore, BANNER_MESSAGES } from '../../../stores/bannerStore';
 
 const CUSTOM_EXERCISES_KEY = 'custom_exercises';
 const RECENT_EXERCISES_KEY = 'recent_exercises';
@@ -374,7 +375,8 @@ export default function CreateCustomExercise() {
   const handleSaveCustomExercise = async () => {
     // Validation
     if (!exerciseName.trim()) {
-      Alert.alert('Error', 'Please enter an exercise name');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter an exercise name');
       return;
     }
 
@@ -421,6 +423,10 @@ export default function CreateCustomExercise() {
       const savedToRecent = await saveRecentExercise(customExercise);
       
       if (savedToCustom && savedToRecent) {
+        // Show success banner
+        const { showSuccess } = useBannerStore.getState();
+        showSuccess(`Custom exercise "${exerciseName.trim()}" created successfully!`);
+        
         // Navigate back to newWorkout with the custom exercise
         router.back(); // Close createCustomExercise modal
         router.back(); // Close exerciseSelection modal
@@ -432,18 +438,19 @@ export default function CreateCustomExercise() {
           });
         }, 200);
       } else {
-        Alert.alert('Error', 'Failed to save custom exercise. Please try again.');
+        const { showError } = useBannerStore.getState();
+        showError('Failed to save custom exercise. Please try again.');
       }
     } catch (error) {
       console.error('Error creating custom exercise:', error);
-      Alert.alert('Error', 'Failed to create custom exercise. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to create custom exercise. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   const isFormValid = exerciseName.trim(); // Only exercise name is required now
-  console.log(Platform.OS === 'android' && isInFullScreenModal);
 
   return (
     <GestureHandlerRootView style={styles.container}>

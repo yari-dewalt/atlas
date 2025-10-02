@@ -4,6 +4,7 @@ import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
 import { supabase } from '../../../../lib/supabase';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../stores/bannerStore';
 
 export default function PasswordSettingsScreen() {
   const router = useRouter();
@@ -21,22 +22,26 @@ export default function PasswordSettingsScreen() {
 
   const handleSave = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('All Fields Required', 'Please fill in all password fields');
+      const { showError } = useBannerStore.getState();
+      showError('Please fill in all password fields');
       return;
     }
 
     if (!isValidPassword(newPassword)) {
-      Alert.alert('Invalid Password', 'Password must be at least 8 characters long');
+      const { showError } = useBannerStore.getState();
+      showError('Password must be at least 8 characters long');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'New password and confirmation do not match');
+      const { showError } = useBannerStore.getState();
+      showError('New password and confirmation do not match');
       return;
     }
 
     if (currentPassword === newPassword) {
-      Alert.alert('Same Password', 'Your new password must be different from your current password');
+      const { showError } = useBannerStore.getState();
+      showError('Your new password must be different from your current password');
       return;
     }
 
@@ -49,14 +54,13 @@ export default function PasswordSettingsScreen() {
       
       if (error) throw error;
       
-      Alert.alert(
-        'Password Updated', 
-        'Your password has been successfully updated.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Your password has been successfully updated.');
+      router.back();
     } catch (error) {
       console.error('Error updating password:', error);
-      Alert.alert('Update Failed', 'Failed to update password. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update password. Please try again.');
     } finally {
       setLoading(false);
     }

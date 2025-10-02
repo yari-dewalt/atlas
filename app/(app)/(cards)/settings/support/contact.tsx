@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, Alert, Linking, KeyboardAvoidingView
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../../constants/colors';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
 
 // Global variable to store the current handleSend function and state
 let currentHandleSend: (() => void) | null = null;
@@ -17,7 +18,8 @@ export default function ContactSupportScreen() {
 
   const handleSend = async () => {
     if (!message.trim()) {
-      Alert.alert('Error', 'Please enter a message before sending.');
+      const { showError } = useBannerStore.getState();
+      showError('Please enter a message before sending.');
       return;
     }
 
@@ -29,10 +31,12 @@ export default function ContactSupportScreen() {
       await Linking.openURL(emailUrl);
       // Clear the message after opening email
       setMessage('');
-      Alert.alert('Success', 'Your support request has been opened in your email app.');
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Your support request has been opened in your email app.');
     } catch (error) {
       console.error('Error opening email:', error);
-      Alert.alert('Error', 'Unable to open email app. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Unable to open email app. Please try again.');
     }
   };
 

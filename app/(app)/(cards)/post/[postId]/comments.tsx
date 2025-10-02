@@ -12,6 +12,7 @@ import { fetchComments, addComment, formatTimeAgo, formatLikesCount, likePost, c
 import * as Haptics from 'expo-haptics';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
 
 export default function PostCommentsScreen() {
   const { postId, focus } = useLocalSearchParams();
@@ -331,7 +332,8 @@ export default function PostCommentsScreen() {
       }
     } catch (error) {
       console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to add comment');
       
       // Remove optimistic comment on error
       if (replyingTo) {
@@ -357,7 +359,8 @@ export default function PostCommentsScreen() {
 
   const toggleLiked = async () => {
     if (!session?.user?.id) {
-      Alert.alert('Please sign in to like posts');
+      const { showInfo } = useBannerStore.getState();
+      showInfo('Please sign in to like posts');
       return;
     }
     
@@ -423,7 +426,8 @@ export default function PostCommentsScreen() {
       console.error('Error toggling like:', error);
       setLiked(!liked);
       setLikesCount(prevCount => liked ? prevCount + 1 : Math.max(0, prevCount - 1));
-      Alert.alert('Error', 'Failed to update like status. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update like status. Please try again.');
     } finally {
       setIsLikeLoading(false);
     }
@@ -431,7 +435,8 @@ export default function PostCommentsScreen() {
 
   const handleLikeComment = async (comment) => {
     if (!session?.user?.id) {
-      Alert.alert('Please sign in to like comments');
+      const { showInfo } = useBannerStore.getState();
+      showInfo('Please sign in to like comments');
       return;
     }
     
@@ -500,7 +505,8 @@ export default function PostCommentsScreen() {
       }
     } catch (error) {
       console.error('Error liking comment:', error);
-      Alert.alert('Error', 'Failed to update like status');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update like status');
     } finally {
       setLikingCommentId(null);
     }
@@ -562,7 +568,8 @@ export default function PostCommentsScreen() {
     const canDelete = isPostOwner || comment.user_id === session.user.id;
     
     if (!canDelete) {
-      Alert.alert('Error', 'You do not have permission to delete this comment');
+      const { showError } = useBannerStore.getState();
+      showError('You do not have permission to delete this comment');
       return;
     }
     
@@ -601,9 +608,14 @@ export default function PostCommentsScreen() {
                 setCommentsCount(prev => Math.max(0, prev - 1));
               }
               setShowOptionsFor(null);
+              
+              // Show success banner
+              const { showSuccess } = useBannerStore.getState();
+              showSuccess('Comment deleted successfully');
             } catch (error) {
               console.error('Error deleting comment:', error);
-              Alert.alert('Error', 'Failed to delete comment');
+              const { showError } = useBannerStore.getState();
+              showError('Failed to delete comment');
             }
           }
         }
@@ -702,9 +714,14 @@ export default function PostCommentsScreen() {
           return c;
         })
       );
+      
+      // Show success banner
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess('Comment updated successfully');
     } catch (error) {
       console.error('Error editing comment:', error);
-      Alert.alert('Error', 'Failed to update comment');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update comment');
       
       // Revert the optimistic update on error
       setComments(prev => 

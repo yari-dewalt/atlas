@@ -44,7 +44,6 @@ export default function AppLayout() {
   
   useEffect(() => {
     // Extract the screen name from the pathname
-    console.log('Current pathname:', pathname);
     const segments = pathname.split('/');
     const currentScreen = segments[segments.length - 1];
     

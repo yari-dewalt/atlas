@@ -16,6 +16,7 @@ import { useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser } from "../../utils/weightUtils";
 import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
+import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
 
 const Post = ({ data, onDelete, isDetailView = false }) => {
   const [liked, setLiked] = useState(data.is_liked || false);
@@ -409,12 +410,14 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
 
   const handleDeletePost = async () => {
     if (!session?.user?.id) {
-      Alert.alert('Error', 'You must be logged in to delete posts');
+      const { showError } = useBannerStore.getState();
+      showError('You must be logged in to delete posts');
       return;
     }
     
     if (data.user.id !== session.user.id) {
-      Alert.alert('Error', 'You can only delete your own posts');
+      const { showError } = useBannerStore.getState();
+      showError('You can only delete your own posts');
       return;
     }
     
@@ -465,7 +468,9 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 onDelete(data.id);
               }
               
-              Alert.alert('Success', 'Post deleted successfully');
+              // Show success banner with red X icon (using error type for delete)
+              const { showSuccess } = useBannerStore.getState();
+              showSuccess(BANNER_MESSAGES.POST_DELETED);
             } catch (error) {
               console.error('Error deleting post:', error);
               
@@ -475,7 +480,9 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 clearInterval(loadingInterval);
               }
               
-              Alert.alert('Error', 'Failed to delete post. Please try again.');
+              // Show error banner
+              const { showError } = useBannerStore.getState();
+              showError(BANNER_MESSAGES.ERROR_SAVE_FAILED);
             }
           }
         }
@@ -490,7 +497,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
 
   const toggleLiked = async () => {
     if (!session?.user?.id) {
-      Alert.alert('Please sign in to like posts');
+      const { showInfo } = useBannerStore.getState();
+      showInfo('Please sign in to like posts');
       return;
     }
     
@@ -518,7 +526,9 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       console.error('Error toggling like:', error);
       setLiked(!liked);
       setLikesCount(prevCount => liked ? prevCount + 1 : Math.max(0, prevCount - 1));
-      Alert.alert('Error', 'Failed to update like status. Please try again.');
+      
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update like status. Please try again.');
     } finally {
       setIsLikeLoading(false);
     }
@@ -546,7 +556,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
 
   const handleCommentLike = async (commentId: string, currentLikes: number, isLiked: boolean) => {
     if (!session?.user?.id) {
-      Alert.alert('Please sign in to like comments');
+      const { showInfo } = useBannerStore.getState();
+      showInfo('Please sign in to like comments');
       return;
     }
 
@@ -615,7 +626,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
         )
       );
       
-      Alert.alert('Error', 'Failed to update like status. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update like status. Please try again.');
     }
   };
 
@@ -651,7 +663,9 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       }
     } catch (error) {
       console.error('Error sharing post:', error);
-      Alert.alert('Error', 'Unable to share this post. Please try again.');
+      
+      const { showError } = useBannerStore.getState();
+      showError('Unable to share this post. Please try again.');
     }
   };
 
@@ -958,7 +972,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
         statusBarTranslucent={true}
       >
         <TouchableOpacity
-                activeOpacity={0.5} 
+          activeOpacity={0.5} 
           style={styles.bottomSheetOverlay}
           onPress={hideBottomSheet}
         >

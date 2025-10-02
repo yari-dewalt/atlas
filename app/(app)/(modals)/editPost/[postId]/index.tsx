@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "../../../../../stores/authStore";
 import { useProfileStore } from "../../../../../stores/profileStore";
 import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../../stores/progressStore";
+import { useBannerStore, BANNER_MESSAGES } from "../../../../../stores/bannerStore";
 import { getUserWeightUnit, displayWeightForUser } from "../../../../../utils/weightUtils";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fetchPostById, updatePost, uploadPostMedia } from "../../../../../utils/postUtils";
@@ -503,7 +504,9 @@ export default function EditPost() {
         clearInterval(loadingInterval);
       }
       
-      Alert.alert('Error', 'Failed to save post. Please try again.');
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError(BANNER_MESSAGES.ERROR_SAVE_FAILED);
     } finally {
       setIsSubmitting(false);
     }
@@ -586,11 +589,22 @@ export default function EditPost() {
       updatePostsCount(1);
     }
     
-    Alert.alert(
-      'Success',
-      'Your post has been published!',
-      [{ text: 'OK', onPress: () => { router.dismiss(); } }]
+    // Show success banner with View action
+    const { showSuccess } = useBannerStore.getState();
+    showSuccess(
+      BANNER_MESSAGES.POST_CREATED,
+      4000, // Show for 4 seconds
+      {
+        text: 'View',
+        onPress: () => {
+          router.dismiss();
+          router.push(`/post/${newPostId}`);
+        }
+      }
     );
+    
+    // Dismiss the modal
+    router.dismiss();
   };
 
   const updateExistingPost = async () => {
@@ -629,9 +643,21 @@ export default function EditPost() {
     
     if (titleUpdateError) throw titleUpdateError;
     
-    Alert.alert('Success', 'Post updated successfully', [
-      { text: 'OK', onPress: () => { router.dismiss(); router.push(`/post/${postId}`); } }
-    ]);
+    // Show success banner with View action
+    const { showSuccess } = useBannerStore.getState();
+    showSuccess(
+      BANNER_MESSAGES.POST_UPDATED,
+      4000, // Show for 4 seconds
+      {
+        text: 'View',
+        onPress: () => {
+          router.push(`/post/${postId}`);
+        }
+      }
+    );
+    
+    // Dismiss the modal and navigate to post
+    router.dismiss();
   };
   
   const addNewMedia = async () => {

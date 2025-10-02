@@ -19,6 +19,7 @@ import { supabase } from "../../../../lib/supabase";
 import { format, parseISO } from "date-fns";
 import { useWorkoutStore } from "../../../../stores/workoutStore";
 import { useRoutineStore } from "../../../../stores/routineStore";
+import { useBannerStore } from "../../../../stores/bannerStore";
 import { setTabScrollRef } from "../_layout";
 
 // Mock data for routines and history
@@ -43,6 +44,7 @@ export default function Workout() {
   const router = useRouter();
   const { session, profile } = useAuthStore();
   const { activeWorkout } = useWorkoutStore();
+  const { showError } = useBannerStore();
 
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -150,6 +152,7 @@ export default function Workout() {
     } catch (error) {
       console.error('Error fetching random official routine:', error);
       setOfficialRoutine(null);
+      showError("Failed to load official routine");
     } finally {
       setOfficialRoutineLoading(false);
     }
@@ -230,6 +233,7 @@ export default function Workout() {
       setWorkoutHistory(processedWorkouts);
     } catch (error) {
       console.error("Error loading workout history:", error);
+      showError("Failed to load workout history");
     } finally {
       setHistoryLoading(false);
     }
@@ -383,7 +387,7 @@ export default function Workout() {
         .single();
       
       if (routineError || !routineData) {
-        Alert.alert("Error", "Could not load routine");
+        showError("Could not load routine");
         return;
       }
       
@@ -406,7 +410,7 @@ export default function Workout() {
               .sort((a: any, b: any) => a.set_number - b.set_number)
               .map((routineSet: any, i: number) => {
                 // Convert stored weight from kg to user's preferred unit (rounded to whole number)
-                let convertedWeight = 0;
+                let convertedWeight = null;
                 if (isOwner && routineSet.weight) {
                   convertedWeight = convertWeightForDisplay(routineSet.weight, 'kg', userWeightUnit);
                 }
@@ -464,7 +468,7 @@ export default function Workout() {
       router.push("/newWorkout");
     } catch (error) {
       console.error("Error starting workout from routine:", error);
-      Alert.alert("Error", "Failed to start workout. Please try again.");
+      showError("Failed to start workout. Please try again.");
     }
   };
 

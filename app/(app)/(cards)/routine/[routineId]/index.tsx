@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { useWorkoutStore } from '../../../../../stores/workoutStore';
 import { useRoutineStore } from '../../../../../stores/routineStore';
 import { progressUtils, PROGRESS_LABELS } from '../../../../../stores/progressStore';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
 import CachedAvatar from '../../../../../components/CachedAvatar';
 import RoutineDetailSkeleton from '../../../../../components/RoutineDetailSkeleton';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -152,8 +153,6 @@ export default function RoutineDetail() {
       .eq('id', routineId)
       .single();
 
-    console.log("ROUTINE:",routineData);
-
     if (routineError) throw routineError;
 
     // Then, get the profile data separately
@@ -242,7 +241,10 @@ export default function RoutineDetail() {
     }
   } catch (error) {
     console.error('Error fetching routine:', error);
-    Alert.alert('Error', 'Failed to load routine details');
+    
+    // Show error banner
+    const { showError } = useBannerStore.getState();
+    showError('Failed to load routine details');
   } finally {
     setLoading(false);
   }
@@ -289,7 +291,10 @@ export default function RoutineDetail() {
       }
     } catch (error) {
       console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like status');
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update like status');
     }
   };
 
@@ -331,7 +336,10 @@ export default function RoutineDetail() {
 
         setIsSaved(false);
         setSaveCount(prev => Math.max(0, prev - 1));
-        Alert.alert("Success", "Routine removed from saved!");
+        
+        // Show success banner
+        const { showSuccess } = useBannerStore.getState();
+        showSuccess("Routine removed from saved!");
         return;
       }
 
@@ -366,11 +374,26 @@ export default function RoutineDetail() {
 
       setIsSaved(true);
       setSaveCount(prev => prev + 1);
-      Alert.alert("Success", "Routine saved to your collection!");
+      
+      // Show success banner with action to view saved routines
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(
+        "Routine saved to your collection!",
+        4000,
+        {
+          text: 'View',
+          onPress: () => {
+            router.push('/(app)/(tabs)/routines?tab=saved');
+          }
+        }
+      );
     } catch (error) {
       console.error('Error saving routine:', error);
       progressUtils.cancelLoading();
-      Alert.alert("Error", "Failed to save routine");
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError("Failed to save routine");
     }
   };
 
@@ -459,13 +482,27 @@ export default function RoutineDetail() {
       progressUtils.stepProgress(4, 4, 'Copy created!');
       progressUtils.completeLoading();
 
-      Alert.alert("Success", "Routine copied to your collection!");
+      // Show success banner with action to view the copied routine
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(
+        "Routine copied to your collection!",
+        4000,
+        {
+          text: 'View',
+          onPress: () => {
+            router.push(`/(app)/(cards)/routine/${newRoutine.id}`);
+          }
+        }
+      );
       // Close the bottom sheet
       optionsBottomSheetRef.current?.close();
     } catch (error) {
       console.error('Error copying routine:', error);
       progressUtils.cancelLoading();
-      Alert.alert("Error", "Failed to copy routine");
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError("Failed to copy routine");
     }
   };
 
@@ -494,15 +531,10 @@ export default function RoutineDetail() {
           const customExercise = customExercises.find((ex: any) => ex.name === exerciseName);
           
           if (!customExercise) {
-            // Show modal about custom exercise not in library
+            // Show banner about custom exercise not in library
             const creatorUsername = routine.profiles?.username || 'Unknown User';
-            Alert.alert(
-              "Custom Exercise", 
-              `This custom exercise was created by ${creatorUsername} and is not in your exercise library.`,
-              [
-                { text: "OK", style: "default" }
-              ]
-            );
+            const { showInfo } = useBannerStore.getState();
+            showInfo(`This custom exercise was created by ${creatorUsername} and is not in your exercise library.`);
             return;
           }
           
@@ -517,20 +549,18 @@ export default function RoutineDetail() {
           });
           return;
         } else {
-          // Show modal about custom exercise not in library
+          // Show banner about custom exercise not in library
           const creatorUsername = routine.profiles?.username || 'Unknown User';
-          Alert.alert(
-            "Custom Exercise", 
-            `This custom exercise was created by ${creatorUsername} and is not in your exercise library.`,
-            [
-              { text: "OK", style: "default" }
-            ]
-          );
+          const { showInfo } = useBannerStore.getState();
+          showInfo(`This custom exercise was created by ${creatorUsername} and is not in your exercise library.`);
           return;
         }
       } catch (error) {
         console.error('Error checking custom exercise:', error);
-        Alert.alert("Error", "Could not load exercise details.");
+        
+        // Show error banner
+        const { showError } = useBannerStore.getState();
+        showError("Could not load exercise details.");
         return;
       }
     }
@@ -588,19 +618,19 @@ export default function RoutineDetail() {
       progressUtils.stepProgress(3, 3, 'Routine deleted!');
       progressUtils.completeLoading();
 
-      Alert.alert("Success", "Routine deleted successfully", [
-        {
-          text: "OK",
-          onPress: () => {
-            // Navigate back and the focus effect will refresh the data
-            router.back();
-          }
-        }
-      ]);
+      // Show success banner and navigate back
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(BANNER_MESSAGES.ROUTINE_DELETED);
+      
+      // Navigate back and the focus effect will refresh the data
+      router.back();
     } catch (error) {
       console.error('Error deleting routine:', error);
       progressUtils.cancelLoading();
-      Alert.alert("Error", "Failed to delete routine");
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError("Failed to delete routine");
     }
   };
 
@@ -640,7 +670,10 @@ export default function RoutineDetail() {
       }
     } catch (error) {
       console.error("Error starting workout:", error);
-      Alert.alert("Error", "Failed to start workout. Please try again.");
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError("Failed to start workout. Please try again.");
     }
   };
 
@@ -662,7 +695,7 @@ export default function RoutineDetail() {
               .sort((a: any, b: any) => a.set_number - b.set_number)
               .map((routineSet: any, i: number) => {
                 // Convert stored weight from kg to user's preferred unit (rounded to whole number)
-                let convertedWeight = 0;
+                let convertedWeight = null;
                 if (isOwner && routineSet.weight) {
                   convertedWeight = convertWeightForDisplay(routineSet.weight, 'kg', userWeightUnit);
                 }
@@ -682,7 +715,7 @@ export default function RoutineDetail() {
             // Fallback: generate sets from default values (for migration compatibility)
             workoutSets = Array.from({ length: exercise.total_sets }).map((_, i) => {
               // Convert stored default weight from kg to user's preferred unit (rounded to whole number)
-              let convertedWeight = 0;
+              let convertedWeight = null;
               if (isOwner && exercise.default_weight) {
                 convertedWeight = convertWeightForDisplay(exercise.default_weight, 'kg', userWeightUnit);
               }
@@ -728,7 +761,10 @@ export default function RoutineDetail() {
       router.push("/newWorkout");
     } catch (error) {
       console.error("Error starting workout from routine:", error);
-      Alert.alert("Error", "Failed to start workout. Please try again.");
+      
+      // Show error banner
+      const { showError } = useBannerStore.getState();
+      showError("Failed to start workout. Please try again.");
     }
   };
 

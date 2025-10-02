@@ -13,6 +13,7 @@ import { useProfileStore } from '../../../../../stores/profileStore';
 import { useEditProfileStore } from '../../../../../stores/editProfileStore';
 import CachedAvatar from '../../../../../components/CachedAvatar';
 import { supabase } from '../../../../../lib/supabase';
+import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -134,11 +135,16 @@ export default function EditProfileScreen() {
         });
       }
       
+      // Show success banner
+      const { showSuccess } = useBannerStore.getState();
+      showSuccess(BANNER_MESSAGES.PROFILE_UPDATED);
+      
       // Navigate back on success
       router.back();
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Update Failed', 'Failed to update profile. Please try again.');
+      const { showError } = useBannerStore.getState();
+      showError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -252,11 +258,8 @@ export default function EditProfileScreen() {
     // Request camera permissions
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Camera Permission Required',
-        'Please allow camera access to take photos.',
-        [{ text: 'OK' }]
-      );
+      const { showError } = useBannerStore.getState();
+      showError('Please allow camera access to take photos.');
       return;
     }
     
@@ -331,7 +334,8 @@ export default function EditProfileScreen() {
         setAvatarUrl(data.path);
       } catch (error) {
         if (error instanceof Error) {
-          Alert.alert(error.message);
+          const { showError } = useBannerStore.getState();
+          showError(error.message);
         } else {
           throw error;
         }

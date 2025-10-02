@@ -12,6 +12,7 @@ import { useMessageStore } from '../../stores/messagesStore';
 import { useEditProfileStore } from '../../stores/editProfileStore';
 import { useProgressStore } from '../../stores/progressStore';
 import CachedAvatar from '../../components/CachedAvatar';
+import GlobalBanner from '../../components/GlobalBanner';
 
 // Unified TopNavBar with dynamic content
 const TopNavBar = () => {
@@ -655,6 +656,9 @@ export default function AppLayout() {
           }}
         />
       </Stack>
+      
+      {/* Global Banner */}
+      <GlobalBanner />
     </View>
   );
 }

@@ -1,12 +1,14 @@
-import { View, Text, StyleSheet, TextInput, Pressable, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { useBannerStore } from '../../stores/bannerStore';
 
 export default function Signup() {
   const router = useRouter();
   const { email } = useLocalSearchParams();
+  const { showError, showSuccess } = useBannerStore();
 
   const handleResendEmail = async () => {
     if (!email) return;
@@ -17,9 +19,9 @@ export default function Signup() {
     });
 
     if (error) {
-      Alert.alert(error.message);
+      showError(error.message);
     } else {
-      Alert.alert('Verification email sent!');
+      showSuccess('Verification email sent!');
     }
   };
 

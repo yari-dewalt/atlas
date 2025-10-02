@@ -19,6 +19,7 @@ import { supabase } from '../../../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useWorkoutStore } from '../../../stores/workoutStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBannerStore } from '../../../stores/bannerStore';
 
 const CUSTOM_EXERCISES_KEY = 'custom_exercises';
 const RECENT_EXERCISES_KEY = 'recent_exercises';
@@ -34,6 +35,9 @@ export default function ExerciseDetails() {
   
   // Get workout store functions
   const { activeWorkout, removeExercise } = useWorkoutStore();
+  
+  // Get banner store functions
+  const { showSuccess, showError } = useBannerStore();
 
   // Detect if we're in a fullscreen modal by checking the route
   // If we're coming from a workout, selection, or routine modal, we're likely in fullscreen
@@ -143,6 +147,7 @@ export default function ExerciseDetails() {
     } catch (err) {
       console.error('Error loading exercise details:', err);
       setError('Failed to load exercise details');
+      showError('Failed to load exercise details. Using cached information.');
       setExercise({
         id: exerciseId,
         name: exerciseName || 'Unknown Exercise',
@@ -220,15 +225,11 @@ export default function ExerciseDetails() {
               router.back();
               
               // Show success message
-              Alert.alert(
-                'Exercise Deleted',
-                `"${exercise.name}" has been completely removed from your app.`,
-                [{ text: 'OK' }]
-              );
+              showSuccess(`"${exercise.name}" has been completely removed from your app.`);
               
             } catch (error) {
               console.error('Error deleting custom exercise:', error);
-              Alert.alert('Error', 'Failed to delete exercise. Please try again.');
+              showError('Failed to delete exercise. Please try again.');
             }
           }
         }
@@ -451,11 +452,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  loadingText: {
-    color: colors.secondaryText,
-    marginTop: 12,
-    fontSize: 16,
   },
   content: {
     flex: 1,
