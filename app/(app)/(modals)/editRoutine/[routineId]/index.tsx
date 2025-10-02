@@ -2771,7 +2771,7 @@ reorderModalFooter: {
     backgroundColor: colors.notification,
     justifyContent: 'center',
     alignItems: 'flex-end',
-    width: 300,
+    width: 340,
     height: '100%',
     borderTopRightRadius: 8,
     borderBottomRightRadius: 8,
