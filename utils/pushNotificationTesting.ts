@@ -1,4 +1,5 @@
 import PushNotificationService from './pushNotificationService';
+import { supabase } from '../lib/supabase';
 import {
   sendPostLikePushNotification,
   sendFollowPushNotification,
@@ -106,6 +107,83 @@ export const testPushNotifications = {
   },
 
   /**
+   * Test duplicate prevention - send same notification multiple times rapidly
+   */
+  async testDuplicatePrevention(recipientId: string, actorId: string, postId: string) {
+    console.log('Testing duplicate prevention...');
+    console.log('Sending 5 identical post like notifications rapidly...');
+    
+    // Send the same notification 5 times rapidly
+    for (let i = 0; i < 5; i++) {
+      await sendPostLikePushNotification(recipientId, actorId, postId);
+      console.log(`Sent notification ${i + 1}/5`);
+      await new Promise(resolve => setTimeout(resolve, 50)); // Very small delay
+    }
+    
+    console.log('All notifications queued. Check database - should only have 1 notification.');
+    console.log('Run processQueue() after 5 seconds to send it.');
+  },
+
+  /**
+   * Test fast delivery (5 second batching)
+   */
+  async testFastDelivery(recipientId: string, actorId: string, postId: string) {
+    console.log('Testing fast delivery...');
+    await sendPostLikePushNotification(recipientId, actorId, postId);
+    console.log('Notification queued. It should be sent automatically in ~5 seconds.');
+    
+    // Set up a timer to show when it should be sent
+    setTimeout(() => {
+      console.log('⏰ Notification should be sent around now (5 seconds elapsed)');
+    }, 5000);
+  },
+
+  /**
+   * Get current user ID for easy testing
+   */
+  async getCurrentUserId() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      console.log(`Current user ID: ${user.id}`);
+      return user.id;
+    } else {
+      console.log('No user logged in');
+      return null;
+    }
+  },
+
+  /**
+   * View pending notifications for debugging
+   */
+  async viewPendingNotifications(userId?: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const targetUserId = userId || user?.id;
+    
+    if (!targetUserId) {
+      console.log('No user ID provided and no user logged in');
+      return;
+    }
+
+    const { data: notifications, error } = await supabase
+      .from('push_notifications')
+      .select('*')
+      .eq('user_id', targetUserId)
+      .is('sent_at', null)
+      .is('failed_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return;
+    }
+
+    console.log(`Found ${notifications?.length || 0} pending notifications for user ${targetUserId}:`);
+    notifications?.forEach((notif, index) => {
+      console.log(`${index + 1}. ${notif.notification_type} - ${notif.batch_key} (${notif.created_at})`);
+    });
+  },
+
+  /**
    * Clean up test data
    */
   async cleanup() {
@@ -113,6 +191,21 @@ export const testPushNotifications = {
     const pushService = PushNotificationService.getInstance();
     await pushService.cleanupOldNotifications();
     console.log('Cleanup complete');
+  },
+
+  /**
+   * Clear all pending notifications for current user (emergency)
+   */
+  async clearMyPendingNotifications() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('No user logged in');
+      return;
+    }
+
+    const pushService = PushNotificationService.getInstance();
+    await pushService.clearPendingNotifications(user.id);
+    console.log('Cleared all pending notifications for current user');
   },
 };
 

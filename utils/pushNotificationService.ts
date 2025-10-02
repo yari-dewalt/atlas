@@ -176,7 +176,7 @@ class PushNotificationService {
 
     switch (type) {
       case 'post_like':
-        title = 'Post Likes';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others liked your post`;
         } else {
@@ -185,7 +185,7 @@ class PushNotificationService {
         break;
 
       case 'routine_like':
-        title = 'Routine Likes';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others liked your routine`;
         } else {
@@ -194,7 +194,7 @@ class PushNotificationService {
         break;
 
       case 'routine_save':
-        title = 'Routine Saves';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others saved your routine`;
         } else {
@@ -203,7 +203,7 @@ class PushNotificationService {
         break;
 
       case 'comment_like':
-        title = 'Comment Likes';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others liked your comment`;
         } else {
@@ -212,7 +212,7 @@ class PushNotificationService {
         break;
 
       case 'comment_reply':
-        title = 'Comment Replies';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others replied to your comment`;
         } else {
@@ -221,7 +221,7 @@ class PushNotificationService {
         break;
 
       case 'post_comment':
-        title = 'Post Comments';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others commented on your post`;
         } else {
@@ -230,7 +230,7 @@ class PushNotificationService {
         break;
 
       case 'follow':
-        title = 'New Followers';
+        title = 'Atlas';
         if (hasMultipleActors) {
           body = `${firstActor.username} and ${count - 1} others started following you`;
         } else {
@@ -239,7 +239,7 @@ class PushNotificationService {
         break;
 
       default:
-        title = 'Notification';
+        title = 'Atlas';
         body = hasMultipleActors 
           ? `${firstActor.username} and ${count - 1} others interacted with your content`
           : `${firstActor.username} interacted with your content`;
@@ -259,7 +259,7 @@ class PushNotificationService {
   }
 
   /**
-   * Queue a push notification (with batching)
+   * Queue a push notification (with batching and duplicate prevention)
    */
   async queuePushNotification(data: PushNotificationData): Promise<void> {
     try {
@@ -272,14 +272,60 @@ class PushNotificationService {
       // Generate batch key
       const batchKey = this.generateBatchKey(data);
 
-      // Create actor info
+      // Check if we already have a recent unsent notification for this exact event
+      const { data: existingNotification, error: checkError } = await supabase
+        .from('push_notifications')
+        .select('id, created_at, content')
+        .eq('user_id', data.recipientId)
+        .eq('batch_key', batchKey)
+        .is('sent_at', null)
+        .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Only check last 5 minutes
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing notifications:', checkError);
+      }
+
+      // If we found an existing notification, update it instead of creating a new one
+      if (existingNotification) {
+        console.log(`Updating existing notification for batch key: ${batchKey}`);
+        
+        // Use the RPC function to update with the new actor
+        await supabase.rpc('create_or_update_push_notification', {
+          p_user_id: data.recipientId,
+          p_notification_type: data.type,
+          p_content: this.createBatchedContent(
+            data.type,
+            [{
+              id: data.actorId,
+              username: data.actorUsername || 'Someone',
+              avatarUrl: data.actorAvatarUrl,
+            }],
+            1,
+            {
+              recipientId: data.recipientId,
+              postId: data.postId,
+              routineId: data.routineId,
+              commentId: data.commentId,
+              routineName: data.routineName,
+              postTitle: data.postTitle,
+            }
+          ),
+          p_batch_key: batchKey,
+          p_actor_id: data.actorId,
+        });
+        return;
+      }
+
+      // Create new notification
       const actor = {
         id: data.actorId,
         username: data.actorUsername || 'Someone',
         avatarUrl: data.actorAvatarUrl,
       };
 
-      // Create base content
       const baseContent = this.createBatchedContent(
         data.type,
         [actor],
@@ -375,8 +421,8 @@ class PushNotificationService {
    */
   async processQueuedNotifications(): Promise<void> {
     try {
-      // Get notifications that haven't been sent yet and are older than 30 seconds
-      // (to allow for batching)
+      // Get notifications that haven't been sent yet and are older than 5 seconds
+      // (to allow for brief batching while keeping notifications fast)
       const { data: notifications, error } = await supabase
         .from('push_notifications')
         .select(`
@@ -384,7 +430,8 @@ class PushNotificationService {
           profiles!push_notifications_user_id_fkey (push_token)
         `)
         .is('sent_at', null)
-        .lt('created_at', new Date(Date.now() - 30000).toISOString()) // 30 seconds ago
+        .is('failed_at', null) // Don't retry failed notifications automatically
+        .lt('created_at', new Date(Date.now() - 5000).toISOString()) // 5 seconds ago
         .limit(50);
 
       if (error) throw error;
@@ -402,6 +449,18 @@ class PushNotificationService {
    */
   private async sendSingleNotification(notification: any): Promise<void> {
     try {
+      // Double-check that this notification hasn't been sent already (race condition protection)
+      const { data: currentNotification, error: checkError } = await supabase
+        .from('push_notifications')
+        .select('sent_at, failed_at')
+        .eq('id', notification.id)
+        .single();
+
+      if (checkError || currentNotification?.sent_at || currentNotification?.failed_at) {
+        console.log(`Notification ${notification.id} already processed, skipping`);
+        return;
+      }
+
       const pushToken = notification.profiles?.push_token;
       
       if (!pushToken) {
@@ -412,7 +471,24 @@ class PushNotificationService {
             failed_at: new Date().toISOString(),
             error_message: 'No push token available',
           })
-          .eq('id', notification.id);
+          .eq('id', notification.id)
+          .is('sent_at', null) // Only update if not already sent
+          .is('failed_at', null); // Only update if not already failed
+        return;
+      }
+
+      // Mark as being processed to prevent duplicate sends
+      const { error: processingError } = await supabase
+        .from('push_notifications')
+        .update({ 
+          updated_at: new Date().toISOString() // Use updated_at as a processing lock
+        })
+        .eq('id', notification.id)
+        .is('sent_at', null)
+        .is('failed_at', null);
+
+      if (processingError) {
+        console.log(`Failed to lock notification ${notification.id} for processing`);
         return;
       }
 
@@ -422,7 +498,10 @@ class PushNotificationService {
         sound: 'default',
         title: notification.content.title,
         body: notification.content.body,
-        data: notification.content.data,
+        data: {
+          ...notification.content.data,
+          notificationId: notification.id, // Include notification ID for tracking
+        },
         badge: await this.getUnreadCount(notification.user_id),
       };
 
@@ -442,7 +521,8 @@ class PushNotificationService {
         await supabase
           .from('push_notifications')
           .update({ sent_at: new Date().toISOString() })
-          .eq('id', notification.id);
+          .eq('id', notification.id)
+          .is('sent_at', null); // Only update if not already sent
       } else {
         // Mark as failed
         await supabase
@@ -451,7 +531,9 @@ class PushNotificationService {
             failed_at: new Date().toISOString(),
             error_message: result.data?.message || 'Unknown error',
           })
-          .eq('id', notification.id);
+          .eq('id', notification.id)
+          .is('sent_at', null) // Only update if not already sent
+          .is('failed_at', null); // Only update if not already failed
       }
     } catch (error) {
       console.error('Error sending notification:', error);
@@ -463,7 +545,9 @@ class PushNotificationService {
           failed_at: new Date().toISOString(),
           error_message: error.message || 'Unknown error',
         })
-        .eq('id', notification.id);
+        .eq('id', notification.id)
+        .is('sent_at', null) // Only update if not already sent
+        .is('failed_at', null); // Only update if not already failed
     }
   }
 
@@ -599,7 +683,7 @@ class PushNotificationService {
   }
 
   /**
-   * Clean up old notifications (should be called periodically)
+   * Clean up old notifications and prevent stale duplicates (should be called periodically)
    */
   async cleanupOldNotifications(): Promise<void> {
     try {
@@ -608,8 +692,40 @@ class PushNotificationService {
         .from('push_notifications')
         .delete()
         .lt('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+      // Mark very old unsent notifications as failed to prevent them from being processed
+      // (notifications older than 1 hour that are still unsent are likely stale)
+      await supabase
+        .from('push_notifications')
+        .update({
+          failed_at: new Date().toISOString(),
+          error_message: 'Notification expired - too old to send',
+        })
+        .is('sent_at', null)
+        .is('failed_at', null)
+        .lt('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()); // 1 hour ago
+
     } catch (error) {
       console.error('Error cleaning up old notifications:', error);
+    }
+  }
+
+  /**
+   * Emergency method to clear all pending notifications for a user (use carefully)
+   */
+  async clearPendingNotifications(userId: string): Promise<void> {
+    try {
+      await supabase
+        .from('push_notifications')
+        .update({
+          failed_at: new Date().toISOString(),
+          error_message: 'Cleared by admin',
+        })
+        .eq('user_id', userId)
+        .is('sent_at', null)
+        .is('failed_at', null);
+    } catch (error) {
+      console.error('Error clearing pending notifications:', error);
     }
   }
 }
