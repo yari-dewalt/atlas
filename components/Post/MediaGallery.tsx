@@ -61,7 +61,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [mediaUrls, setMediaUrls] = useState<{[key: string]: string}>({});
   const [galleryWidth, setGalleryWidth] = useState(0);
-  const [videoMuted, setVideoMuted] = useState<{[key: string]: boolean}>({});
+  const [globalVideoMuted, setGlobalVideoMuted] = useState<boolean>(true); // Global mute state for all videos
   const [backgroundVideoMutedBeforeFullscreen, setBackgroundVideoMutedBeforeFullscreen] = useState<boolean | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
@@ -126,26 +126,14 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
 
 
   useEffect(() => {
-    // Initialize remaining times with original durations and muted states
+    // Initialize remaining times with original durations
     const times = {};
-    const mutedStates = {};
     media.forEach(item => {
       if (item.type === 'video' && item.duration) {
         times[item.id] = item.duration;
       }
-      if (item.type === 'video') {
-        // Only set initial muted state if not already set
-        if (videoMuted[item.id] === undefined) {
-          mutedStates[item.id] = true; // Videos start muted by default
-        }
-      }
     });
     setRemainingTimes(times);
-    
-    // Only update muted states for new videos
-    if (Object.keys(mutedStates).length > 0) {
-      setVideoMuted(prev => ({ ...prev, ...mutedStates }));
-    }
 
     // Handle video playback based on focus
     media.forEach((item, index) => {
@@ -153,9 +141,9 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
         const videoRef = videoRefs.current[item.id];
         if (videoRef) {
           if (index === activeIndex) {
-            // Reset and play the active video, preserving mute state
+            // Reset and play the active video, using global mute state
             videoRef.setPositionAsync(0).then(() => {
-              videoRef.setIsMutedAsync(videoMuted[item.id] ?? true).then(() => {
+              videoRef.setIsMutedAsync(globalVideoMuted).then(() => {
                 videoRef.playAsync();
               });
             });
@@ -170,6 +158,19 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
     });
   }, [activeIndex, media]);
 
+  // Separate effect to handle mute state changes without restarting videos
+  useEffect(() => {
+    media.forEach((item, index) => {
+      if (item.type === 'video') {
+        const videoRef = videoRefs.current[item.id];
+        if (videoRef) {
+          // Only update mute state without affecting playback position
+          videoRef.setIsMutedAsync(globalVideoMuted);
+        }
+      }
+    });
+  }, [globalVideoMuted]);
+
   // Handle post visibility changes - pause videos when post goes out of view
   useEffect(() => {
     media.forEach((item, index) => {
@@ -181,14 +182,14 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
             videoRef.pauseAsync();
           } else if (index === activeIndex) {
             // Resume the active video when post comes back into view and screen is focused
-            videoRef.setIsMutedAsync(videoMuted[item.id] ?? true).then(() => {
+            videoRef.setIsMutedAsync(globalVideoMuted).then(() => {
               videoRef.playAsync();
             });
           }
         }
       }
     });
-  }, [isPostVisible, activeIndex, media, videoMuted]);
+  }, [isPostVisible, activeIndex, media, globalVideoMuted]);
 
   // Cleanup effect - pause all videos when component unmounts (navigation away)
   useEffect(() => {
@@ -239,7 +240,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
       const videoRef = videoRefs.current[item.id];
       if (videoRef) {
         // Store the current muted state before muting for fullscreen
-        setBackgroundVideoMutedBeforeFullscreen(videoMuted[item.id] ?? true);
+        setBackgroundVideoMutedBeforeFullscreen(globalVideoMuted);
         // Mute the background video
         videoRef.setIsMutedAsync(true);
       }
@@ -307,12 +308,15 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   const toggleMute = async (itemId: string) => {
     const videoRef = videoRefs.current[itemId];
     if (videoRef) {
-      const newMutedState = !videoMuted[itemId];
-      setVideoMuted(prev => ({
-        ...prev,
-        [itemId]: newMutedState
-      }));
-      await videoRef.setIsMutedAsync(newMutedState);
+      const newMutedState = !globalVideoMuted;
+      setGlobalVideoMuted(newMutedState);
+      
+      // Update all video refs to use the new global mute state
+      Object.entries(videoRefs.current).forEach(([id, ref]) => {
+        if (ref) {
+          ref.setIsMutedAsync(newMutedState);
+        }
+      });
     }
   };
 
@@ -356,7 +360,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
               resizeMode={ResizeMode.COVER}
               shouldPlay={index === activeIndex}
               isLooping={true}
-              isMuted={videoMuted[item.id] ?? true}
+              isMuted={globalVideoMuted}
               onPlaybackStatusUpdate={(status) => handlePlaybackStatusUpdate(status, item.id, item.duration)}
             />
             <TouchableOpacity
@@ -368,7 +372,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
               }}
             >
               <IonIcon 
-                name={videoMuted[item.id] ? "volume-mute" : "volume-high"} 
+                name={globalVideoMuted ? "volume-mute" : "volume-high"} 
                 size={20} 
                 color={colors.primaryText} 
               />
