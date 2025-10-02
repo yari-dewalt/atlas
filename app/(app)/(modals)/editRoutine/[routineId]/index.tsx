@@ -566,6 +566,53 @@ export default function EditRoutine() {
     return true;
   };
 
+  // Check if minimum requirements are met to enable the Create/Save button
+  const canSaveRoutine = () => {
+    // Must have a routine name
+    if (routineName.trim() === "") {
+      return false;
+    }
+    
+    // Must have at least one exercise
+    if (exercises.length === 0) {
+      return false;
+    }
+    
+    // Each exercise must have at least one set with valid rep values
+    for (const exercise of exercises) {
+      if (exercise.sets.length === 0) {
+        return false;
+      }
+
+      // Check each set for valid rep values
+      for (const set of exercise.sets) {
+        if (set.isRange) {
+          // For rep ranges, both min and max must be provided and valid
+          const repsMin = typeof set.repsMin === 'string' ? parseInt(set.repsMin) : set.repsMin;
+          const repsMax = typeof set.repsMax === 'string' ? parseInt(set.repsMax) : set.repsMax;
+          
+          if (!repsMin || isNaN(repsMin) || repsMin < 1) {
+            return false;
+          }
+          if (!repsMax || isNaN(repsMax) || repsMax < 1) {
+            return false;
+          }
+          if (repsMax <= repsMin) {
+            return false;
+          }
+        } else {
+          // For single rep counts, a valid rep count is required
+          const reps = typeof set.reps === 'string' ? parseInt(set.reps) : set.reps;
+          if (!reps || isNaN(reps) || reps < 1) {
+            return false;
+          }
+        }
+      }
+    }
+    
+    return true;
+  };
+
   const updateExerciseDefaults = (exerciseId: number, field: keyof Exercise, value: any) => {
     setExercises(exercises.map(exercise => 
       exercise.id === exerciseId 
@@ -1386,10 +1433,10 @@ export default function EditRoutine() {
         <TouchableOpacity
                 activeOpacity={0.5} 
           onPress={handleSaveRoutine} 
-          style={styles.headerButton}
-          disabled={loading}
+          style={[styles.headerButton, (!canSaveRoutine() || loading) && styles.headerButtonDisabled]}
+          disabled={!canSaveRoutine() || loading}
         >
-            <Text style={styles.saveText}>
+            <Text style={[styles.saveText, (!canSaveRoutine() || loading) && styles.saveTextDisabled]}>
               {routineId === 'new' ? 'Create' : 'Save'}
             </Text>
         </TouchableOpacity>
@@ -2330,6 +2377,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.brand,
     fontWeight: '600',
+  },
+  headerButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveTextDisabled: {
+    color: colors.secondaryText,
   },
   contentContainer: {
     flex: 1,

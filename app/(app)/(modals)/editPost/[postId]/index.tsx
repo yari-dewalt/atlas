@@ -902,7 +902,7 @@ export default function EditPost() {
             {isSubmitting ? (
               <ActivityIndicator size="small" color={colors.brand} />
             ) : (
-              <Text style={styles.saveText}>{isNewPost ? 'Publish' : 'Save'}</Text>
+              <Text style={[styles.saveText, (!isFormValid || isSubmitting) && styles.saveTextDisabled]}>{isNewPost ? 'Publish' : 'Save'}</Text>
             )}
           </TouchableOpacity>
         {/* Progress Bar */}
@@ -1312,6 +1312,9 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  saveTextDisabled: {
+    color: colors.secondaryText,
   },
   
   // Content styles
