@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, TextInput, KeyboardAvoidingView, Platform, StatusBar, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, TextInput, KeyboardAvoidingView, Platform, StatusBar, Animated, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { colors } from '../../../constants/colors';
 import { useWorkoutStore } from '../../../stores/workoutStore';
 import { useAuthStore } from '../../../stores/authStore';
@@ -11,6 +12,7 @@ import { getUserWeightUnit, displayWeightForUser, convertWeight } from '../../..
 import DateTimePicker from '@react-native-community/datetimepicker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { supabase } from '../../../lib/supabase';
 
 export default function SaveWorkout() {
   const router = useRouter();
@@ -22,7 +24,8 @@ export default function SaveWorkout() {
     updateActiveWorkout,
     isSaving 
   } = useWorkoutStore();
-  const { profile } = useAuthStore();
+  const { profile, session } = useAuthStore();
+  const { showError, showSuccess } = useBannerStore();
   
   // Progress bar state
   const { isVisible } = useProgressStore();
@@ -46,6 +49,8 @@ export default function SaveWorkout() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [workoutVisibility, setWorkoutVisibility] = useState('public'); // 'public', 'friends', 'private'
   const [notesVisibility, setNotesVisibility] = useState('public');
+  const [saveAsRoutine, setSaveAsRoutine] = useState(false);
+  const [routineName, setRoutineName] = useState('');
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -82,6 +87,13 @@ export default function SaveWorkout() {
       }
     }
   }, [activeWorkout]);
+
+  // Update routine name when workout title or saveAsRoutine checkbox changes
+  useEffect(() => {
+    if (saveAsRoutine && workoutTitle) {
+      setRoutineName(`${workoutTitle} Routine`);
+    }
+  }, [saveAsRoutine, workoutTitle]);
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -164,27 +176,48 @@ export default function SaveWorkout() {
         }
         
         // Show success banner with action to view the workout
-        const { showSuccess } = useBannerStore.getState();
         const message = isEditing ? BANNER_MESSAGES.WORKOUT_UPDATED : BANNER_MESSAGES.WORKOUT_SAVED;
         // For editing: use editingWorkoutId (database ID)
         // For new workouts: success now contains the database ID (string) or false
         const workoutId = isEditing ? activeWorkout?.editingWorkoutId : success;
         
-        if (workoutId) {
-          showSuccess(
-            message,
-            4000,
-            {
-              text: 'View',
-              onPress: () => {
-                // Navigate to the workout detail screen using the correct database ID
-                router.push(`/(app)/(cards)/workout/${workoutId}`);
-              }
-            }
-          );
+        // Create routine if requested
+        if (saveAsRoutine && routineName.trim()) {
+          try {
+            await createRoutineFromWorkout(routineName.trim());
+            showSuccess(
+              `Workout saved and routine "${routineName}" created successfully!`,
+              5000,
+              workoutId ? {
+                text: 'View Workout',
+                onPress: () => {
+                  router.push(`/(app)/(cards)/workout/${workoutId}`);
+                }
+              } : undefined
+            );
+          } catch (error) {
+            console.error('Error creating routine:', error);
+            // Still show workout success, but mention routine failure
+            showSuccess(message, 3000);
+            showError('Workout saved but failed to create routine. You can create it manually from the workout.');
+          }
         } else {
-          // Show success without action if we don't have a valid ID
-          showSuccess(message, 3000);
+          if (workoutId) {
+            showSuccess(
+              message,
+              4000,
+              {
+                text: 'View',
+                onPress: () => {
+                  // Navigate to the workout detail screen using the correct database ID
+                  router.push(`/(app)/(cards)/workout/${workoutId}`);
+                }
+              }
+            );
+          } else {
+            // Show success without action if we don't have a valid ID
+            showSuccess(message, 3000);
+          }
         }
         
         endWorkout();
@@ -214,6 +247,146 @@ export default function SaveWorkout() {
     }
   };
 
+
+
+  const createRoutineFromWorkout = async (routineName: string) => {
+    if (!activeWorkout?.exercises || !session?.user?.id) return;
+    
+    try {
+      // Create a new routine from the workout
+      const { data: newRoutine, error: routineError } = await supabase
+        .from('routines')
+        .insert({
+          name: routineName,
+          user_id: session.user.id,
+          category: 'user_created',
+          original_creator_id: session.user.id,
+        })
+        .select('id')
+        .single();
+
+      if (routineError) throw routineError;
+
+      // Copy all exercises to the routine
+      const exercisesToCopy = activeWorkout.exercises.map((exercise, index) => {
+        const completedSets = exercise.sets.filter(set => set.isCompleted);
+        
+        // Calculate rep range if there are multiple sets with different rep counts
+        const repCounts = completedSets.map(set => set.reps).filter((reps) => reps != null && typeof reps === 'number');
+        const uniqueReps = [...new Set(repCounts)] as number[];
+        
+        let defaultReps = null;
+        let defaultRepsMin = null;
+        let defaultRepsMax = null;
+        
+        if (uniqueReps.length === 1) {
+          // All sets have the same reps
+          defaultReps = uniqueReps[0];
+        } else if (uniqueReps.length > 1) {
+          // Sets have different reps, set a range
+          defaultRepsMin = Math.min(...uniqueReps);
+          defaultRepsMax = Math.max(...uniqueReps);
+        }
+        
+        // Get the most common RPE or the first one
+        const rpeCounts = completedSets.map(set => set.rpe).filter((rpe) => rpe != null);
+        const defaultRpe = rpeCounts.length > 0 ? rpeCounts[0] : null;
+        
+        // Get the most recent weight used for this exercise
+        const weights = completedSets.map(set => set.weight).filter((weight) => weight != null && typeof weight === 'number');
+        let defaultWeight = weights.length > 0 ? weights[weights.length - 1] : null; // Use the last (most recent) weight
+        
+        // Convert weight to kg for database storage
+        if (defaultWeight !== null) {
+          defaultWeight = convertWeight(defaultWeight, userWeightUnit, 'kg');
+        }
+        
+        return {
+          routine_id: newRoutine.id,
+          exercise_id: exercise.exercise_id, // Include exercise_id to maintain relationship with exercises table
+          name: exercise.name,
+          order_position: index + 1,
+          total_sets: completedSets.length > 0 ? completedSets.length : 3, // Default to 3 sets if no completed sets
+          default_weight: defaultWeight, // Copy the most recent weight used
+          default_reps: defaultReps,
+          default_reps_min: defaultRepsMin,
+          default_reps_max: defaultRepsMax,
+          default_rpe: defaultRpe,
+        };
+      });
+
+      const { data: insertedExercises, error: exercisesError } = await supabase
+        .from('routine_exercises')
+        .insert(exercisesToCopy)
+        .select('id, order_position');
+
+      if (exercisesError) throw exercisesError;
+
+      // Now create individual sets for each exercise based on the workout sets
+      const allSetsToInsert = [];
+      
+      for (let exerciseIndex = 0; exerciseIndex < activeWorkout.exercises.length; exerciseIndex++) {
+        const workoutExercise = activeWorkout.exercises[exerciseIndex];
+        const routineExercise = insertedExercises.find(ex => ex.order_position === exerciseIndex + 1);
+        
+        if (!routineExercise) continue;
+        
+        const completedSets = workoutExercise.sets.filter(set => set.isCompleted);
+        
+        // Create routine sets based on completed workout sets
+        const setsForThisExercise = completedSets.map((workoutSet, setIndex) => {
+          let convertedWeight = null;
+          if (workoutSet.weight && typeof workoutSet.weight === 'number') {
+            convertedWeight = convertWeight(workoutSet.weight, userWeightUnit, 'kg');
+          }
+          
+          // Determine rep mode and values
+          let reps = null;
+          let repsMin = null;
+          let repsMax = null;
+          
+          if (workoutSet.reps && typeof workoutSet.reps === 'number') {
+            reps = workoutSet.reps;
+          }
+          
+          return {
+            routine_exercise_id: routineExercise.id,
+            set_number: setIndex + 1,
+            weight: convertedWeight,
+            reps: reps,
+            reps_min: repsMin,
+            reps_max: repsMax,
+            rpe: workoutSet.rpe && typeof workoutSet.rpe === 'number' ? workoutSet.rpe : null,
+          };
+        });
+        
+        allSetsToInsert.push(...setsForThisExercise);
+      }
+
+      // Insert all the individual sets
+      if (allSetsToInsert.length > 0) {
+        const { error: setsError } = await supabase
+          .from('routine_sets')
+          .insert(allSetsToInsert);
+
+        if (setsError) throw setsError;
+      }
+
+      // Show success message and navigate to the new routine
+      showSuccess(
+        `Routine "${routineName}" was successfully created with ${activeWorkout.exercises.length} exercise${activeWorkout.exercises.length === 1 ? '' : 's'}!`,
+        5000,
+        {
+          text: "View Routine",
+          onPress: () => router.push(`/routine/${newRoutine.id}`)
+        }
+      );
+    } catch (error) {
+      console.error('Error creating routine:', error);
+      showError("Failed to create routine from workout");
+    }
+  };
+
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Header */}
@@ -230,10 +403,10 @@ export default function SaveWorkout() {
         <TouchableOpacity
                 activeOpacity={0.5} 
           onPress={handleSaveWorkout} 
-          style={styles.saveButton}
-          disabled={isSaving}
+          style={[styles.saveButton, (isSaving || (saveAsRoutine && !routineName.trim())) && styles.saveButtonDisabled]}
+          disabled={isSaving || (saveAsRoutine && !routineName.trim())}
         >
-          <Text style={[styles.saveButtonText, isSaving && styles.saveButtonTextDisabled]}>
+          <Text style={[styles.saveButtonText, (isSaving || (saveAsRoutine && !routineName.trim())) && styles.saveButtonTextDisabled]}>
             {activeWorkout?.isEditing ? 'Update' : 'Save'}
           </Text>
         </TouchableOpacity>
@@ -311,6 +484,39 @@ export default function SaveWorkout() {
                 </View>
               );
             })}
+          </View>
+        </View>
+
+        {/* Save as Routine Section */}
+        <View style={styles.section}>
+          <View style={styles.saveAsRoutineSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.checkboxRow}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSaveAsRoutine(!saveAsRoutine);
+              }}
+            >
+              <View style={styles.checkboxContainer}>
+                <View style={[styles.checkbox, saveAsRoutine && styles.checkboxActive]}>
+                  {saveAsRoutine && (
+                    <IonIcon name="checkmark" size={14} color={colors.primaryText} />
+                  )}
+                </View>
+              </View>
+              <Text style={styles.checkboxLabel}>Save as routine</Text>
+            </TouchableOpacity>
+            
+            {saveAsRoutine && (
+              <TextInput
+                style={styles.routineNameInput}
+                value={routineName}
+                onChangeText={setRoutineName}
+                placeholder="Enter routine name"
+                placeholderTextColor={`${colors.secondaryText}80`}
+              />
+            )}
           </View>
         </View>
       </ScrollView>
@@ -518,7 +724,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -677,6 +883,53 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.brand,
     zIndex: 1000,
+  },
+  saveAsRoutineSection: {
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 12,
+    padding: 16,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkboxContainer: {
+    marginRight: 12,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: colors.whiteOverlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxActive: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    color: colors.primaryText,
+    fontWeight: '500',
+    flex: 1,
+  },
+  routineNameInput: {
+    backgroundColor: colors.secondaryAccent,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.whiteOverlay,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 16,
+    color: colors.primaryText,
+    marginTop: 12,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.whiteOverlay,
+    opacity: 0.5,
   },
 
 });

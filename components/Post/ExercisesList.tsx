@@ -263,6 +263,9 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
 
   const createRoutineWithName = async (routineName: string) => {
     try {
+      // Check if we're the owner of this workout
+      const isOwner = postUser?.id === session?.user?.id;
+      
       // Create a new routine from the workout
       const { data: newRoutine, error: routineError } = await supabase
         .from('routines')
@@ -302,13 +305,21 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
         const rpeCounts = workoutSets.map((set: any) => set.rpe).filter((rpe: any) => rpe != null);
         const defaultRpe = rpeCounts.length > 0 ? rpeCounts[0] : null;
         
+        // Get the most recent weight used for this exercise (only if we're the owner)
+        const weights = workoutSets.map((set: any) => set.weight).filter((weight: any) => weight != null && typeof weight === 'number');
+        let defaultWeight = null;
+        if (isOwner && weights.length > 0) {
+          defaultWeight = weights[weights.length - 1]; // Use the last (most recent) weight
+          // Note: Weight is already stored in kg in the database, so no conversion needed
+        }
+        
         return {
           routine_id: newRoutine.id,
           exercise_id: exercise.exercise_id, // Include exercise_id to maintain relationship with exercises table
           name: exercise.exercises?.name || exercise.name,
           order_position: index + 1,
           total_sets: workoutSets.length > 0 ? workoutSets.length : 3, // Default to 3 sets if no sets exist
-          default_weight: null, // Don't copy personal weight defaults
+          default_weight: defaultWeight, // Copy weight only if we're the owner
           default_reps: defaultReps,
           default_reps_min: defaultRepsMin,
           default_reps_max: defaultRepsMax,
@@ -316,11 +327,62 @@ const ExercisesList: React.FC<ExercisesListProps> = ({
         };
       });
 
-      const { error: exercisesError } = await supabase
+      const { data: insertedExercises, error: exercisesError } = await supabase
         .from('routine_exercises')
-        .insert(exercisesToCopy);
+        .insert(exercisesToCopy)
+        .select('id, order_position');
 
       if (exercisesError) throw exercisesError;
+
+      // Create individual sets for each exercise based on the workout sets (only if we're the owner)
+      if (isOwner) {
+        const allSetsToInsert = [];
+        
+        for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
+          const workoutExercise = exercises[exerciseIndex];
+          const routineExercise = insertedExercises.find((ex: any) => ex.order_position === exerciseIndex + 1);
+          
+          if (!routineExercise) continue;
+          
+          const workoutSets = workoutExercise.workout_sets || [];
+          
+          // Create routine sets based on workout sets
+          const setsForThisExercise = workoutSets.map((workoutSet: any, setIndex: number) => {
+            // Weight is already in kg from database, no conversion needed
+            const weight = workoutSet.weight && typeof workoutSet.weight === 'number' ? workoutSet.weight : null;
+            
+            // Determine rep mode and values
+            let reps = null;
+            let repsMin = null;
+            let repsMax = null;
+            
+            if (workoutSet.reps && typeof workoutSet.reps === 'number') {
+              reps = workoutSet.reps;
+            }
+            
+            return {
+              routine_exercise_id: routineExercise.id,
+              set_number: setIndex + 1,
+              weight: weight,
+              reps: reps,
+              reps_min: repsMin,
+              reps_max: repsMax,
+              rpe: workoutSet.rpe && typeof workoutSet.rpe === 'number' ? workoutSet.rpe : null,
+            };
+          });
+          
+          allSetsToInsert.push(...setsForThisExercise);
+        }
+
+        // Insert all the individual sets
+        if (allSetsToInsert.length > 0) {
+          const { error: setsError } = await supabase
+            .from('routine_sets')
+            .insert(allSetsToInsert);
+
+          if (setsError) throw setsError;
+        }
+      }
 
       // Show success message and navigate to the new routine
       showSuccess(
