@@ -30,7 +30,22 @@ const ActivityChartSkeleton: React.FC = () => {
       <View style={styles.selectedPointStatsContainer}>
         <View style={styles.selectedPointDateContainer}>
           <View style={styles.selectedPointDateSkeleton} />
-          <View style={styles.selectedPointValueSkeleton} />
+        </View>
+        
+        {/* Three metrics skeleton */}
+        <View style={styles.selectedPointMetricsContainer}>
+          <View style={styles.metricItem}>
+            <View style={styles.metricLabelSkeleton} />
+            <View style={styles.metricValueSkeleton} />
+          </View>
+          <View style={styles.metricItem}>
+            <View style={styles.metricLabelSkeleton} />
+            <View style={styles.metricValueSkeleton} />
+          </View>
+          <View style={styles.metricItem}>
+            <View style={styles.metricLabelSkeleton} />
+            <View style={styles.metricValueSkeleton} />
+          </View>
         </View>
       </View>
       
@@ -46,14 +61,14 @@ const ActivityChartSkeleton: React.FC = () => {
           
           {/* Chart dots skeleton */}
           <View style={styles.chartDotsContainer}>
-            {Array.from({ length: 8 }).map((_, index) => (
+            {Array.from({ length: 12 }).map((_, index) => (
               <ChartDotSkeleton key={index} delay={index * 100} />
             ))}
           </View>
           
           {/* Chart labels skeleton */}
           <View style={styles.chartLabelsContainer}>
-            {Array.from({ length: 4 }).map((_, index) => (
+            {Array.from({ length: 3 }).map((_, index) => (
               <View key={index} style={styles.chartLabelSkeleton} />
             ))}
           </View>
@@ -97,28 +112,48 @@ const ChartDotSkeleton: React.FC<ChartDotSkeletonProps> = ({ delay }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.primaryAccent,
+    backgroundColor: colors.background,
   },
   
   // Selected Point Stats Skeleton
   selectedPointStatsContainer: {
     paddingHorizontal: 20,
-    marginBottom: 10,
-    backgroundColor: colors.primaryAccent,
+    paddingVertical: 16,
+    backgroundColor: colors.background,
   },
   selectedPointDateContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: -20,
+    marginBottom: 12,
   },
   selectedPointDateSkeleton: {
-    height: 14,
+    height: 16,
     backgroundColor: colors.whiteOverlay,
     borderRadius: 4,
-    width: 70,
+    width: 100,
   },
-  selectedPointValueSkeleton: {
-    height: 16,
+  selectedPointMetricsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 8,
+    paddingVertical: 8,
+  },
+  metricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricLabelSkeleton: {
+    height: 10,
+    backgroundColor: colors.whiteOverlay,
+    borderRadius: 2,
+    width: 40,
+    marginBottom: 4,
+  },
+  metricValueSkeleton: {
+    height: 14,
     backgroundColor: colors.whiteOverlay,
     borderRadius: 4,
     width: 60,
@@ -130,57 +165,56 @@ const styles = StyleSheet.create({
     paddingRight: 0,
   },
   chartSkeleton: {
-    width: Dimensions.get('window').width,
-    height: 220,
-    backgroundColor: colors.primaryAccent,
+    width: '100%',
+    height: 140,
+    backgroundColor: colors.background,
     borderRadius: 16,
     position: 'relative',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 20,
+    marginBottom: -8,
   },
   chartLinesSkeleton: {
     position: 'absolute',
-    top: 40,
+    top: 20,
     left: 55,
     right: 20,
-    bottom: 60,
+    bottom: 40,
     justifyContent: 'space-between',
   },
   chartHorizontalLine: {
     height: 1,
-    backgroundColor: colors.whiteOverlay,
-    opacity: 0.3,
+    backgroundColor: colors.secondaryText,
+    opacity: 0.4,
   },
   chartDotsContainer: {
     position: 'absolute',
-    top: 50,
-    left: 65,
-    right: 30,
-    bottom: 70,
+    top: 30,
+    left: 55,
+    right: 20,
+    bottom: 50,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
   },
   chartDotSkeleton: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.whiteOverlay,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.brand,
+    opacity: 0.6,
   },
   chartLabelsContainer: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 22,
     left: 55,
     right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   chartLabelSkeleton: {
-    height: 12,
+    height: 10,
     backgroundColor: colors.whiteOverlay,
-    borderRadius: 4,
-    width: 40,
+    borderRadius: 2,
+    width: 30,
   },
 });
 

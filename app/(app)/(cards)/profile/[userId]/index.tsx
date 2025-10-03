@@ -11,14 +11,13 @@ import { useAuthStore } from '../../../../../stores/authStore';
 import { getUserWeightUnit, convertWeight } from '../../../../../utils/weightUtils';
 import { supabase } from '../../../../../lib/supabase';
 import { useProfileStore } from '../../../../../stores/profileStore';
-import { format, subDays, subMonths, subYears, startOfDay, endOfDay, startOfWeek } from 'date-fns';
-import { LineChart } from 'react-native-chart-kit'; 
+import { format, subDays, subMonths, subYears, subWeeks, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
 import { Dimensions } from 'react-native';
-import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import CustomLineChart from '../../../../../components/CustomLineChart';
+
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import VideoThumbnail from '../../../../../components/VideoThumbnail';
-import { setTabScrollRef } from '../../../(tabs)/_layout';
 
 export default function ProfileScreen() {
   const scrollViewRef = useRef(null);
@@ -36,8 +35,6 @@ export default function ProfileScreen() {
   const [mediaLoading, setMediaLoading] = useState(true);
   
   // Activity graph state
-  const [selectedMetric, setSelectedMetric] = useState<'duration' | 'volume' | 'reps'>('duration');
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'week' | 'month' | '3months' | 'year' | 'all'>('month');
   const [activityData, setActivityData] = useState<{labels: string[], datasets: any[]}>({
     labels: [],
     datasets: []
@@ -57,27 +54,7 @@ export default function ProfileScreen() {
     activeDays: number;
   } | null>(null);
   
-  // Bottom sheet refs
-  const metricBottomSheetRef = useRef<BottomSheet>(null);
-  const timeRangeBottomSheetRef = useRef<BottomSheet>(null);
-  
-  // Bottom sheet snap points
-  const snapPoints = useMemo(() => ['40%'], []);
-
-  useEffect(() => {setTabScrollRef('profile', scrollViewRef.current);}, []);
-  
-  // Backdrop component
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        enableTouchThrough={false}
-      />
-    ),
-    []
-  );
+  const [weeklyMetricsData, setWeeklyMetricsData] = useState<{ [key: string]: { duration: number; volume: number; reps: number } }>({});
 
   const { profile: authProfile, session } = useAuthStore();
   const { 
@@ -90,11 +67,35 @@ export default function ProfileScreen() {
     fetchProfile,
     updateCurrentProfile
   } = useProfileStore();
-  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const router = useRouter();
 
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(authProfile);
+
+  // Helper function to format duration in minutes to "(x)d (x)h (x)m" format
+  const formatDuration = (minutes: number): string => {
+    if (minutes === 0) return '0m';
+    
+    const days = Math.floor(minutes / (24 * 60));
+    const hours = Math.floor((minutes % (24 * 60)) / 60);
+    const mins = minutes % 60;
+    
+    const parts: string[] = [];
+    
+    if (days > 0) {
+      parts.push(`${days}d`);
+    }
+    
+    if (hours > 0) {
+      parts.push(`${hours}h`);
+    }
+    
+    if (mins > 0 || parts.length === 0) {
+      parts.push(`${mins}m`);
+    }
+    
+    return parts.join(' ');
+  };
 
   useEffect(() => {
     if (currentProfile?.id) {
@@ -105,33 +106,8 @@ export default function ProfileScreen() {
       fetchRoutines(currentProfile.id);
       fetchActivityData(currentProfile.id);
       fetchRecentMedia(currentProfile.id);
-      fetchFollowingRelationships();
     }
   }, [currentProfile?.id]);
-
-  // Fetch who's following us to show "Follow back" button
-  const fetchFollowingRelationships = async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      // Get users who are following us
-      const { data: followersData, error: followersError } = await supabase
-        .from('follows')
-        .select('follower_id')
-        .eq('following_id', session.user.id);
-
-      if (followersError) {
-        console.error('Error fetching followers:', followersError);
-      } else {
-        const followersSet = new Set(followersData.map(f => f.follower_id));
-        setFollowingBackUsers(followersSet);
-      }
-    } catch (error) {
-      console.error('Error fetching follow relationships:', error);
-    }
-  };
-
-
 
   // Refresh profile data when screen comes into focus (e.g., after deleting a routine or post)
   useFocusEffect(
@@ -158,171 +134,72 @@ export default function ProfileScreen() {
     }, [currentProfile?.id, session?.user?.id])
   );
 
-  // Enhanced chart area press handler for tapping anywhere
-  const handleChartAreaPress = (event: any) => {
-    // Handle both direct dot clicks and area clicks
-    let locationX: number;
-    let index: number | undefined;
-    
-    if (event.index !== undefined) {
-      // Direct dot click - use the provided index
-      index = event.index;
-    } else if (event.nativeEvent) {
-      // Area click - calculate the index from location
-      locationX = event.nativeEvent.locationX;
-      const chartWidth = Dimensions.get('window').width;
-      const paddingLeft = 55; // Chart's left padding - match vertical line calc
-      const paddingRight = 20; // Chart's right padding
-      const actualChartWidth = chartWidth - paddingLeft - paddingRight;
-      
-      // Calculate relative position within the chart
-      const relativeX = locationX - paddingLeft;
-      const progress = Math.max(0, Math.min(1, relativeX / actualChartWidth));
-      
-      // Find the closest data point
-      const dataCount = activityData.labels.length;
-      index = Math.round(progress * (dataCount - 1));
-    }
-    
-    if (index !== undefined && index >= 0 && index < activityData.labels.length) {
-      const value = activityData.datasets[0]?.data[index];
-      // Use the original full labels array for display, not the filtered display labels
-      const originalLabels = generateOriginalLabels();
-      const label = originalLabels[index] || `Point ${index + 1}`;
-      
-      if (value !== undefined) {
-        // Add haptic feedback when a point is selected
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        
-        setSelectedPointIndex(index);
-        setSelectedValue(value);
-        setSelectedLabel(label);
-      }
-    }
-  };
 
-  // Pan gesture handler for dragging across the chart
-  const handlePanGesture = (event: any) => {
-    const { x } = event.nativeEvent;
-    const chartWidth = Dimensions.get('window').width;
-    const paddingLeft = 55; // Chart's left padding - match vertical line calc
-    const paddingRight = 20; // Chart's right padding
-    const actualChartWidth = chartWidth - paddingLeft - paddingRight;
-    
-    // Calculate relative position within the chart
-    const relativeX = x - paddingLeft;
-    const progress = Math.max(0, Math.min(1, relativeX / actualChartWidth));
-    
-    // Find the closest data point
-    const dataCount = activityData.labels.length;
-    const index = Math.round(progress * (dataCount - 1));
-    
-    if (index >= 0 && index < dataCount && index !== selectedPointIndex) {
-      const value = activityData.datasets[0]?.data[index];
-      // Use the original full labels array for display, not the filtered display labels
-      const originalLabels = generateOriginalLabels();
-      const label = originalLabels[index] || `Point ${index + 1}`;
-      
-      if (value !== undefined) {
-        // Add haptic feedback when a new point is selected during drag
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        
-        setSelectedPointIndex(index);
-        setSelectedValue(value);
-        setSelectedLabel(label);
-      }
-    }
-  };
 
-  // Helper function to generate original labels without filtering
+  // Helper function to generate original labels for 12-week view
   const generateOriginalLabels = () => {
     const labels: string[] = [];
     const now = new Date();
     
-    let days = 30;
-    let labelFormat = 'MMM dd';
-    let showDataPoints = 10;
-    let aggregateBy = 'day';
-    
-    switch (selectedTimeRange) {
-      case 'week': 
-        days = 7; 
-        labelFormat = 'EEE';
-        showDataPoints = 7;
-        aggregateBy = 'day';
-        break;
-      case 'month': 
-        days = 30; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 10;
-        aggregateBy = 'day';
-        break;
-      case '3months': 
-        days = 90; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 12;
-        aggregateBy = 'week';
-        break;
-      case 'year': 
-        days = 365; 
-        labelFormat = 'MMM';
-        showDataPoints = 12;
-        aggregateBy = 'month';
-        break;
-      case 'all': 
-        days = 730;
-        labelFormat = 'MMM yy';
-        showDataPoints = 15;
-        aggregateBy = 'month';
-        break;
-    }
-
-    // Generate the same data structure as in processActivityDataForChart but only return labels
-    const generateDailyData = () => {
-      const dailyData: { date: Date; value: number }[] = [];
+    // Fixed 12-week view - generate labels for each week
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = startOfWeek(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
       
-      for (let i = days - 1; i >= 0; i--) {
-        const date = subDays(now, i);
-        dailyData.push({ date, value: 0 }); // We only need dates for labels
+      // Check if this is the current week (i === 0)
+      if (i === 0) {
+        labels.push("This week");
+      } else {
+        // Format: "Week of Oct 21 - Oct 27"
+        const weekLabel = `Week of ${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+        labels.push(weekLabel);
+      }
+    }
+    
+    return labels;
+  };
+
+  // Helper function to generate Strava-style display labels (only show month when it changes)
+  const generateStravaStyleLabels = (fullLabels: string[]) => {
+    const displayLabels: string[] = [];
+    const now = new Date();
+    let lastDominantMonth = '';
+    
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = startOfWeek(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
+      
+      // Count days in each month for this week
+      const monthCounts: { [month: string]: number } = {};
+      
+      // Check each day of the week to see which month it belongs to
+      for (let day = 0; day < 7; day++) {
+        const currentDay = new Date(weekStart);
+        currentDay.setDate(currentDay.getDate() + day);
+        const monthKey = format(currentDay, 'MMM');
+        monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
       }
       
-      return dailyData;
-    };
-
-    const dailyData = generateDailyData();
-    
-    // Aggregate labels based on time range (same logic as in processActivityDataForChart)
-    if (aggregateBy === 'day') {
-      dailyData.forEach(({ date }) => {
-        labels.push(format(date, labelFormat));
-      });
-    } else if (aggregateBy === 'week') {
-      const weeklyData: { [key: string]: boolean } = {};
-      
-      dailyData.forEach(({ date }) => {
-        const weekStart = startOfWeek(date);
-        const weekLabel = format(weekStart, 'MMM dd');
-        
-        if (!weeklyData[weekLabel]) {
-          weeklyData[weekLabel] = true;
-          labels.push(weekLabel);
+      // Find the month with the most days in this week
+      let dominantMonth = '';
+      let maxDays = 0;
+      Object.entries(monthCounts).forEach(([month, days]) => {
+        if (days > maxDays) {
+          maxDays = days;
+          dominantMonth = month;
         }
       });
-    } else if (aggregateBy === 'month') {
-      const monthlyData: { [key: string]: boolean } = {};
       
-      dailyData.forEach(({ date }) => {
-        const monthLabel = format(date, labelFormat);
-        
-        if (!monthlyData[monthLabel]) {
-          monthlyData[monthLabel] = true;
-          labels.push(monthLabel);
-        }
-      });
+      // Only show label if this week's dominant month is different from the last one
+      if (dominantMonth !== lastDominantMonth) {
+        displayLabels.push(dominantMonth.toUpperCase());
+        lastDominantMonth = dominantMonth;
+      } else {
+        displayLabels.push(''); // Empty label for other weeks
+      }
     }
-
-    // Return the last showDataPoints labels (same as in processActivityDataForChart)
-    return labels.slice(-showDataPoints);
+    
+    return displayLabels;
   };
 
   // Reset selection when metric or time range changes
@@ -339,7 +216,7 @@ export default function ProfileScreen() {
       resetSelection();
       fetchActivityData(currentProfile.id);
     }
-  }, [selectedMetric, selectedTimeRange, currentProfile?.id]);
+  }, [currentProfile?.id]);
 
   const fetchRoutines = async (profileId: string, showLoading: boolean = true) => {
     try {
@@ -640,29 +517,9 @@ export default function ProfileScreen() {
     try {
       setActivityDataLoading(true);
       
-      // Calculate date range
+      // Fixed 12-week range
       const now = new Date();
-      let startDate: Date;
-      
-      switch (selectedTimeRange) {
-        case 'week':
-          startDate = subDays(now, 7);
-          break;
-        case 'month':
-          startDate = subDays(now, 30);
-          break;
-        case '3months':
-          startDate = subDays(now, 90);
-          break;
-        case 'year':
-          startDate = subDays(now, 365);
-          break;
-        case 'all':
-          startDate = subDays(now, 730); // 2 years for "all"
-          break;
-        default:
-          startDate = subDays(now, 30);
-      }
+      const startDate = subWeeks(now, 11); // 12 weeks total including current week
 
       const { data, error } = await supabase
         .from('workouts')
@@ -719,89 +576,39 @@ export default function ProfileScreen() {
   };
 
   const processActivityDataForChart = (workouts: any[]) => {
-    // Initialize time range settings
-    let days = 30;
-    let labelFormat = 'MMM dd';
-    let showDataPoints = 10;
-    let aggregateBy = 'day';
-    
-    switch (selectedTimeRange) {
-      case 'week': 
-        days = 7; 
-        labelFormat = 'EEE';
-        showDataPoints = 7;
-        aggregateBy = 'day';
-        break;
-      case 'month': 
-        days = 30; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 10;
-        aggregateBy = 'day';
-        break;
-      case '3months': 
-        days = 90; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 12;
-        aggregateBy = 'week';
-        break;
-      case 'year': 
-        days = 365; 
-        labelFormat = 'MMM';
-        showDataPoints = 12;
-        aggregateBy = 'month';
-        break;
-      case 'all': 
-        days = 730;
-        labelFormat = 'MMM yy';
-        showDataPoints = 15;
-        aggregateBy = 'month';
-        break;
-    }
-
     const now = new Date();
     const dataPoints: { [key: string]: number } = {};
+    const allMetricsData: { [key: string]: { duration: number; volume: number; reps: number } } = {};
+    const weekKeys: string[] = [];
     
-    // Initialize all time periods with 0 values
-    for (let i = days - 1; i >= 0; i--) {
-      const date = subDays(now, i);
-      let key: string;
-      
-      if (aggregateBy === 'day') {
-        key = format(date, labelFormat);
-      } else if (aggregateBy === 'week') {
-        key = format(startOfWeek(date), 'MMM dd');
-      } else {
-        key = format(date, labelFormat);
-      }
-      
-      if (!dataPoints[key]) {
-        dataPoints[key] = 0;
-      }
+    // Initialize 12 weeks with 0 values and store keys in order
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = startOfWeek(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
+      const weekKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+      dataPoints[weekKey] = 0;
+      allMetricsData[weekKey] = { duration: 0, volume: 0, reps: 0 };
+      weekKeys.push(weekKey);
     }
     
-    // Process workout data
+    // Process workouts and aggregate by week
     workouts.forEach(workout => {
       const workoutDate = new Date(workout.start_time);
-      let key: string;
       
-      if (aggregateBy === 'day') {
-        key = format(workoutDate, labelFormat);
-      } else if (aggregateBy === 'week') {
-        key = format(startOfWeek(workoutDate), 'MMM dd');
-      } else {
-        key = format(workoutDate, labelFormat);
-      }
-      
-      if (!dataPoints[key]) {
-        dataPoints[key] = 0;
-      }
-      
-      switch (selectedMetric) {
-        case 'duration':
-          // Duration in minutes
-          dataPoints[key] += Math.floor((workout.duration || 0) / 60);
-          break;
-        case 'volume':
+      // Find which week this workout belongs to
+      for (let i = 11; i >= 0; i--) {
+        const weekStart = startOfWeek(subWeeks(now, i));
+        const weekEnd = endOfWeek(weekStart);
+        
+        if (workoutDate >= weekStart && workoutDate <= weekEnd) {
+          const weekKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+          
+          // Calculate duration (for chart display)
+          const duration = Math.floor((workout.duration || 0) / 60);
+          dataPoints[weekKey] += duration;
+          allMetricsData[weekKey].duration += duration;
+          
+          // Calculate volume
           let totalVolume = 0;
           workout.workout_exercises?.forEach((exercise: any) => {
             exercise.workout_sets?.forEach((set: any) => {
@@ -812,9 +619,9 @@ export default function ProfileScreen() {
               }
             });
           });
-          dataPoints[key] += totalVolume;
-          break;
-        case 'reps':
+          allMetricsData[weekKey].volume += totalVolume;
+          
+          // Calculate reps
           let totalReps = 0;
           workout.workout_exercises?.forEach((exercise: any) => {
             exercise.workout_sets?.forEach((set: any) => {
@@ -823,38 +630,48 @@ export default function ProfileScreen() {
               }
             });
           });
-          dataPoints[key] += totalReps;
+          allMetricsData[weekKey].reps += totalReps;
+          
           break;
+        }
       }
     });
 
-    // Convert to arrays and limit to showDataPoints
-    const labels = Object.keys(dataPoints);
-    const values = Object.values(dataPoints);
+    console.log(dataPoints);
+
+    // Use the weekKeys array to maintain proper order
+    const labels = weekKeys;
+    const values = weekKeys.map(key => dataPoints[key]);
     
-    const displayLabels = labels.slice(-showDataPoints);
-    const displayValues = values.slice(-showDataPoints);
+    // Generate Strava-style labels (only show month when it changes)
+    const finalLabels = generateStravaStyleLabels(labels);
 
-    // Reduce label clutter for longer time ranges
-    const finalLabels = displayLabels.map((label, index) => {
-      if (selectedTimeRange === 'month' || selectedTimeRange === '3months' || selectedTimeRange === 'year' || selectedTimeRange === 'all') {
-        return index % 2 === 0 ? label : '';
-      }
-      return label;
-    });
+    // Store the metrics data for access when points are selected
+    setWeeklyMetricsData(allMetricsData);
 
-    // Auto-select the rightmost point
-    if (finalLabels.length > 0 && displayValues.length > 0) {
+    // Auto-select the rightmost point (most recent data)
+    if (finalLabels.length > 0 && values.length > 0) {
       const lastIndex = finalLabels.length - 1;
       setSelectedPointIndex(lastIndex);
-      setSelectedValue(displayValues[lastIndex]);
-      setSelectedLabel(finalLabels[lastIndex]);
+      setSelectedValue(values[lastIndex]);
+      
+      // Use the display-friendly label from generateOriginalLabels which includes "This week"
+      const originalLabels = generateOriginalLabels();
+      const displayLabel = originalLabels[lastIndex] || labels[lastIndex] || finalLabels[lastIndex];
+      setSelectedLabel(displayLabel);
+      
+      // Calculate the X position for the vertical line
+      // Match the CustomLineChart component's padding and positioning logic
+      const chartWidth = Dimensions.get('window').width - 55 - 20; // paddingLeft + paddingRight
+      const paddingLeft = 55;
+      const selectedPointX = paddingLeft + (lastIndex / (values.length - 1)) * chartWidth;
+      setSelectedPointX(selectedPointX);
     }
 
     return {
       labels: finalLabels,
       datasets: [{
-        data: displayValues,
+        data: values,
         color: (opacity = 1) => colors.brand,
         strokeWidth: 2
       }]
@@ -882,30 +699,8 @@ export default function ProfileScreen() {
 
       let workoutValue = 0;
       
-      switch (selectedMetric) {
-        case 'duration':
-          workoutValue = Math.floor((workout.duration || 0) / 60);
-          break;
-        case 'volume':
-          workout.workout_exercises?.forEach((exercise: any) => {
-            exercise.workout_sets?.forEach((set: any) => {
-              if (set.is_completed && set.weight && set.reps) {
-                const displayWeight = convertWeight(set.weight, 'kg', userWeightUnit);
-                workoutValue += displayWeight * set.reps;
-              }
-            });
-          });
-          break;
-        case 'reps':
-          workout.workout_exercises?.forEach((exercise: any) => {
-            exercise.workout_sets?.forEach((set: any) => {
-              if (set.is_completed && set.reps) {
-                workoutValue += set.reps;
-              }
-            });
-          });
-          break;
-      }
+      // Only calculate duration for stats since chart only shows duration
+      workoutValue = Math.floor((workout.duration || 0) / 60);
       
       totalValue += workoutValue;
       maxValue = Math.max(maxValue, workoutValue);
@@ -927,214 +722,52 @@ export default function ProfileScreen() {
     const values: number[] = [];
     const now = new Date();
     
-    let days = 7;
-    let labelFormat = 'MMM dd';
-    let showDataPoints = 10;
-    let aggregateBy = 'day'; // 'day', 'week', 'month'
-    
-    switch (selectedTimeRange) {
-      case 'week': 
-        days = 7; 
-        labelFormat = 'EEE'; // Mon, Tue, Wed
-        showDataPoints = 7;
-        aggregateBy = 'day';
-        break;
-      case 'month': 
-        days = 30; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 10;
-        aggregateBy = 'day';
-        break;
-      case '3months': 
-        days = 90; 
-        labelFormat = 'MMM dd';
-        showDataPoints = 12;
-        aggregateBy = 'week';
-        break;
-      case 'year': 
-        days = 365; 
-        labelFormat = 'MMM';
-        showDataPoints = 12;
-        aggregateBy = 'month';
-        break;
-      case 'all': 
-        days = 730; // 2 years for comprehensive data
-        labelFormat = 'MMM yy';
-        showDataPoints = 15;
-        aggregateBy = 'month';
-        break;
+    // Generate 12 weeks of mock data
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = startOfWeek(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
+      const weekKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+      
+      // Generate mock values with some variation (duration only)
+      const baseValue = 180; // Base duration in minutes
+      const variation = (Math.random() - 0.5) * 0.6; // ±30% variation
+      const mockValue = Math.max(0, Math.round(baseValue * (1 + variation)));
+      
+      labels.push(weekKey);
+      values.push(mockValue);
     }
 
-    // Generate realistic activity patterns with seasonal variation
-    const generateDailyData = () => {
-      const dailyData: { date: Date; value: number }[] = [];
-      
-      for (let i = days - 1; i >= 0; i--) {
-        const date = subDays(now, i);
-        const dayOfWeek = date.getDay();
-        const monthOfYear = date.getMonth();
-        
-        // Seasonal patterns (higher activity in spring/summer)
-        const seasonalMultiplier = Math.sin((monthOfYear + 3) * Math.PI / 6) * 0.3 + 1;
-        
-        // Weekly patterns
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const isMondayOrTuesday = dayOfWeek === 1 || dayOfWeek === 2;
-        
-        // Realistic activity probability
-        let activityChance = 0.6; // Base chance
-        if (isWeekend) activityChance = 0.45; // Lower weekend activity
-        if (isMondayOrTuesday) activityChance = 0.75; // Higher early week
-        
-        let value = 0;
-        if (Math.random() < activityChance) {
-          // Progressive overload pattern (gradual increase over time)
-          const progressFactor = 1 + (days - i) / days * 0.5;
-          
-          // Base intensity with natural variation
-          const baseIntensity = 0.3 + Math.random() * 0.7;
-          const weekendMultiplier = isWeekend ? 1.4 : 1.0; // Longer weekend sessions
-          
-          switch (selectedMetric) {
-            case 'duration':
-              // 20-150 minutes with realistic distribution
-              const baseDuration = 35 + Math.random() * 85;
-              value = Math.floor(baseDuration * weekendMultiplier * seasonalMultiplier * progressFactor);
-              break;
-              
-            case 'volume':
-              // 500-12000 kg with progressive overload
-              const baseVolume = 1200 + Math.random() * 6000;
-              const intensityVariation = Math.random() > 0.2 ? 1 : 0.6; // Some lighter days
-              value = Math.floor(baseVolume * intensityVariation * seasonalMultiplier * progressFactor);
-              break;
-              
-            case 'reps':
-              // 25-450 reps with workout type variation
-              const workoutType = Math.random();
-              let baseReps;
-              if (workoutType < 0.3) {
-                // Heavy lifting day (lower reps)
-                baseReps = 25 + Math.random() * 75;
-              } else if (workoutType < 0.7) {
-                // Moderate day
-                baseReps = 80 + Math.random() * 120;
-              } else {
-                // High volume day
-                baseReps = 200 + Math.random() * 250;
-              }
-              value = Math.floor(baseReps * seasonalMultiplier * progressFactor);
-              break;
-          }
-          
-          // Add natural variation (±15%)
-          value = Math.floor(value * (0.85 + Math.random() * 0.3));
-          
-          // Ensure minimum values
-          value = Math.max(value, selectedMetric === 'duration' ? 15 : 
-                                 selectedMetric === 'volume' ? 200 : 10);
-        }
-        
-        dailyData.push({ date, value });
-      }
-      
-      return dailyData;
-    };
+    // Generate Strava-style labels (only show month when it changes)
+    const finalLabels = generateStravaStyleLabels(labels);
 
-    const dailyData = generateDailyData();
-    
-    // Aggregate data based on time range
-    if (aggregateBy === 'day') {
-      // Use daily data directly
-      dailyData.forEach(({ date, value }) => {
-        labels.push(format(date, labelFormat));
-        values.push(value);
-      });
-    } else if (aggregateBy === 'week') {
-      // Group by week
-      const weeklyData: { [key: string]: number[] } = {};
-      
-      dailyData.forEach(({ date, value }) => {
-        const weekStart = startOfWeek(date);
-        const weekLabel = format(weekStart, 'MMM dd');
-        
-        if (!weeklyData[weekLabel]) {
-          weeklyData[weekLabel] = [];
-        }
-        weeklyData[weekLabel].push(value);
-      });
-      
-      Object.entries(weeklyData).forEach(([weekLabel, weekValues]) => {
-        labels.push(weekLabel);
-        // Sum values for the week
-        values.push(weekValues.reduce((sum, val) => sum + val, 0));
-      });
-    } else if (aggregateBy === 'month') {
-      // Group by month
-      const monthlyData: { [key: string]: number[] } = {};
-      
-      dailyData.forEach(({ date, value }) => {
-        const monthLabel = format(date, labelFormat);
-        
-        if (!monthlyData[monthLabel]) {
-          monthlyData[monthLabel] = [];
-        }
-        monthlyData[monthLabel].push(value);
-      });
-      
-      Object.entries(monthlyData).forEach(([monthLabel, monthValues]) => {
-        labels.push(monthLabel);
-        // Calculate monthly average for better visualization
-        const total = monthValues.reduce((sum, val) => sum + val, 0);
-        const average = monthValues.length > 0 ? Math.floor(total / monthValues.length) : 0;
-        values.push(average);
-      });
-    }
-
-    // Ensure we show the right number of data points
-    const displayLabels = labels.slice(-showDataPoints);
-    const displayValues = values.slice(-showDataPoints);
-
-    // Add some smoothing for better visual appeal
-    const smoothedValues = displayValues.map((value, index) => {
-      if (index === 0 || index === displayValues.length - 1) return value;
-      
-      const prev = displayValues[index - 1];
-      const next = displayValues[index + 1];
-      const smoothed = Math.floor((prev + value + next) / 3);
-      
-      // Don't over-smooth, keep some variation
-      return Math.floor(value * 0.7 + smoothed * 0.3);
-    });
-
-    // Reduce label clutter by showing every other label for longer time ranges
-    const finalLabels = displayLabels.map((label, index) => {
-      if (selectedTimeRange === 'month' || selectedTimeRange === '3months' || selectedTimeRange === 'year' || selectedTimeRange === 'all') {
-        return index % 2 === 0 ? label : '';
-      }
-      return label;
+    // Add some natural variation to make it look realistic
+    const smoothedValues = values.map((value, index) => {
+      // Add progressive improvement over time
+      const progressFactor = 1 + (index / 12) * 0.3; // 30% improvement over 12 weeks
+      const naturalVariation = 0.7 + Math.random() * 0.6; // ±30% natural variation
+      return Math.floor(value * progressFactor * naturalVariation);
     });
 
     setActivityData({
       labels: finalLabels,
       datasets: [{
         data: smoothedValues,
-        color: (opacity = 1) => colors.brand, // Full brand color
+        color: (opacity = 1) => colors.brand,
         strokeWidth: 2
       }]
     });
 
     // Calculate stats
-    const activeDays = smoothedValues.filter(value => value > 0).length;
+    const activeWeeks = smoothedValues.filter(value => value > 0).length;
     const total = smoothedValues.reduce((sum, value) => sum + value, 0);
-    const average = activeDays > 0 ? Math.round(total / activeDays) : 0;
+    const average = activeWeeks > 0 ? Math.round(total / activeWeeks) : 0;
     const max = Math.max(...smoothedValues);
     
     setActivityStats({
       total,
       average,
       max,
-      activeDays
+      activeDays: activeWeeks
     });
 
     // Auto-select the rightmost point
@@ -1142,7 +775,18 @@ export default function ProfileScreen() {
       const lastIndex = finalLabels.length - 1;
       setSelectedPointIndex(lastIndex);
       setSelectedValue(smoothedValues[lastIndex]);
-      setSelectedLabel(finalLabels[lastIndex]);
+      
+      // Use the display-friendly label from generateOriginalLabels which includes "This week"
+      const originalLabels = generateOriginalLabels();
+      const displayLabel = originalLabels[lastIndex] || labels[lastIndex] || finalLabels[lastIndex];
+      setSelectedLabel(displayLabel);
+      
+      // Calculate the X position for the vertical line
+      // Match the CustomLineChart component's padding and positioning logic
+      const chartWidth = Dimensions.get('window').width - 55 - 20; // paddingLeft + paddingRight
+      const paddingLeft = 55;
+      const selectedPointX = paddingLeft + (lastIndex / (smoothedValues.length - 1)) * chartWidth;
+      setSelectedPointX(selectedPointX);
     }
   };
 
@@ -1296,42 +940,7 @@ export default function ProfileScreen() {
     setIsAvatarFullscreen(!isAvatarFullscreen);
   };
 
-  const handleMetricSelection = (metric: 'duration' | 'volume' | 'reps') => {
-    setSelectedMetric(metric);
-    metricBottomSheetRef.current?.close();
-  };
 
-  const handleTimeRangeSelection = (range: 'week' | 'month' | '3months' | 'year' | 'all') => {
-    setSelectedTimeRange(range);
-    timeRangeBottomSheetRef.current?.close();
-  };
-
-  const getMetricLabel = () => {
-    switch (selectedMetric) {
-      case 'duration': return 'Duration (min)';
-      case 'volume': return `Volume (${userWeightUnit})`;
-      case 'reps': return 'Total Reps';
-    }
-  };
-
-  const getTimeRangeLabel = () => {
-    switch (selectedTimeRange) {
-      case 'week': return 'Week';
-      case 'month': return 'Month';
-      case '3months': return '3 Months';
-      case 'year': return 'Year';
-      case 'all': return 'All Time';
-    }
-  };
-
-  const getMetricUnit = () => {
-    switch (selectedMetric) {
-      case 'duration': return 'min';
-      case 'volume': return userWeightUnit;
-      case 'reps': return 'reps';
-      default: return '';
-    }
-  };
   
   // Generate workout days if none exist
   if (workoutDays.length === 0) {
@@ -1407,8 +1016,7 @@ export default function ProfileScreen() {
                 onPress={handleFollowAction}
               >
                 <Text style={styles.buttonText}>
-                  {currentProfile?.is_following ? 'Following' : 
-                   (followingBackUsers.has(currentProfile?.id) ? 'Follow Back' : 'Follow')}
+                  {currentProfile?.is_following ? 'Following' : 'Follow'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1480,131 +1088,95 @@ export default function ProfileScreen() {
 
         {/* Activity Graph Section */}
         <View style={styles.section}>
-          <View style={styles.activityHeader}>
-            <Text style={styles.activityTitle}>Activity</Text>
-            <View style={styles.activityControls}>
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                style={styles.controlButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  metricBottomSheetRef.current?.expand();
-                }}
-              >
-                <Text style={styles.controlButtonText}>{getMetricLabel()}</Text>
-                <IonIcon name="chevron-down" size={16} color={colors.secondaryText} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                style={styles.controlButton}
-                onPress={() => timeRangeBottomSheetRef.current?.expand()}
-              >
-                <Text style={styles.controlButtonText}>{getTimeRangeLabel()}</Text>
-                <IonIcon name="chevron-down" size={16} color={colors.secondaryText} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          
           {/* Selected Point Stats Section */}
-          {selectedPointIndex !== null && selectedValue !== null && selectedLabel !== null && (
-            <View style={styles.selectedPointStatsContainer}>
-              <View style={styles.selectedPointDateContainer}>
-                <Text style={styles.selectedPointDate}>{selectedLabel}</Text>
-                <Text style={styles.selectedPointValueDisplay}>{Math.round(selectedValue)} {getMetricUnit()}</Text>
+          {selectedPointIndex !== null && selectedValue !== null && selectedLabel !== null && (() => {
+            // Get the week key from the original labels
+            const originalLabels = generateOriginalLabels();
+            const weekLabel = originalLabels[selectedPointIndex];
+            
+            // Find the corresponding week key in the metrics data
+            let metricsForWeek = { duration: 0, volume: 0, reps: 0 };
+            Object.entries(weeklyMetricsData).forEach(([key, metrics]) => {
+              // Check if this week key corresponds to our selected week
+              const weekStart = startOfWeek(subWeeks(new Date(), 11 - selectedPointIndex));
+              const weekEnd = endOfWeek(weekStart);
+              const expectedKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+              if (key === expectedKey) {
+                metricsForWeek = metrics;
+              }
+            });
+            
+            return (
+              <View style={styles.selectedPointStatsContainer}>
+                <View style={styles.selectedPointDateContainer}>
+                  <Text style={styles.selectedPointDate}>{selectedLabel}</Text>
+                </View>
+                {/* Show all three metrics for the selected week */}
+                <View style={styles.selectedPointMetricsContainer}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Duration</Text>
+                    <Text style={styles.metricValue}>{formatDuration(Math.round(metricsForWeek.duration))}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Volume</Text>
+                    <Text style={styles.metricValue}>{Math.round(metricsForWeek.volume).toLocaleString()} {userWeightUnit}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Reps</Text>
+                    <Text style={styles.metricValue}>{Math.round(metricsForWeek.reps).toLocaleString()}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          )}
+            );
+          })()}
           
           {!activityDataLoading ? (
             <View style={styles.chartContainer}>
               {activityData.labels.length > 0 ? (
                 <View style={styles.chartWrapper}>
-                  <PanGestureHandler onGestureEvent={handlePanGesture}>
-                    <Pressable
-                      onPress={handleChartAreaPress} style={styles.chartPressable}>
-                      <LineChart
+                  <CustomLineChart
                         data={{
                           ...activityData,
                           datasets: activityData.datasets.map(dataset => ({
                             ...dataset,
-                            color: (opacity = 1) => colors.brand, // Full brand color for line
+                            color: (opacity = 1) => colors.brand,
                             strokeWidth: 2,
                           }))
                         }}
                         width={Dimensions.get('window').width}
-                        height={220}
-                        yAxisInterval={1} // Show labels at max and min values
-                        onDataPointClick={handleChartAreaPress}
-                        chartConfig={{
-                          backgroundColor: colors.background,
-                          backgroundGradientFrom: colors.background,
-                          backgroundGradientTo: colors.background,
-                          decimalPlaces: 0,
-                          color: (opacity = 1) => colors.brand, // Full brand color for line
-                          labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                          style: {
-                            borderRadius: 16,
-                          },
-                          propsForDots: {
-                            r: '4',
-                            strokeWidth: '2',
-                            stroke: colors.brand,
-                            fill: colors.background, // Hollow dots by default
-                          },
-                          // Customize grid lines
-                          propsForBackgroundLines: {
-                            strokeDasharray: '', // Solid line (no dashes)
-                            stroke: colors.secondaryText,
-                            strokeWidth: 1,
-                            opacity: 0.2, // Very subtle grid lines
-                          },
-                          propsForVerticalLabels: {
-                            fontSize: 12,
-                            fill: colors.primaryText,
-                          },
-                          propsForHorizontalLabels: {
-                            fontSize: 12,
-                            fill: colors.primaryText,
-                          }
+                        height={140}
+                        selectedPointIndex={selectedPointIndex}
+                        onDataPointPress={(index, value, x, y) => {
+                          // Use the original full labels array for display
+                          const originalLabels = generateOriginalLabels();
+                          const label = originalLabels[index] || `Point ${index + 1}`;
+                          
+                          setSelectedPointIndex(index);
+                          setSelectedValue(value);
+                          setSelectedLabel(label);
+                          setSelectedPointX(x);
                         }}
-                        bezier
+                        onPanGesture={(x) => {
+                          // Update vertical line position continuously during drag
+                          setSelectedPointX(x);
+                        }}
+                        formatYLabel={(value: string) => {
+                          const minutes = parseInt(value) || 0;
+                          return formatDuration(minutes);
+                        }}
+                        bezier={true}
                         style={styles.chart}
-                        withHorizontalLines={true}
+                        withHorizontalLines={false}
                         withVerticalLines={true}
                         withDots={true}
-                        segments={2}
-                        renderDotContent={({ x, y, index }) => {
-                          if (index === selectedPointIndex) {
-                            // Store the exact x position for vertical line
-                            if (selectedPointX !== x) {
-                              setSelectedPointX(x);
-                            }
-                            return (
-                              <View 
-                                key={index} 
-                                style={[
-                                  styles.selectedPointOverlay, 
-                                  { 
-                                    left: x - 3, 
-                                    top: y - 3,
-                                  }
-                                ]}
-                              >
-                                <View style={styles.selectedDotGlow} />
-                                <View style={styles.selectedDot} />
-                              </View>
-                            );
-                          }
-                          return null;
-                        }}
+                        segments={1}
+                        yAxisInterval={1}
                       />
-                    </Pressable>
-                  </PanGestureHandler>
                   
                   {/* Vertical line indicator for selected point */}
                   {selectedPointIndex !== null && selectedPointX !== null && (
                     <View style={[styles.verticalLine, { 
-                      left: selectedPointX
+                      left: selectedPointX - 1, // Center the line
                     }]} />
                   )}
                 </View>
@@ -1620,7 +1192,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <View style={[styles.section, { borderBottomWidth: 0 }]}>
+        <View style={styles.sectionLast}>
           <View style={styles.menuContainer}>
             <TouchableOpacity
                 activeOpacity={0.5} 
@@ -1698,113 +1270,9 @@ export default function ProfileScreen() {
       </Modal>
       </View>
 
-      {/* Bottom Sheets */}
-      <BottomSheet
-        ref={metricBottomSheetRef}
-        index={-1}
-        snapPoints={snapPoints}
-        backdropComponent={renderBackdrop}
-        enablePanDownToClose
-        backgroundStyle={styles.bottomSheetBackground}
-        handleIndicatorStyle={styles.bottomSheetIndicator}
-      >
-        <BottomSheetView style={styles.bottomSheetModalContent}>
-          <Text style={styles.bottomSheetTitle}>Select Metric</Text>
-          <Text style={styles.bottomSheetSubtitle}>Choose a metric to display in your activity graph</Text>
-          
-          <View style={styles.bottomSheetContent}>
-            {['duration', 'volume', 'reps'].map((metric) => (
-              <TouchableOpacity
-                activeOpacity={0.5}
-                key={metric}
-                style={[
-                  styles.bottomSheetOption,
-                  selectedMetric === metric && styles.bottomSheetOptionSelected
-                ]}
-                onPress={() => handleMetricSelection(metric as 'duration' | 'volume' | 'reps')}
-              >
-                <View style={styles.bottomSheetOptionIcon}>
-                  <IonIcon 
-                    name={metric === 'duration' ? 'time-outline' : 
-                          metric === 'volume' ? 'barbell-outline' : 'fitness-outline'} 
-                    size={20} 
-                    color={colors.primaryText} 
-                  />
-                </View>
-                <View style={styles.bottomSheetOptionTextContainer}>
-                  <Text style={[
-                    styles.bottomSheetOptionText,
-                    selectedMetric === metric && styles.bottomSheetOptionTextSelected
-                  ]}>
-                    {metric === 'duration' ? 'Duration (min)' : 
-                     metric === 'volume' ? `Volume (${userWeightUnit})` : 'Total Reps'}
-                  </Text>
-                </View>
-                {selectedMetric === metric && (
-                  <IonIcon name="checkmark" size={20} color={colors.brand} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </BottomSheetView>
-      </BottomSheet>
 
-      <BottomSheet
-        ref={timeRangeBottomSheetRef}
-        index={-1}
-        snapPoints={snapPoints}
-        backdropComponent={renderBackdrop}
-        enablePanDownToClose
-        backgroundStyle={styles.bottomSheetBackground}
-        handleIndicatorStyle={styles.bottomSheetIndicator}
-      >
-        <BottomSheetView style={styles.bottomSheetModalContent}>
-          <Text style={styles.bottomSheetTitle}>Select Time Range</Text>
-          <Text style={styles.bottomSheetSubtitle}>Choose a time period for your activity data</Text>
-          
-          <View style={styles.bottomSheetContent}>
-            {[
-              { key: 'week', label: 'Week' },
-              { key: 'month', label: 'Month' },
-              { key: '3months', label: '3 Months' },
-              { key: 'year', label: 'Year' },
-              { key: 'all', label: 'All Time' }
-            ].map((range) => (
-              <TouchableOpacity
-                activeOpacity={0.5}
-                key={range.key}
-                style={[
-                  styles.bottomSheetOption,
-                  selectedTimeRange === range.key && styles.bottomSheetOptionSelected
-                ]}
-                onPress={() => handleTimeRangeSelection(range.key as 'week' | 'month' | '3months' | 'year' | 'all')}
-              >
-                <View style={styles.bottomSheetOptionIcon}>
-                  <IonIcon 
-                    name={range.key === 'week' ? 'calendar-outline' :
-                          range.key === 'month' ? 'calendar-outline' :
-                          range.key === '3months' ? 'calendar-outline' :
-                          range.key === 'year' ? 'calendar-outline' : 'infinite-outline'} 
-                    size={20} 
-                    color={colors.primaryText} 
-                  />
-                </View>
-                <View style={styles.bottomSheetOptionTextContainer}>
-                  <Text style={[
-                    styles.bottomSheetOptionText,
-                    selectedTimeRange === range.key && styles.bottomSheetOptionTextSelected
-                  ]}>
-                    {range.label}
-                  </Text>
-                </View>
-                {selectedTimeRange === range.key && (
-                  <IonIcon name="checkmark" size={20} color={colors.brand} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </BottomSheetView>
-      </BottomSheet>
+
+
     </GestureHandlerRootView>
   );
 }
@@ -1873,7 +1341,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   followButton: {
-    width: 120,
+    width: 100,
     backgroundColor: colors.brand,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1889,6 +1357,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlay,
+    paddingVertical: 12,
+  },
+  sectionLast: {
+    backgroundColor: colors.background,
+    borderBottomWidth: 0,
   },
   menuContainer: {
     padding: 0,
@@ -1897,7 +1370,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlay,
@@ -1957,37 +1430,7 @@ const styles = StyleSheet.create({
     borderRadius: 150, // Half of the size to make it circular
   },
   // Activity Graph Styles
-  activityHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  activityTitle: {
-    color: colors.primaryText,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  activityControls: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  controlButton: {
-    backgroundColor: colors.primaryAccent,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  controlButtonText: {
-    color: colors.primaryText,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
   chartContainer: {
     alignItems: 'center',
     paddingRight: 0,
@@ -1995,23 +1438,22 @@ const styles = StyleSheet.create({
   chartWrapper: {
     position: 'relative',
     width: '100%',
-  },
-  chartPressable: {
-    width: '100%',
+    marginBottom: -8,
   },
   chart: {
     borderRadius: 16,
   },
   verticalLine: {
     position: 'absolute',
-    top: 0,
-    bottom: 39,
+    top: 20, // Match chart's top padding
+    height: 80, // Match chart's actual drawing area height (140 - 20 - 20)
     width: 2,
     backgroundColor: colors.brand,
-    opacity: 0.8,
+    opacity: 1, // Match main line opacity
+    borderRadius: 0.75,
   },
   chartEmptyContainer: {
-    height: 220,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
@@ -2021,72 +1463,7 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
     fontSize: 16,
   },
-  // Bottom Sheet Styles (matching newWorkout modal styling)
-  bottomSheetBackground: {
-    backgroundColor: colors.primaryAccent,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-  },
-  bottomSheetIndicator: {
-    backgroundColor: colors.secondaryText,
-    width: 50,
-  },
-  bottomSheetModalContent: {
-    flex: 1,
-    padding: 10,
-  },
-  bottomSheetContent: {
-    flex: 1,
-  },
-  bottomSheetTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  bottomSheetSubtitle: {
-    fontSize: 14,
-    color: colors.secondaryText,
-    textAlign: 'center',
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.whiteOverlayLight,
-    paddingBottom: 12,
-  },
-  bottomSheetOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.whiteOverlayLight,
-  },
-  bottomSheetOptionSelected: {
-  },
-  bottomSheetOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.whiteOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  bottomSheetOptionTextContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  bottomSheetOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
-  },
-  bottomSheetOptionTextSelected: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.brand,
-  },
+
   // Media Gallery Styles
   mediaGallery: {
     marginTop: 16,
@@ -2144,50 +1521,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  selectedDot: {
-    position: 'absolute',
-    top: -3,
-    left: -3,
-    width: 14,
-    height: 14,
-    backgroundColor: colors.brand,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: colors.primaryAccent,
-  },
-  selectedDotGlow: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    backgroundColor: colors.brand,
-    borderRadius: 6,
-    opacity: 0.3,
-    top: -2,
-    left: -2,
-  },
+
   selectedPointStatsContainer: {
     paddingHorizontal: 20,
-    marginBottom: 10,
+    paddingVertical: 16,
     backgroundColor: colors.background,
   },
   selectedPointDateContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: -20,
+    marginBottom: 12,
   },
   selectedPointDate: {
     color: colors.primaryText,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectedPointValueDisplay: {
-    color: colors.brand,
     fontSize: 16,
     fontWeight: '700',
   },
-  selectedPointOverlay: {
-    position: 'absolute',
+  selectedPointMetricsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: colors.primaryAccent,
+    borderRadius: 8,
+    paddingVertical: 8,
   },
+  metricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricLabel: {
+    color: colors.secondaryText,
+    fontSize: 10,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  metricValue: {
+    color: colors.primaryText,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   chartEmptySubtext: {
     color: colors.secondaryText,
     fontSize: 14,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { colors } from '../constants/colors';
+import ActivityChartSkeleton from './ActivityChartSkeleton';
 
 const ProfileSkeleton: React.FC = () => {
   return (
@@ -9,7 +10,7 @@ const ProfileSkeleton: React.FC = () => {
       <ProfileHeaderSkeleton />
       
       {/* Activity Section Skeleton (with chart) */}
-      <ActivitySectionSkeleton />
+      <ActivityChartSkeleton />
       
       {/* Menu Items Skeleton */}
       <MenuItemsSkeleton />
@@ -107,77 +108,6 @@ const MediaItemSkeleton: React.FC<MediaItemSkeletonProps> = ({ delay }) => {
 
   return (
     <Animated.View style={[styles.mediaItemSkeleton, { opacity }]} />
-  );
-};
-
-const ActivitySectionSkeleton: React.FC = () => {
-  const opacity = useRef(new Animated.Value(0.5)).current;
-
-  useEffect(() => {
-    const animate = () => {
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.5,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ]).start(() => animate());
-    };
-
-    const timer = setTimeout(animate, 200);
-    return () => clearTimeout(timer);
-  }, [opacity]);
-
-  return (
-    <Animated.View style={[styles.section, { opacity }]}>
-      {/* Activity header */}
-      <View style={styles.activityHeader}>
-        <View style={styles.activityTitleSkeleton} />
-        <View style={styles.activityControls}>
-          <View style={styles.controlButtonSkeleton} />
-          <View style={styles.controlButtonSkeleton} />
-        </View>
-      </View>
-      
-      {/* Selected point stats */}
-      <View style={styles.selectedPointStatsContainer}>
-        <View style={styles.selectedPointDateContainer}>
-          <View style={styles.selectedPointDateSkeleton} />
-          <View style={styles.selectedPointValueSkeleton} />
-        </View>
-      </View>
-      
-      {/* Chart skeleton */}
-      <View style={styles.chartContainer}>
-        <View style={styles.chartSkeleton}>
-          {/* Chart lines skeleton */}
-          <View style={styles.chartLinesSkeleton}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <View key={index} style={styles.chartHorizontalLine} />
-            ))}
-          </View>
-          
-          {/* Chart dots skeleton */}
-          <View style={styles.chartDotsContainer}>
-            {Array.from({ length: 8 }).map((_, index) => (
-              <ChartDotSkeleton key={index} delay={index * 100} />
-            ))}
-          </View>
-          
-          {/* Chart labels skeleton */}
-          <View style={styles.chartLabelsContainer}>
-            {Array.from({ length: 4 }).map((_, index) => (
-              <View key={index} style={styles.chartLabelSkeleton} />
-            ))}
-          </View>
-        </View>
-      </View>
-    </Animated.View>
   );
 };
 
