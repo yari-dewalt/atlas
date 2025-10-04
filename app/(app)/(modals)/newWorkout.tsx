@@ -39,6 +39,8 @@ import { Picker } from '@react-native-picker/picker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { Audio } from 'expo-av';
 import { useAnimatedStyle } from "react-native-reanimated";
+import SetItem from "./SetItem";
+import { useAnimationManager } from "../../../hooks/useAnimationManager";
 
 export default function NewWorkout() {
   const { routineId } = useLocalSearchParams();
@@ -84,8 +86,9 @@ export default function NewWorkout() {
   const [restTimerModalVisible, setRestTimerModalVisible] = useState(false);
   const [restTimerMode, setRestTimerMode] = useState('timer'); // 'timer' or 'stopwatch'
   const restTimerRef = useRef(null);
-  const [completionAnimations, setCompletionAnimations] = useState({});
-  const [completionRibbonAnimations, setCompletionRibbonAnimations] = useState({});
+  // Use the optimized animation manager
+  const animationManager = useAnimationManager();
+  
   const [workoutName, setWorkoutName] = useState(activeWorkout?.name || "New Workout");
   const [timeInputModalVisible, setTimeInputModalVisible] = useState(false);
   const [manualHours, setManualHours] = useState('00');
@@ -99,9 +102,7 @@ export default function NewWorkout() {
   const [stopwatchActive, setStopwatchActive] = useState(false);
   const [stopwatchTime, setStopwatchTime] = useState(0);
   const [stopwatchInterval, setStopwatchInterval] = useState(null);
-  const [errorFlashAnimations, setErrorFlashAnimations] = useState({});
   const swipeableRefs = useRef({});
-  const [deletionAnimations, setDeletionAnimations] = useState({});
   const [minimizedExercises, setMinimizedExercises] = useState(new Set());
   const [supersets, setSupersets] = useState(new Map()); // Map of supersetId -> Set of exerciseIds
   const [exerciseToSuperset, setExerciseToSuperset] = useState(new Map()); // Map of exerciseId -> supersetId
@@ -355,6 +356,14 @@ const handleRemoveExercise = () => {
   );
 };
 
+  // Memoized function to handle set removal with proper cleanup
+  const handleRemoveSet = useCallback((exerciseId: string, setId: string) => {
+    removeSet(exerciseId, setId);
+    // Clean up animations for the removed set
+    const setKey = `${exerciseId}-${setId}`;
+    animationManager.cleanupAnimations(setKey);
+  }, [removeSet, animationManager]);
+
   // Close functions for bottom sheets
   const applyManualTime = () => {
     const hours = parseInt(manualHours) || 0;
@@ -472,8 +481,17 @@ const handleRemoveExercise = () => {
     // Cleanup when component unmounts
     return () => {
       deactivateKeepAwake();
+      // Clean up all animations
+      if (activeWorkout?.exercises) {
+        activeWorkout.exercises.forEach(exercise => {
+          exercise.sets.forEach(set => {
+            const setKey = `${exercise.id}-${set.id}`;
+            animationManager.cleanupAnimations(setKey);
+          });
+        });
+      }
     };
-  }, [workoutSettings.keepScreenOn, activeWorkout]);
+  }, [workoutSettings.keepScreenOn, activeWorkout, animationManager]);
 
   useEffect(() => {
     if (activeWorkout?.exercises) {
@@ -1797,398 +1815,26 @@ const handleTimerCompletion = async () => {
             </View>
           </View>
           
-          {/* Sets - your existing sets mapping code goes here */}
-          {exercise.sets.map((set, setIndex) => {
-  const setKey = `${exercise.id}-${set.id}`;
-  const swipeableKey = setKey;
-  const animation = completionAnimations[setKey] || new Animated.Value(set.isCompleted ? 0.8 : 0);
-  const ribbonAnimation = completionRibbonAnimations[setKey] || new Animated.Value(set.isCompleted ? 1 : 0);
-  const deletionAnim = deletionAnimations[setKey] || new Animated.Value(1);
-  
-  // Get or create error flash animations for individual fields
-  const weightErrorKey = `${setKey}-weight`;
-  const repsErrorKey = `${setKey}-reps`;
-  const rpeErrorKey = `${setKey}-rpe`;
-  
-  const weightErrorFlash = errorFlashAnimations[weightErrorKey] || new Animated.Value(0);
-  const repsErrorFlash = errorFlashAnimations[repsErrorKey] || new Animated.Value(0);
-  const rpeErrorFlash = errorFlashAnimations[rpeErrorKey] || new Animated.Value(0);
-  
-              // Validation: check if required fields are filled
-              const hasWeight = set.weight !== null && set.weight !== undefined;
-              const hasReps = set.reps !== null && set.reps !== undefined && set.reps > 0;
-              const isValid = hasWeight && hasReps;  // Ensure we have animation objects for this set
-  if (!completionAnimations[setKey]) {
-    setCompletionAnimations(prev => ({...prev, [setKey]: animation}));
-  }
-  if (!completionRibbonAnimations[setKey]) {
-    setCompletionRibbonAnimations(prev => ({...prev, [setKey]: ribbonAnimation}));
-  }
-  if (!errorFlashAnimations[weightErrorKey]) {
-    setErrorFlashAnimations(prev => ({...prev, [weightErrorKey]: weightErrorFlash}));
-  }
-  if (!errorFlashAnimations[repsErrorKey]) {
-    setErrorFlashAnimations(prev => ({...prev, [repsErrorKey]: repsErrorFlash}));
-  }
-  if (!errorFlashAnimations[rpeErrorKey]) {
-    setErrorFlashAnimations(prev => ({...prev, [rpeErrorKey]: rpeErrorFlash}));
-  }
-  
-  // Flash error animation function for specific input fields
-  const flashError = (exerciseId, setId, missingFields) => {
-    const setKey = `${exerciseId}-${setId}`;
-    
-    // Create animation promises for each missing field
-    const animations = [];
-    
-    missingFields.forEach(field => {
-      const fieldErrorKey = `${setKey}-${field}`;
-      const fieldErrorFlash = errorFlashAnimations[fieldErrorKey];
-      
-      if (fieldErrorFlash) {
-        const fieldAnimation = Animated.sequence([
-          Animated.timing(fieldErrorFlash, {
-            toValue: 1,
-            duration: 150,
-            useNativeDriver: false,
-          }),
-          Animated.timing(fieldErrorFlash, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: false,
-          }),
-          Animated.timing(fieldErrorFlash, {
-            toValue: 1,
-            duration: 150,
-            useNativeDriver: false,
-          }),
-          Animated.timing(fieldErrorFlash, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: false,
-          }),
-        ]);
-        animations.push(fieldAnimation);
-      }
-    });
-    
-    // Run all field animations in parallel
-    if (animations.length > 0) {
-      Animated.parallel(animations).start();
-    }
-  };
-
-  // Right action function for swipeable sets
-  const rightAction = (exerciseId, setId, deletionAnim, setKey, prog) => {
-    if (prog.value > 2.2) {
-Animated.timing(deletionAnim, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: false,
-            }).start(() => {
-              removeSet(exerciseId, setId);
-              
-              setDeletionAnimations(prev => {
-                const newAnims = { ...prev };
-                delete newAnims[setKey];
-                return newAnims;
-              });
-            });
-    }
-    return (
-      <View style={styles.hiddenItem}>
-        <TouchableOpacity
-          activeOpacity={0.5}
-          style={[styles.deleteButton, Platform.OS === 'ios' ? {} : { bottom: 1, right: 2 }]}
-          onPress={() => {
-            // Manual delete via button press
-            Animated.timing(deletionAnim, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: false,
-            }).start(() => {
-              removeSet(exerciseId, setId);
-              
-              setDeletionAnimations(prev => {
-                const newAnims = { ...prev };
-                delete newAnims[setKey];
-                return newAnims;
-              });
-            });
-          }}
-        >
-          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <IonIcon name="trash-outline" size={20} color="white" />
-            <Text style={styles.deleteText}>Delete</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-  
-  
-  return (
-    <Animated.View
-      key={set.id}
-      style={{
-        opacity: deletionAnim, // Only fade opacity
-      }}
-    >
-      <Swipeable
-        ref={(ref: any) => {
-          if (ref) {
-            swipeableRefs.current[swipeableKey] = ref;
-          } else {
-            delete swipeableRefs.current[swipeableKey];
-          }
-        }}
-        enabled={exercise.sets.length > 1 && !set.isCompleted} // Disable swipe if only one set
-        renderRightActions={(prog) => rightAction(exercise.id, set.id, deletionAnim, setKey, prog)}
-        rightThreshold={60}
-        onSwipeableOpenStartDrag={() => {
-          // Mark this one as swiping first
-          swipeableRefs.current[swipeableKey + '_swiping'] = true;
-          
-          // Close all other swipeables (excluding the current one)
-          Object.keys(swipeableRefs.current).forEach(key => {
-            const ref = swipeableRefs.current[key];
-            if (key.endsWith('_swiping')) {
-              // Skip swiping state tracking keys
-              return;
-            }
-            if (key !== swipeableKey && ref && ref.close) {
-              ref.close();
-            }
-          });
-        }}
-        onSwipeableWillClose={() => {
-          swipeableRefs.current[swipeableKey + '_swiping'] = false;
-        }}
-      >
-        <Pressable
-          style={[
-            styles.setRow,
-            set.isCompleted && styles.completedSetRow,
-          ]}
-          onPress={() => {
-            // Check if we're currently swiping to prevent accidental presses
-            if (swipeableRefs.current[swipeableKey + '_swiping']) {
-              return;
-            }
-            
-            if (!set.isCompleted) {
-              closeAllSwipeables();
-              openSetEditModal(exerciseIndex, setIndex);
-            }
-          }}
-          disabled={set.isCompleted}
-        >
-          {({ pressed }) => (
-            <>
-              {/* Press feedback overlay - only show when pressed and not completed */}
-              {pressed && !set.isCompleted && (
-                <View style={styles.setPressOverlay} />
-              )}          
-          {/* Add green completion ribbon */}
-          <Animated.View
-            style={[
-              styles.setRowCompletionRibbon,
-              {
-                opacity: ribbonAnimation,
-                transform: [{
-                  translateX: ribbonAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-100, 0],
-                  })
-                }]
-              }
-            ]}
-          />
-          
-          {/* Set number */}
-          <Text style={[styles.setText, styles.setNumberColumn]}>{setIndex + 1}</Text>
-          
-          {/* Weight display */}
-          <View style={[styles.setInputColumn, styles.setValueDisplay]}>
-            {/* Weight error overlay */}
-            <Animated.View
-              style={[
-                styles.setFieldErrorOverlay,
-                {
-                  opacity: weightErrorFlash.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 1],
-                  }),
-                }
-              ]}
+          {/* Sets - optimized with memoized components */}
+          {exercise.sets.map((set, setIndex) => (
+            <SetItem
+              key={set.id}
+              set={set}
+              setIndex={setIndex}
+              exercise={exercise}
+              userWeightUnit={userWeightUnit}
+              workoutSettings={workoutSettings}
+              styles={styles}
+              colors={colors}
+              swipeableRefs={swipeableRefs}
+              onToggleSetCompletion={toggleSetCompletion}
+              onRemoveSet={handleRemoveSet}
+              onOpenSetEdit={openSetEditModal}
+              onCloseAllSwipeables={closeAllSwipeables}
+              exerciseIndex={exerciseIndex}
+              animationManager={animationManager}
             />
-            <Text style={[
-              styles.setValueText,
-              set.isCompleted && styles.completedSetText,
-              (set.weight === null || set.weight === undefined) && !set.isCompleted && styles.placeholderSetText
-            ]}>
-              {set.weight !== null && set.weight !== undefined ? `${String(set.weight)} ${userWeightUnit}` : "-"}
-            </Text>
-          </View>
-
-          {/* Reps display */}
-          <View style={[styles.setInputColumn, styles.setValueDisplay]}>
-            {/* Reps error overlay */}
-            <Animated.View
-              style={[
-                styles.setFieldErrorOverlay,
-                {
-                  opacity: repsErrorFlash.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 1],
-                  }),
-                }
-              ]}
-            />
-            <Text style={[
-              styles.setValueText,
-              set.isCompleted && styles.completedSetText,
-              (!set.reps && !set.isCompleted) && styles.placeholderSetText
-            ]}>
-              {set.reps !== null && set.reps !== undefined && set.reps !== 0 ? String(set.reps) : "-"}
-            </Text>
-          </View>
-
-          {/* RPE display */}
-          {workoutSettings.rpeEnabled && (
-            <View style={[styles.setInputColumn, styles.setValueDisplay]}>
-              {/* RPE error overlay */}
-              <Animated.View
-                style={[
-                  styles.setFieldErrorOverlay,
-                  {
-                    opacity: rpeErrorFlash.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 1],
-                    }),
-                  }
-                ]}
-              />
-              <Text style={[
-                styles.setValueText,
-                set.isCompleted && styles.completedSetText,
-                (!set.rpe && !set.isCompleted) && styles.placeholderSetText
-              ]}>
-                {set.rpe !== null && set.rpe !== undefined && set.rpe !== 0 ? String(set.rpe) : "-"}
-              </Text>
-            </View>
-          )}
-          
-          {/* Completion checkbox */}
-          <TouchableOpacity
-            activeOpacity={0.5}
-            onPress={(e) => {
-              e.stopPropagation(); // Prevent the set row press from firing
-              closeAllSwipeables();
-              
-              // Validation: check if required fields are filled
-              const hasWeight = set.weight !== null && set.weight !== undefined;
-              const hasReps = set.reps !== null && set.reps !== undefined && set.reps > 0;
-              const isValid = hasWeight && hasReps;
-              
-              if (!isValid && !set.isCompleted) {
-                try {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                } catch (error) {
-                  Vibration.vibrate([100, 50, 100]);
-                }
-                
-                // Get missing fields for error highlighting
-                const missingFields = [];
-                if (!hasWeight) missingFields.push('weight');
-                if (!hasReps) missingFields.push('reps');
-                
-                flashError(exercise.id, set.id, missingFields);
-                return;
-              }
-              
-              const newValue = !set.isCompleted;
-              
-              if (newValue) {
-                try {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                } catch (error) {
-                  Vibration.vibrate(40);
-                }
-                
-                // Animate both the checkbox bounce and the ribbon slide-in
-                Animated.parallel([
-                  Animated.sequence([
-                    Animated.timing(animation, {
-                      toValue: 1,
-                      duration: 300,
-                      useNativeDriver: true,
-                    }),
-                    Animated.timing(animation, {
-                      toValue: 0.8,
-                      duration: 200,
-                      useNativeDriver: true,
-                    }),
-                  ]),
-                  Animated.timing(ribbonAnimation, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                  })
-                ]).start();
-              } else {
-                // Animate both out
-                Animated.parallel([
-                  Animated.timing(animation, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(ribbonAnimation, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                  })
-                ]).start();
-              }
-              
-              toggleSetCompletion(exercise.id, set.id);
-            }}
-            style={[
-              styles.checkboxColumn,
-              !isValid && !set.isCompleted && styles.disabledCheckbox
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.customCheckbox,
-                set.isCompleted && styles.customCheckboxCompleted,
-                {
-                  transform: [
-                    { scale: animation.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [1, 1.2, 1]
-                    }) }
-                  ]
-                }
-              ]}
-            >
-              {set.isCompleted && (
-                <IonIcon 
-                  name="checkmark" 
-                  size={16} 
-                  color="white" 
-                />
-              )}
-            </Animated.View>
-          </TouchableOpacity>
-            </>
-          )}
-        </Pressable>
-      </Swipeable>
-    </Animated.View>
-  );
-})}
+          ))}
           
           {/* Add set button */}
           <TouchableOpacity
@@ -5379,5 +5025,15 @@ timerConfirmButton: {
   alignItems: 'center',
   justifyContent: 'center',
   alignSelf: 'center',
+},
+
+deleteButtonAndroid: {
+  bottom: 1,
+  right: 2,
+},
+
+deleteButtonContent: {
+  alignItems: 'center',
+  justifyContent: 'center',
 },
 });
