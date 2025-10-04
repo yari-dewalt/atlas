@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Animated, Platform, Vibration, Pressable 
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { AnimationManager } from '../../../hooks/useAnimationManager';
+import { AnimationManager } from '../hooks/useAnimationManager';
 
 interface SetItemProps {
   set: any;
@@ -58,13 +58,24 @@ const SetItem = memo<SetItemProps>(({
   
   // Flash error animation function - memoized
   const flashError = useCallback((exerciseId: string, setId: string, missingFields: string[]) => {
-    const setKey = `${exerciseId}-${setId}`;
     const animations: Animated.CompositeAnimation[] = [];
     
     missingFields.forEach(field => {
-      const fieldErrorFlash = animationManager.getErrorAnimationForField(setKey, field);
+      let fieldErrorFlash: Animated.Value | null = null;
+      
+      // Use the already retrieved animation values
+      if (field === 'weight') {
+        fieldErrorFlash = weightErrorFlash;
+      } else if (field === 'reps') {
+        fieldErrorFlash = repsErrorFlash;
+      } else if (field === 'rpe') {
+        fieldErrorFlash = rpeErrorFlash;
+      }
       
       if (fieldErrorFlash) {
+        // Reset to 0 first, then start the flash animation
+        fieldErrorFlash.setValue(0);
+        
         const fieldAnimation = Animated.sequence([
           Animated.timing(fieldErrorFlash, {
             toValue: 1,
@@ -87,26 +98,38 @@ const SetItem = memo<SetItemProps>(({
             useNativeDriver: false,
           }),
         ]);
+        
         animations.push(fieldAnimation);
       }
     });
     
     if (animations.length > 0) {
-      Animated.parallel(animations).start();
+      Animated.parallel(animations).start(() => {
+        // Ensure all error animations are reset to 0 when complete
+        missingFields.forEach(field => {
+          if (field === 'weight') {
+            weightErrorFlash.setValue(0);
+          } else if (field === 'reps') {
+            repsErrorFlash.setValue(0);
+          } else if (field === 'rpe') {
+            rpeErrorFlash.setValue(0);
+          }
+        });
+      });
     }
-  }, [animationManager]);
+  }, [weightErrorFlash, repsErrorFlash, rpeErrorFlash]);
   
   // Right action function - memoized
   const rightAction = useCallback((exerciseId: string, setId: string, deletionAnim: Animated.Value, setKey: string, prog: any) => {
-    if (prog.value > 2.2) {
-      Animated.timing(deletionAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: false,
-      }).start(() => {
-        onRemoveSet(exerciseId, setId);
-      });
-    }
+    // if (prog.value > 2.2) {
+    //   Animated.timing(deletionAnim, {
+    //     toValue: 0,
+    //     duration: 250,
+    //     useNativeDriver: false,
+    //   }).start(() => {
+    //     onRemoveSet(exerciseId, setId);
+    //   });
+    // }
     
     const handleDeletePress = () => {
       Animated.timing(deletionAnim, {
@@ -313,7 +336,7 @@ const SetItem = memo<SetItemProps>(({
                         inputRange: [0, 1],
                         outputRange: [0, 1],
                       }),
-                    }
+                    },
                   ]}
                 />
                 <Text style={[

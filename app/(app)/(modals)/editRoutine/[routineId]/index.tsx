@@ -1301,6 +1301,7 @@ export default function EditRoutine() {
         setIsGoingToRpe(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setEditBottomSheetRef.current?.expand();
+        setSelectedSetForEdit({ exerciseId: selectedSetForRpe.exerciseId, setId: selectedSetForRpe.setId });
       }, 100);
     }
   };

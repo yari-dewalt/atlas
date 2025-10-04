@@ -39,7 +39,7 @@ import { Picker } from '@react-native-picker/picker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { Audio } from 'expo-av';
 import { useAnimatedStyle } from "react-native-reanimated";
-import SetItem from "./SetItem";
+import SetItem from "../../../components/SetItem";
 import { useAnimationManager } from "../../../hooks/useAnimationManager";
 
 export default function NewWorkout() {
@@ -213,7 +213,10 @@ export default function NewWorkout() {
   const handleRpeSheetChanges = useCallback((index) => {
     if (index === -1) {
       setRpeModalVisible(false);
-      setSetEditModalVisible(true);
+      // Only open set edit modal if we came from set edit and we're not confirming RPE
+      if (cameFromSetEdit && !isConfirmingRpe) {
+        setSetEditModalVisible(true);
+      }
     }
   }, [cameFromSetEdit, isConfirmingRpe]);
 
@@ -401,7 +404,7 @@ const handleRemoveExercise = () => {
       setTimeout(() => {
         // Reopen with the same editing indices we had before
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setEditBottomSheetRef.current?.expand();
+        openSetEditModal(exerciseIndex, setIndex);
         setIsConfirmingRpe(false); // Reset the flag
         setCameFromSetEdit(false); // Reset the flag
       }, 100);
