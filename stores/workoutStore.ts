@@ -235,8 +235,13 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         }
       }
       
-      // 4. Create all exercises
-      for (const exercise of activeWorkout.exercises) {
+      // 4. Filter exercises that have completed sets
+      const exercisesWithCompletedSets = activeWorkout.exercises.filter(exercise => {
+        return exercise.sets.some(set => set.isCompleted === true);
+      });
+      
+      // 5. Create all exercises (only those with completed sets)
+      for (const exercise of exercisesWithCompletedSets) {
         // Convert local superset ID to UUID if it exists
         const databaseSupersetId = exercise.superset_id !== null && exercise.superset_id !== undefined
           ? supersetIdMap.get(exercise.superset_id) || null
@@ -278,7 +283,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         
         console.log('Successfully saved exercise:', exerciseData.id);
         
-        // 4. Create all sets for this exercise
+        // 6. Create all sets for this exercise
         if (exercise.sets.length > 0) {
           const validSets = exercise.sets.filter(set => 
             set.weight !== null && set.weight !== undefined &&
@@ -379,8 +384,13 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         }
       }
       
-      // 6. Create all exercises
-      for (const exercise of activeWorkout.exercises) {
+      // 6. Filter exercises that have completed sets
+      const exercisesWithCompletedSets = activeWorkout.exercises.filter(exercise => {
+        return exercise.sets.some(set => set.isCompleted === true);
+      });
+      
+      // 7. Create all exercises (only those with completed sets)
+      for (const exercise of exercisesWithCompletedSets) {
         // Convert local superset ID to UUID if it exists
         const databaseSupersetId = exercise.superset_id !== null && exercise.superset_id !== undefined
           ? supersetIdMap.get(exercise.superset_id) || null
