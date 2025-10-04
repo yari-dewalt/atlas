@@ -14,7 +14,7 @@ const KG_TO_LBS = 2.20462;
  * @param weight - The weight value to convert
  * @param fromUnit - The unit the weight is currently in
  * @param toUnit - The unit to convert the weight to
- * @returns The converted weight value, rounded to 1 decimal place
+ * @returns The converted weight value with high precision (stored internally)
  */
 export function convertWeight(weight: number, fromUnit: WeightUnit, toUnit: WeightUnit): number {
   if (fromUnit === toUnit) {
@@ -22,11 +22,11 @@ export function convertWeight(weight: number, fromUnit: WeightUnit, toUnit: Weig
   }
   
   if (fromUnit === 'lbs' && toUnit === 'kg') {
-    return Math.round(weight * LBS_TO_KG * 10) / 10;
+    return weight * LBS_TO_KG;
   }
   
   if (fromUnit === 'kg' && toUnit === 'lbs') {
-    return Math.round(weight * KG_TO_LBS * 10) / 10;
+    return weight * KG_TO_LBS;
   }
   
   return weight;
@@ -69,7 +69,7 @@ export function displayWeightForUser(
   userPreferredUnit: WeightUnit, 
   showUnit: boolean = true
 ): string {
-  const convertedWeight = convertWeight(storedWeight, storageUnit, userPreferredUnit);
+  const convertedWeight = convertWeightForDisplay(storedWeight, storageUnit, userPreferredUnit);
   return formatWeight(convertedWeight, userPreferredUnit, showUnit);
 }
 
@@ -89,11 +89,11 @@ export function convertWeightForStorage(
 }
 
 /**
- * Convert weight for display purposes, rounded to whole numbers to avoid precision issues
+ * Convert weight for display purposes, intelligently rounded to avoid precision drift
  * @param storedWeight - The weight as stored in the database
  * @param storageUnit - The unit used for storage (typically 'kg')
  * @param displayUnit - The user's preferred display unit
- * @returns The weight converted and rounded to the nearest whole number
+ * @returns The weight converted and rounded to avoid floating point precision issues
  */
 export function convertWeightForDisplay(
   storedWeight: number, 
@@ -101,5 +101,32 @@ export function convertWeightForDisplay(
   displayUnit: WeightUnit
 ): number {
   const convertedWeight = convertWeight(storedWeight, storageUnit, displayUnit);
+  
+  // For lbs display, round to nearest 5 lbs if the difference is small to avoid precision drift
+  if (displayUnit === 'lbs') {
+    const rounded = Math.round(convertedWeight);
+    const roundedToFive = Math.round(convertedWeight / 5) * 5;
+    
+    // If the difference between normal rounding and rounding to 5s is small (< 2.5 lbs),
+    // and the original number was likely entered as a round number, use the round number
+    if (Math.abs(rounded - roundedToFive) <= 2.5 && roundedToFive % 5 === 0) {
+      return roundedToFive;
+    }
+    
+    return rounded;
+  }
+  
+  // For kg, round to nearest 2.5kg for similar reasons
+  if (displayUnit === 'kg') {
+    const rounded = Math.round(convertedWeight);
+    const roundedToTwoPointFive = Math.round(convertedWeight / 2.5) * 2.5;
+    
+    if (Math.abs(rounded - roundedToTwoPointFive) <= 1.25 && roundedToTwoPointFive % 2.5 === 0) {
+      return roundedToTwoPointFive;
+    }
+    
+    return rounded;
+  }
+  
   return Math.round(convertedWeight);
 }
