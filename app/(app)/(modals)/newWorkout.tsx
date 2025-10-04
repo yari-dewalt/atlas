@@ -389,11 +389,6 @@ const handleRemoveExercise = () => {
     
     updateSetValue(exerciseIndex, setIndex, 'rpe', selectedRpe);
     
-    // If we're in set edit mode, also update the temp RPE value
-    if (cameFromSetEdit && selectedExerciseForRpe && selectedSetForRpe) {
-      setTempRpe(selectedRpe.toString());
-    }
-    
     // Mark that we're confirming the RPE selection (this prevents handleRpeSheetChanges from reopening)
     setIsConfirmingRpe(true);
     
@@ -402,9 +397,12 @@ const handleRemoveExercise = () => {
     // If we came from set edit mode, reopen it after confirming RPE
     if (cameFromSetEdit) {
       setTimeout(() => {
+        // Update the temp RPE value with the new selected RPE before reopening
+        setTempRpe(selectedRpe.toString());
+        
         // Reopen with the same editing indices we had before
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        openSetEditModal(exerciseIndex, setIndex);
+        openSetEditModal(exerciseIndex, setIndex, selectedRpe);
         setIsConfirmingRpe(false); // Reset the flag
         setCameFromSetEdit(false); // Reset the flag
       }, 100);
@@ -774,7 +772,7 @@ const handleRemoveExercise = () => {
   };
 
   // Set editing popup functions
-  const openSetEditModal = (exerciseIndex, setIndex) => {
+  const openSetEditModal = (exerciseIndex, setIndex, selectedRpe) => {
     const exercise = activeWorkout?.exercises[exerciseIndex];
     const set = exercise?.sets[setIndex];
     
@@ -785,7 +783,7 @@ const handleRemoveExercise = () => {
     setEditingSet(set);
     setTempWeight(set.weight !== null ? String(set.weight) : '');
     setTempReps(set.reps !== null ? String(set.reps) : '');
-    setTempRpe(set.rpe ? String(set.rpe) : '');
+    setTempRpe(selectedRpe ? selectedRpe : set.rpe ? String(set.rpe) : '');
     setSetEditModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditBottomSheetRef.current?.expand();
