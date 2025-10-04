@@ -40,7 +40,6 @@ export default function PostCommentsScreen() {
   const [showOptionsFor, setShowOptionsFor] = useState(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [overlayOpacity] = useState(new Animated.Value(0));
-  const [inputHeight, setInputHeight] = useState(36);
   const [shouldAutoFocus, setShouldAutoFocus] = useState(focus === 'true');
   const [selectedComment, setSelectedComment] = useState(null);
   const REPLIES_BATCH_SIZE = 5;
@@ -297,7 +296,6 @@ export default function PostCommentsScreen() {
     setReplying(false);
     setReplyingTo(null);
     setShouldAutoFocus(false);
-    setInputHeight(36); // Reset input height
 
     try {
       // Make the actual API call
@@ -557,7 +555,6 @@ export default function PostCommentsScreen() {
     setReplyingTo(null);
     setShouldAutoFocus(false);
     // Don't clear the text when canceling reply - preserve user's typed content
-    setInputHeight(36); // Reset input height
   };
 
   const handleDeleteComment = async (comment) => {
@@ -1258,14 +1255,13 @@ export default function PostCommentsScreen() {
         <View style={styles.inputRow}>
           <CachedAvatar 
             path={session?.user?.user_metadata?.avatar_url || profile?.avatar_url} 
-            size={36} 
+            size={34} 
             style={styles.avatarTopAligned}
           />
           <View style={[
             styles.inputContainer, 
             isInputFocused && styles.inputContainerFocused,
-            replying && styles.inputContainerConnected,
-            { height: inputHeight }
+            replying && styles.inputContainerConnected
           ]}>
             <TextInput
               ref={inputRef}
@@ -1274,10 +1270,6 @@ export default function PostCommentsScreen() {
               placeholderTextColor={colors.secondaryText}
               value={newComment}
               onChangeText={setNewComment}
-              onContentSizeChange={(event) => {
-                const newHeight = Math.max(36, Math.min(120, event.nativeEvent.contentSize.height + 16));
-                setInputHeight(newHeight);
-              }}
               onFocus={() => {
                 setIsInputFocused(true);
                 setShouldAutoFocus(false); // Clear auto-focus once manually focused
@@ -1698,7 +1690,7 @@ export default function PostCommentsScreen() {
     gap: 12,
   },
   avatarTopAligned: {
-    marginTop: 4,
+    marginTop: 2,
   },
   inputContainer: {
     flex: 1,
@@ -1707,8 +1699,8 @@ export default function PostCommentsScreen() {
     borderWidth: 0.5,
     borderColor: colors.whiteOverlay,
     paddingHorizontal: 8,
-    paddingVertical: 4,
     minHeight: 36,
+    justifyContent: 'center',
   },
   inputContainerConnected: {
     borderTopLeftRadius: 0,
@@ -1719,11 +1711,12 @@ export default function PostCommentsScreen() {
     borderWidth: 0.5,
   },
   commentInput: {
-    flex: 1,
     fontSize: 14,
     color: colors.primaryText,
     textAlignVertical: 'top',
-    minHeight: 20,
+    minHeight: 32,
+    maxHeight: 120,
+    paddingVertical: 8,
   },
   sendButton: {
     width: 30,
