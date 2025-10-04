@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView, FlatList, ScrollView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
+import { FlashList } from '@shopify/flash-list';
 
 // Skeleton Loader Component for Exercise Items
 const ExerciseSkeletonItem = () => {
@@ -107,6 +108,7 @@ export default function ExerciseSelection() {
   const [customExercises, setCustomExercises] = useState([]);
   const [recentExercises, setRecentExercises] = useState([]);
   const [sectionsData, setSectionsData] = useState([]);
+  const [flattenedData, setFlattenedData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -123,8 +125,8 @@ export default function ExerciseSelection() {
   const muscleGroupBottomSheetRef = useRef(null);
   const equipmentBottomSheetRef = useRef(null);
   
-  // SectionList ref for auto-scrolling
-  const sectionListRef = useRef(null);
+  // FlashList ref for auto-scrolling
+  const flashListRef = useRef(null);
   const searchInputRef = useRef(null);
 
   // Bottom Sheet snap points
@@ -372,12 +374,10 @@ export default function ExerciseSelection() {
     const showListener = Keyboard.addListener('keyboardDidShow', (event) => {
       // Small delay to ensure the keyboard is fully shown
       setTimeout(() => {
-        if (searchInputRef.current) {
-          sectionListRef.current?.scrollToLocation({
-            sectionIndex: 0,
-            itemIndex: 0,
+        if (searchInputRef.current && flashListRef.current) {
+          flashListRef.current?.scrollToIndex({
+            index: 0,
             animated: true,
-            viewPosition: 0.2, // Show search input near top with some padding
           });
         }
       }, 100);
@@ -612,6 +612,29 @@ export default function ExerciseSelection() {
     }
 
     setSectionsData(sections);
+
+    // Create flattened data for FlashList
+    const flattened = [];
+    sections.forEach((section) => {
+      // Add section header
+      flattened.push({
+        type: 'sectionHeader',
+        title: section.title,
+        key: `header-${section.key}`,
+      });
+      
+      // Add section items with unique keys per section
+      section.data.forEach((item) => {
+        flattened.push({
+          type: 'exercise',
+          data: item,
+          key: `${section.key}-exercise-${item.id}`, // Make key unique per section
+          sectionKey: section.key,
+        });
+      });
+    });
+    
+    setFlattenedData(flattened);
   };
 
   // Updated selection handlers
@@ -654,7 +677,8 @@ export default function ExerciseSelection() {
 
   const getAnimatedValue = (exerciseId) => {
     if (!animatedValues.has(exerciseId)) {
-      animatedValues.set(exerciseId, new Animated.Value(0));
+      const initialValue = selectedExercises.has(exerciseId) ? 1 : 0;
+      animatedValues.set(exerciseId, new Animated.Value(initialValue));
     }
     return animatedValues.get(exerciseId);
   };
@@ -673,7 +697,7 @@ export default function ExerciseSelection() {
       }
       Animated.timing(animatedValue, {
         toValue: 0,
-        duration: 200,
+        duration: 250,
         useNativeDriver: false,
       }).start();
     } else {
@@ -682,7 +706,7 @@ export default function ExerciseSelection() {
       newOrder.push(exercise);
       Animated.timing(animatedValue, {
         toValue: 1,
-        duration: 200,
+        duration: 250,
         useNativeDriver: false,
       }).start();
     }
@@ -745,7 +769,7 @@ export default function ExerciseSelection() {
     return equipmentItem ? equipmentItem.label : "All Equipment";
   };
 
-  const renderExerciseItem = ({ item, section }) => {
+  const renderExerciseItem = ({ item }) => {
     const isSelected = selectedExercises.has(item.id);
     const animatedValue = getAnimatedValue(item.id);
     
@@ -855,10 +879,26 @@ export default function ExerciseSelection() {
     );
   };
 
-  // Dynamic content container style
-  const contentContainerStyle = {
-    paddingBottom: selectedExercises.size > 0 ? 100 : 20
+  // New render function for FlashList
+  const renderFlashListItem = ({ item }) => {
+    if (item.type === 'sectionHeader') {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>{item.title}</Text>
+        </View>
+      );
+    } else if (item.type === 'exercise') {
+      return renderExerciseItem({ item: item.data });
+    }
+    return null;
   };
+
+
+
+  // Dynamic content container style for FlashList
+  const contentContainerStyle = useMemo(() => ({
+    paddingBottom: selectedExercises.size > 0 ? 100 : 20
+  }), [selectedExercises.size]);
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -985,14 +1025,15 @@ export default function ExerciseSelection() {
             </TouchableOpacity>
           </View>
         ) : (
-          <SectionList
-            ref={sectionListRef}
-            sections={sectionsData}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            renderItem={renderExerciseItem}
-            renderSectionHeader={renderSectionHeader}
+          <FlashList
+            ref={flashListRef}
+            data={flattenedData}
+            keyExtractor={(item) => item.key}
+            renderItem={renderFlashListItem}
+            drawDistance={500}
+            removeClippedSubviews={true}
+            key={`${searchQuery}-${selectedMuscleGroup}-${selectedEquipment}-${flattenedData.length}`}
             contentContainerStyle={contentContainerStyle}
-            stickySectionHeadersEnabled={false}
             keyboardShouldPersistTaps="handled"
             onScrollBeginDrag={() => {
               Keyboard.dismiss();
