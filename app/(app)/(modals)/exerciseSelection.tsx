@@ -1492,8 +1492,8 @@ customText: {
   selectionRibbon: {
     position: 'absolute',
     left: 0,
-    top: 0,
-    bottom: 0,
+    top: -1,
+    bottom: -1,
     backgroundColor: colors.brand,
     zIndex: 1,
   },
