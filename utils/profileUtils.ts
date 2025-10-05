@@ -14,20 +14,31 @@ export async function createProfileWithGoogleAvatar(user: any, googleUserInfo: a
       return { error: fetchError };
     }
 
-    // If profile already exists, update it with Google avatar if it doesn't have one
+    // If profile already exists, update it with Google avatar and ensure email_verified is true
     if (existingProfile) {
+      const updates: any = {};
+      
       if (!existingProfile.avatar_url && googleUserInfo?.photo) {
+        updates.avatar_url = googleUserInfo.photo;
+      }
+      
+      // Ensure Google users are always marked as email verified
+      if (existingProfile.email_verified !== true) {
+        updates.email_verified = true;
+      }
+      
+      if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({ avatar_url: googleUserInfo.photo })
+          .update(updates)
           .eq('id', user.id);
 
         if (updateError) {
-          console.error('Error updating profile with Google avatar:', updateError);
+          console.error('Error updating profile:', updateError);
           return { error: updateError };
         }
       }
-      return { data: existingProfile, error: null };
+      return { data: { ...existingProfile, ...updates }, error: null };
     }
 
     // Create new profile with Google information
@@ -37,6 +48,7 @@ export async function createProfileWithGoogleAvatar(user: any, googleUserInfo: a
       full_name: googleUserInfo?.name || user.user_metadata?.full_name,
       avatar_url: googleUserInfo?.photo || user.user_metadata?.avatar_url,
       username: null, // Will be set during onboarding
+      email_verified: true, // Google users are pre-verified
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

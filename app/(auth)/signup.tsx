@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback, Alert } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { createProfileWithGoogleAvatar } from '../../utils/profileUtils';
-import { useBannerStore } from '../../stores/bannerStore';
 
 export default function Signup() {
   const [email, onChangeEmail] = useState('');
@@ -14,7 +13,6 @@ export default function Signup() {
   const [confirmPassword, onChangeConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { showError } = useBannerStore();
 
   const handleTermsPress = () => {
     router.push('/(legal)/terms');
@@ -30,7 +28,7 @@ export default function Signup() {
       const { data, error, googleUserInfo } = await signInWithGoogle();
       
       if (error) {
-        showError(error.message || 'Failed to sign in with Google');
+        Alert.alert('Error', error.message || 'Failed to sign in with Google');
         return;
       }
 
@@ -39,7 +37,7 @@ export default function Signup() {
         await createProfileWithGoogleAvatar(data.user, googleUserInfo);
       }
     } catch (error: any) {
-      showError(error.message || 'An unexpected error occurred');
+      Alert.alert('Error', error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -48,36 +46,65 @@ export default function Signup() {
   async function signUpWithEmail() {
     Keyboard.dismiss();
     if (password !== confirmPassword) {
-      showError("Passwords do not match");
+      Alert.alert('Error', 'Passwords do not match');
       return;
     }
 
     if (email && password && confirmPassword) {
       setLoading(true)
+      
+      // First, sign up the user with email/password
       const {
-        data: { user, session },
-        error,
+        data: signUpData,
+        error: signUpError,
       } = await supabase.auth.signUp({
         email: email,
         password: password,
+        options: {
+          emailRedirectTo: undefined, // Disable email link verification
+        }
       });
   
-      if (error) {
-        showError(error.message);
+      if (signUpError) {
+        console.log(signUpError);
+        Alert.alert('Error', signUpError.message);
         setLoading(false);
         return;
       }
-      if (user && user.identities && user.identities.length === 0) {
-        showError('This email is already registered');
+
+      console.log(signUpData.user);
+      
+      if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
+        Alert.alert(
+          'Account Exists', 
+          'An account with this email already exists.'
+        );
         setLoading(false);
         return;
       }
-      if (!session) {
-        router.replace({
-          pathname: "/(auth)/verification",
-          params: { email: email }
-        });
-      }
+
+      // Sign out to prevent session persistence before verification
+      await supabase.auth.signOut();
+      
+      // Navigate immediately for better UX
+      router.replace({
+        pathname: "/(auth)/verification",
+        params: { 
+          email: email,
+          isSignup: 'true' // Flag to indicate this is signup verification
+        }
+      });
+      
+      // Send OTP in background - user can manually resend if needed
+      supabase.auth.signInWithOtp({
+        email: email,
+        options: {
+          shouldCreateUser: false, // User already created above
+        }
+      }).catch(error => {
+        console.log('Background OTP send failed (user can resend manually):', error);
+      });
+      
       setLoading(false)
     }
   }

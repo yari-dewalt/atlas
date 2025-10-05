@@ -1,32 +1,66 @@
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Keyboard, TouchableOpacity, TouchableWithoutFeedback, Alert } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { createProfileWithGoogleAvatar } from '../../utils/profileUtils';
-import { useBannerStore } from '../../stores/bannerStore';
 
 export default function Login() {
-  const [email, onChangeEmail] = useState('');
+  const params = useLocalSearchParams();
+  const [email, onChangeEmail] = useState(params.email as string || '');
   const [password, onChangePassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { showError } = useBannerStore();
 
   async function signInWithEmail() {
     Keyboard.dismiss();
     if (email && password) {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
   
       if (error) {
-        showError(error.message);
+        Alert.alert('Login Error', error.message);
+        setLoading(false);
+        return;
       }
+
+      // Check if user's email is verified by checking their profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('email_verified')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!profileError && profileData && profileData.email_verified !== true) {
+        // Email not verified - sign out to prevent session persistence
+        await supabase.auth.signOut();
+        
+        // Navigate immediately for better UX
+        router.replace({
+          pathname: "/(auth)/verification",
+          params: { email: email }
+        });
+        
+        // Send OTP in background - user can manually resend if needed
+        supabase.auth.signInWithOtp({
+          email: email,
+          options: {
+            shouldCreateUser: false,
+          }
+        }).catch(error => {
+          console.log('Background OTP send failed (user can resend manually):', error);
+        });
+        
+        setLoading(false);
+        return;
+      }
+
+      // Email is verified, proceed normally
       setLoading(false);
     }
   }
@@ -37,7 +71,7 @@ export default function Login() {
       const { data, error, googleUserInfo } = await signInWithGoogle();
       
       if (error) {
-        showError(error.message || 'Failed to sign in with Google');
+        Alert.alert('Google Sign In Failed', error.message || 'Failed to sign in with Google');
         return;
       }
 
@@ -46,7 +80,7 @@ export default function Login() {
         await createProfileWithGoogleAvatar(data.user, googleUserInfo);
       }
     } catch (error: any) {
-      showError(error.message || 'An unexpected error occurred');
+      Alert.alert('Error', error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

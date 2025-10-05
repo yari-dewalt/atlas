@@ -14,7 +14,7 @@ import { Audio } from 'expo-av';
 // Root layout component
 export default function RootLayout() {
   // Get state and actions from auth store
-  const { session, loading, setSession, setLoading, fetchProfile, profile } = useAuthStore();
+  const { session, loading, setSession, setLoading, fetchProfile, profile, updateProfile } = useAuthStore();
   const { fetchNotifications, subscribeToNotifications } = useNotificationStore();
   
   // Initialize push notifications
@@ -62,9 +62,11 @@ export default function RootLayout() {
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, updatedSession) => {
+      (_event, updatedSession) => {
         setSession(updatedSession);
-        fetchProfile();
+        if (updatedSession) {
+          fetchProfile();
+        }
       }
     );
 
@@ -98,14 +100,24 @@ export default function RootLayout() {
         router.replace('/(auth)/auth');
       }
     } else {
-      // Has session - check onboarding status from profile
-      if (profile && profile.onboarding_completed !== true) {
-        // Needs onboarding or is currently in the flow
+      // Has session - check email verification first, then onboarding status
+      if (profile && profile.email_verified !== true) {
+        // Don't sign out if user is currently on verification screen
+        const currentPath = segments.join('/');
+        if (currentPath.includes('verification')) {
+          return; // Let verification process complete
+        }
+        // Sign out users with unverified emails to prevent session persistence
+        supabase.auth.signOut();
+        updateProfile(null);
+        return;
+      } else if (profile && profile.onboarding_completed !== true) {
+        // Email verified but needs onboarding or is currently in the flow
         if (!inOnboardingGroup) {
           router.replace('/(onboarding)/welcome');
         }
-      } else {
-        // Onboarding complete and not in flow - redirect to app
+      } else if (profile && profile.onboarding_completed === true && profile.email_verified === true) {
+        // Email verified and onboarding complete - redirect to app
         if (!inAppGroup) {
           router.replace('/(app)/(tabs)/home');
         }

@@ -11,6 +11,7 @@ type UserProfile = {
   weight_unit?: 'lbs' | 'kg' | null;
   date_of_birth?: string | null;
   onboarding_completed?: boolean | null;
+  email_verified?: boolean | null;
 };
 
 type AuthState = {
@@ -25,6 +26,7 @@ type AuthState = {
   fetchProfile: () => Promise<void>;
   updateProfile: (updatedProfile: UserProfile) => void;
   markOnboardingComplete: () => Promise<void>;
+  markEmailVerified: () => Promise<void>;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -51,7 +53,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, name, bio, avatar_url, weight_unit, date_of_birth, onboarding_completed")
+        .select("id, username, name, bio, avatar_url, weight_unit, date_of_birth, onboarding_completed, email_verified")
         .eq("id", session.user.id)
         .single();
       
@@ -91,6 +93,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch (error) {
       console.error("Error marking onboarding complete:", error);
+      throw error;
+    }
+  },
+
+  markEmailVerified: async () => {
+    const { session, profile } = get();
+    if (!session?.user || !profile) return;
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ email_verified: true })
+        .eq("id", session.user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      set({ 
+        profile: { 
+          ...profile, 
+          email_verified: true 
+        } 
+      });
+    } catch (error) {
+      console.error("Error marking email verified:", error);
       throw error;
     }
   },

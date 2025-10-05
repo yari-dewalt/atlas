@@ -1,52 +1,255 @@
-import { View, Text, StyleSheet, TextInput, Pressable, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
-import { useBannerStore } from '../../stores/bannerStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useState, useEffect, useRef } from 'react';
 
-export default function Signup() {
+export default function Verification() {
   const router = useRouter();
-  const { email } = useLocalSearchParams();
-  const { showError, showSuccess } = useBannerStore();
+  const { email, isSignup } = useLocalSearchParams();
+  const { markEmailVerified } = useAuthStore();
+  const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const hiddenInputRef = useRef<TextInput>(null);
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
+  
+  const isSignupFlow = isSignup === 'true';
 
-  const handleResendEmail = async () => {
-    if (!email) return;
+  // Note: We don't automatically send OTP here anymore since it's sent from the login/signup flows
+  // Users can manually request a new code using the "Resend Code" button if needed
+
+  // Animate cursor blinking
+  useEffect(() => {
+    const blinkCursor = () => {
+      Animated.sequence([
+        Animated.timing(cursorOpacity, {
+          toValue: 0,
+          duration: 530,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cursorOpacity, {
+          toValue: 1,
+          duration: 530,
+          useNativeDriver: true,
+        }),
+      ]).start(blinkCursor);
+    };
+
+    // Only animate if input is focused and we haven't completed all 6 digits
+    if (isInputFocused && otp.length < 6) {
+      blinkCursor();
+    }
+
+    return () => {
+      cursorOpacity.stopAnimation();
+    };
+  }, [otp.length, cursorOpacity, isInputFocused]);
+
+    const handleVerifyOtp = async () => {
+    // Clear any previous error messages
+    setErrorMessage('');
     
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email as string,
-    });
+    if (!otp || otp.length !== 6) {
+      setErrorMessage('Please enter a valid 6-digit code');
+      return;
+    }
 
-    if (error) {
-      showError(error.message);
-    } else {
-      showSuccess('Verification email sent!');
+    if (!email) {
+      setErrorMessage('Email is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email as string,
+        token: otp,
+        type: 'email'
+      });
+
+      if (error) {
+        // Check if it's an invalid token error
+        if (error.message.toLowerCase().includes('invalid') || 
+            error.message.toLowerCase().includes('token') ||
+            error.message.toLowerCase().includes('code')) {
+          setErrorMessage('Incorrect verification code. Please try again.');
+        } else {
+          setErrorMessage(error.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (data.user && data.session) {
+        // Update email_verified status in the profile using auth store
+        try {
+          await markEmailVerified();
+          
+          // Give a small delay to ensure the profile state is updated
+          // before the _layout routing logic runs
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (error) {
+          console.error('Error updating email verification status:', error);
+          // Don't block the user, but log the error
+        }
+      }
+    } catch (error: any) {
+      setErrorMessage(error.message || 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleResendOtp = async () => {
+    if (!email) return;
+    
+    setResendLoading(true);
+    setErrorMessage(''); // Clear any error messages
+    
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email as string,
+      options: {
+        shouldCreateUser: false, // User already exists
+      }
+    });
+
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      Alert.alert('Success', 'Verification code sent!');
+    }
+    setResendLoading(false);
+  };
+
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-                activeOpacity={0.5} onPress={() => router.back()} style={styles.backButton}>
-        <IonIcon name="arrow-back" size={24} color={colors.primaryText} />
-      </TouchableOpacity>
-      <Text style={styles.title}>Verification</Text>
-      <Text style={styles.text}>Email Verification Sent!</Text>
-      <Text style={styles.text}>We've sent a verification link to your email address. Please check your inbox and click the link to verify your account.</Text>
-      <Text style={styles.text}>Haven't received the email? Check your spam folder or click the button below to resend the verification email.</Text>
-      <Text style={styles.noteText}>Note: The verification link will expire in 24 hours.</Text>
-      <TouchableOpacity
-                activeOpacity={0.5} style={styles.logInButton}
-      onPress={() => router.replace("/(auth)/login")}>
-        <Text style={styles.logInButtonText}>Log in</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-                activeOpacity={0.5} style={styles.verificationButton}
-        onPress={handleResendEmail}>
-        <Text style={styles.verificationButtonText}>Re-send verification email</Text>
-      </TouchableOpacity>
-    </View>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        <TouchableOpacity
+          activeOpacity={0.5} 
+          onPress={() => router.back()} 
+          style={styles.backButton}
+        >
+          <IonIcon name="arrow-back" size={24} color={colors.primaryText} />
+        </TouchableOpacity>
+        
+        <Text style={styles.title}>Verify Your Email</Text>
+        <Text style={styles.text}>
+          We've sent a 6-digit verification code to:
+        </Text>
+        <Text style={styles.emailText}>{email}</Text>
+        <Text style={styles.text}>
+          Enter the code below to verify your email and continue.
+        </Text>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputName}>Verification Code</Text>
+          
+          {/* OTP Display Boxes */}
+          <TouchableOpacity 
+            style={styles.otpContainer}
+            activeOpacity={1}
+            onPress={() => {
+              // Focus the hidden input when user taps on OTP boxes
+              hiddenInputRef.current?.focus();
+            }}
+          >
+            {Array.from({ length: 6 }, (_, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.otpBox,
+                  otp.length > index && styles.otpBoxFilled,
+                  otp.length === index && styles.otpBoxActive
+                ]}
+              >
+                <View style={styles.otpBoxContent}>
+                  <Text style={[
+                    styles.otpText,
+                    otp.length > index && styles.otpTextFilled
+                  ]}>
+                    {otp[index] || ''}
+                  </Text>
+                  {/* Show cursor in active box when empty and input is focused */}
+                  {otp.length === index && !otp[index] && isInputFocused && (
+                    <Animated.View 
+                      style={[
+                        styles.cursor,
+                        { opacity: cursorOpacity }
+                      ]} 
+                    />
+                  )}
+                </View>
+              </View>
+            ))}
+          </TouchableOpacity>
+          
+          {/* Hidden Input Field */}
+          <TextInput
+            ref={hiddenInputRef}
+            style={styles.hiddenInput}
+            onChangeText={(text) => {
+              setOtp(text);
+              // Clear error message when user starts typing
+              if (errorMessage) {
+                setErrorMessage('');
+              }
+            }}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            value={otp}
+            keyboardType="number-pad"
+            maxLength={6}
+            autoFocus={true}
+            autoComplete="sms-otp"
+            textContentType="oneTimeCode"
+          />
+        </View>
+
+        {/* Error Message */}
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
+
+        <TouchableOpacity
+          activeOpacity={0.5} 
+          style={[
+            styles.verifyButton,
+            (loading || !otp || otp.length !== 6) && styles.verifyButtonDisabled
+          ]}
+          onPress={handleVerifyOtp}
+          disabled={loading || !otp || otp.length !== 6}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.primaryText} />
+          ) : (
+            <Text style={styles.verifyButtonText}>Verify & Log In</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.5} 
+          style={styles.resendButton}
+          onPress={handleResendOtp}
+          disabled={resendLoading}
+        >
+          {resendLoading ? (
+            <ActivityIndicator color={colors.brand} />
+          ) : (
+            <Text style={styles.resendButtonText}>Resend Code</Text>
+          )}
+        </TouchableOpacity>
+        
+        <Text style={styles.noteText}>
+          Didn't receive the code? Check your spam folder or tap "Resend Code" above.
+        </Text>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -75,12 +278,96 @@ const styles = StyleSheet.create({
   text: {
     color: colors.primaryText,
     fontSize: 16,
+    textAlign: 'center',
+  },
+  emailText: {
+    color: colors.brand,
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   noteText: {
     color: colors.secondaryText,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 'auto',
+    marginBottom: 40,
+  },
+  inputContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    width: '100%',
+    marginTop: 20,
+  },
+  inputName: {
+    color: colors.primaryText,
     fontSize: 16,
   },
-  logInButton: {
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 10,
+  },
+  otpBox: {
+    width: 45,
+    height: 55,
+    borderWidth: 2,
+    borderColor: colors.secondaryAccent,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  otpBoxContent: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  otpBoxFilled: {
+    borderColor: colors.primaryText,
+    backgroundColor: colors.background,
+  },
+  otpBoxActive: {
+    borderColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  otpText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.secondaryText,
+  },
+  otpTextFilled: {
+    color: colors.primaryText,
+  },
+  cursor: {
+    position: 'absolute',
+    width: 2,
+    height: 24,
+    backgroundColor: colors.secondaryText,
+    borderRadius: 1,
+  },
+  errorText: {
+    color: colors.notification,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  hiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  verifyButton: {
     backgroundColor: colors.brand,
     color: colors.primaryText,
     width: '100%',
@@ -89,27 +376,29 @@ const styles = StyleSheet.create({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: 20,
   },
-  logInButtonText: {
+  verifyButtonDisabled: {
+    backgroundColor: colors.secondaryAccent,
+    opacity: 0.7,
+  },
+  verifyButtonText: {
     color: colors.primaryText,
     fontWeight: 'bold',
     fontSize: 16,
   },
-  verificationButton: {
+  resendButton: {
     backgroundColor: colors.background,
     color: colors.primaryText,
-    width: '100%',
     height: 48,
     borderRadius: 8,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
   },
-  verificationButtonText: {
+  resendButtonText: {
     color: colors.brand,
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '500',
+    fontSize: 15,
   },
 });
