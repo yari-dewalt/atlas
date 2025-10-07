@@ -363,8 +363,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
               isMuted={globalVideoMuted}
               onPlaybackStatusUpdate={(status) => handlePlaybackStatusUpdate(status, item.id, item.duration)}
             />
-            <TouchableOpacity
-                activeOpacity={0.5} 
+            <Pressable
               style={styles.muteButton}
               onPress={(e) => {
                 e.stopPropagation();
@@ -376,7 +375,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
                 size={20} 
                 color={colors.primaryText} 
               />
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
       </Pressable>
@@ -553,7 +552,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 50,

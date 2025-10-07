@@ -380,8 +380,7 @@ export default function MediaScreen() {
                   isLooping={true}
                   isMuted={videoMuted[item.id] ?? true}
                 />
-                <TouchableOpacity
-                  activeOpacity={0.5} 
+                <Pressable
                   style={styles.muteButton}
                   onPress={(e) => {
                     e.stopPropagation();
@@ -393,7 +392,7 @@ export default function MediaScreen() {
                     size={20} 
                     color={colors.primaryText} 
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </VisibilitySensor>
           ) : (
@@ -832,7 +831,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 50,
