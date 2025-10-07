@@ -2957,7 +2957,9 @@ const handleTimerCompletion = async () => {
                     ]}>
                       {tempRpe || "-"}
                     </Text>
-                    <IonIcon name="chevron-forward" size={16} color={colors.secondaryText} />
+                    <View style={styles.setEditRpeChevron}>
+                      <IonIcon name="chevron-forward" size={16} color={colors.secondaryText} />
+                    </View>
                   </TouchableOpacity>
                 </View>
               )}
@@ -4933,7 +4935,7 @@ setEditInputHorizontal: {
 setEditRpeSelector: {
   flexDirection: 'row',
   alignItems: 'center',
-  justifyContent: 'space-between',
+  position: 'relative',
 },
 
 setEditRpeSelectorText: {
@@ -4942,6 +4944,13 @@ setEditRpeSelectorText: {
   fontWeight: '600',
   textAlign: 'center',
   flex: 1,
+},
+
+setEditRpeChevron: {
+  position: 'absolute',
+  right: 8,
+  alignItems: 'center',
+  justifyContent: 'center',
 },
 
 setEditRpePlaceholderText: {

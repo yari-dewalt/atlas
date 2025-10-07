@@ -2139,7 +2139,9 @@ export default function EditRoutine() {
                       ]}>
                         {set.rpe || "-"}
                       </Text>
-                      <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+                      <View style={styles.setEditRpeChevron}>
+                        <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+                      </View>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -2996,7 +2998,7 @@ reorderModalFooter: {
   setEditRpeSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    position: 'relative',
   },
   setEditRpeSelectorText: {
     fontSize: 18,
@@ -3005,8 +3007,14 @@ reorderModalFooter: {
     textAlign: 'center',
     flex: 1,
   },
+  setEditRpeChevron: {
+    position: 'absolute',
+    right: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   setEditRpePlaceholderText: {
-    color: colors.whiteOverlay,
+    color: 'rgba(255,255,255,0.3)',
   },
 
   // RPE Bottom Sheet Styles
