@@ -389,7 +389,7 @@ export default function MediaScreen() {
                 >
                   <IonIcon 
                     name={videoMuted[item.id] ? "volume-mute" : "volume-high"} 
-                    size={20} 
+                    size={14} 
                     color={colors.primaryText} 
                   />
                 </Pressable>
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 50,
