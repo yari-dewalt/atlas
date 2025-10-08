@@ -1637,19 +1637,21 @@ const handleTimerCompletion = async () => {
           </View>
         ) : activeWorkout?.exercises.length === 0 ? (
           <View style={styles.emptyStateContainer}>
-            <IonIcon name="barbell-outline" size={60} color={colors.secondaryText} />
-            <Text style={styles.emptyStateTitle}>No exercises yet</Text>
+            <IonIcon name="barbell-outline" size={50} color={colors.secondaryText} />
+            <Text style={styles.emptyStateTitle}>Get started</Text>
             <Text style={styles.emptyStateText}>
-              Start adding exercises to your workout to track your progress
+              Add an exercise to start your workout.
             </Text>
-            <TouchableOpacity
+          <TouchableOpacity
                 activeOpacity={0.5}
-              style={styles.emptyStateButton}
-              onPress={handleAddExercise}
-            >
-              <IonIcon name="add-circle-outline" size={24} color={colors.primaryText} />
-              <Text style={styles.emptyStateButtonText}>Add Your First Exercise</Text>
-            </TouchableOpacity>
+            style={[styles.addExerciseButton, { width: '90%' }]}
+            onPress={() => {
+              handleAddExercise();
+            }}
+          >
+            <IonIcon name="add" size={18} color={colors.primaryText} />
+            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
+          </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.exercisesContainer}>
@@ -3063,21 +3065,20 @@ const styles = StyleSheet.create({
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
     marginTop: 20,
   },
   emptyStateTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '500',
     color: colors.primaryText,
-    marginTop: 20,
+    marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 14,
     color: colors.secondaryText,
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 16,
     paddingHorizontal: 20,
   },
   emptyStateButton: {
