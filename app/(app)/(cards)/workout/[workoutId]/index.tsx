@@ -826,30 +826,31 @@ export default function WorkoutDetailScreen() {
               
               <View style={styles.exerciseInfo}>
                 <View style={styles.exerciseNameRow}>
-                  <Text style={styles.exerciseItemName}>
-                    {exercise.exercises?.name || exercise.name}
-                  </Text>
+                  <View>
+                    <Text style={styles.exerciseItemName}>
+                      {exercise.exercises?.name || exercise.name}
+                    </Text>
+                    {/* Exercise Notes */}
+                    {exercise.notes && (
+                      <View style={styles.exerciseNotesContainer}>
+                        <Text style={styles.exerciseNotes}>{exercise.notes}</Text>
+                      </View>
+                    )}
+                  </View>
+
                   {!exercise.exercise_id && (
                     <View style={styles.customBadge}>
                       <Text style={styles.customBadgeText}>Custom</Text>
                     </View>
                   )}
+                  <View style={styles.infoButton}>
+                    <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+                  </View>
                 </View>
               </View>
             </View>
           </View>
-          
-          <View style={styles.infoButton}>
-            <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
-          </View>
         </TouchableOpacity>
-        
-        {/* Exercise Notes */}
-        {exercise.notes && (
-          <View style={styles.exerciseNotesContainer}>
-            <Text style={styles.exerciseNotes}>{exercise.notes}</Text>
-          </View>
-        )}
         
         {/* Sets details */}
         <View style={styles.setsContainer}>
@@ -1355,9 +1356,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   exerciseNotesContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    marginTop: 4,
   },
   exerciseImagePlaceholder: {
     width: 40,
@@ -1387,7 +1386,7 @@ const styles = StyleSheet.create({
   },
   exerciseNameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
   customBadge: {
@@ -1405,10 +1404,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   exerciseNotes: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.secondaryText,
-    fontStyle: 'italic',
-    lineHeight: 18,
   },
   routineInfoHeader: {
     flexDirection: 'row',
@@ -1428,9 +1425,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   infoButton: {
-    padding: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginLeft: 'auto',
   },
   // Muscle Split Section
   muscleSplitSection: {

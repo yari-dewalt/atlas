@@ -1703,8 +1703,21 @@ const handleTimerCompletion = async () => {
         </View>
       )}
       
-      {/* Exercise Name */}
-      <Text style={styles.exerciseName}>{exercise.name}</Text>
+      <View>
+        {/* Exercise Name */}
+        <Text style={styles.exerciseName}>{exercise.name}</Text>
+        {/* Show notes input only when not minimized */}
+          <TextInput
+            style={styles.notesInput}
+            value={exercise.notes || ''}
+            onChangeText={(text) => updateExercise(exercise.id, { notes: text })}
+            placeholder="Add notes..."
+            placeholderTextColor={'rgba(255,255,255,0.6)'}
+            maxLength={200}
+            scrollEnabled={false}
+            onFocus={closeAllSwipeables}
+          />
+      </View>
       
       {/* Custom Exercise Badge */}
       {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
@@ -1745,21 +1758,6 @@ const handleTimerCompletion = async () => {
     <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
   </TouchableOpacity>
 </View>
-      
-      {/* Show notes input only when not minimized */}
-      {!isMinimized && (
-        <TextInput
-          style={styles.notesInput}
-          value={exercise.notes || ''}
-          onChangeText={(text) => updateExercise(exercise.id, { notes: text })}
-          placeholder="Add notes here..."
-          placeholderTextColor={colors.secondaryText}
-          multiline={true}
-          maxLength={200}
-          scrollEnabled={false}
-          onFocus={closeAllSwipeables}
-        />
-      )}
     </View>
   </View>
       
@@ -3219,7 +3217,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     paddingHorizontal: 4,
-    marginTop: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
@@ -3732,13 +3729,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   notesInput: {
-    color: colors.primaryText,
+    color: colors.secondaryText,
     fontSize: 13,
-    fontStyle: 'italic',
     textAlignVertical: 'top',
-    minHeight: 32,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    maxWidth: '100%',
+    marginTop: 4,
   },
   errorSetRow: {
     borderLeftWidth: 3,
@@ -3854,12 +3849,10 @@ const styles = StyleSheet.create({
   },
   
   minimizeIcon: {
-    marginTop: 10,
     marginLeft: 8,
   },
   
   exerciseOptionsButton: {
-    marginTop: 10,
     padding: 8,
   },
   
