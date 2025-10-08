@@ -318,6 +318,19 @@ export default function NewWorkout() {
     }, 200);
   };
 
+  const handleReplaceExercise = () => {
+    exerciseOptionsBottomSheetRef.current?.close();
+    
+    // Navigate to exercise selection in replace mode
+    router.push({
+      pathname: '/(app)/(modals)/exerciseSelection',
+      params: { 
+        replaceExerciseId: selectedExerciseForOptions.id,
+        fromNewWorkout: 'true'
+      }
+    });
+  };
+
 const handleAddToSuperset = () => {
   exerciseOptionsBottomSheetRef.current?.close();
   setTimeout(() => {
@@ -429,10 +442,11 @@ const handleRemoveExercise = () => {
   };
 
  useEffect(() => {
-    // Handle single exercise from custom creation or exercise selection
-    if (params?.selectedExercise && params.selectedExercise !== 'undefined' && params.selectedExercise !== 'null') {
+    // Handle single exercise from custom creation or exercise selection (but not replacement)
+    if (params?.selectedExercise && params.selectedExercise !== 'undefined' && params.selectedExercise !== 'null' && !params?.replaceExerciseId) {
       try {
-        const exercise = JSON.parse(params.selectedExercise);
+        const exerciseString = Array.isArray(params.selectedExercise) ? params.selectedExercise[0] : params.selectedExercise;
+        const exercise = JSON.parse(exerciseString);
         if (exercise && exercise.id) { // Add null check
           addExerciseToWorkout(exercise);
         }
@@ -444,10 +458,33 @@ const handleRemoveExercise = () => {
       }
     }
     
+    // Handle exercise replacement
+    if (params?.selectedExercise && params.selectedExercise !== 'undefined' && params.selectedExercise !== 'null' && params?.replaceExerciseId) {
+      try {
+        const exerciseString = Array.isArray(params.selectedExercise) ? params.selectedExercise[0] : params.selectedExercise;
+        const newExercise = JSON.parse(exerciseString);
+        const exerciseIdToReplace = Array.isArray(params.replaceExerciseId) ? params.replaceExerciseId[0] : params.replaceExerciseId;
+        
+        if (newExercise && newExercise.id && exerciseIdToReplace) {
+          replaceExerciseInWorkout(exerciseIdToReplace, newExercise);
+        }
+        
+        // Clear the parameters
+        router.setParams({ 
+          selectedExercise: undefined, 
+          replaceExerciseId: undefined 
+        });
+      } catch (error) {
+        console.error('Error parsing replacement exercise:', error);
+        showError('Failed to replace exercise. Please try again.');
+      }
+    }
+    
     // Handle multiple exercises from exercise selection
     if (params?.selectedExercises && params.selectedExercises !== 'undefined' && params.selectedExercises !== 'null' && params?.isMultiple === 'true') {
       try {
-        const exercises = JSON.parse(params.selectedExercises);
+        const exercisesString = Array.isArray(params.selectedExercises) ? params.selectedExercises[0] : params.selectedExercises;
+        const exercises = JSON.parse(exercisesString);
         if (exercises && Array.isArray(exercises)) { // Add null and array checks
           exercises.forEach(exercise => {
             if (exercise && exercise.id) { // Add null check for each exercise
@@ -745,6 +782,43 @@ const handleRemoveExercise = () => {
       defaultSets: exercise.defaultSets || 1,
       image_url: exercise.image_url || null,
       superset_id: exercise.superset_id || null,
+    });
+  };
+
+  const replaceExerciseInWorkout = (exerciseIdToReplace, newExercise) => {
+    const exerciseIndex = activeWorkout?.exercises.findIndex(ex => ex.id === exerciseIdToReplace);
+    if (exerciseIndex === -1 || !activeWorkout) return;
+
+    const oldExercise = activeWorkout.exercises[exerciseIndex];
+    
+    // Generate a unique workout exercise ID for the new exercise
+    const workoutExerciseId = `${newExercise.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create the replacement exercise, preserving sets and other workout-specific data
+    const replacementExercise = {
+      id: workoutExerciseId, // New unique ID
+      exercise_id: newExercise.id, // New exercise's database ID
+      name: newExercise.name, // New exercise name
+      image_url: newExercise.image_url || null, // New exercise image
+      sets: oldExercise.sets, // Preserve existing sets
+      notes: oldExercise.notes || '', // Preserve notes
+      superset_id: oldExercise.superset_id || null, // Preserve superset relationship
+    };
+
+    // Handle superset logic
+    if (exerciseToSuperset.has(exerciseIdToReplace)) {
+      const supersetId = exerciseToSuperset.get(exerciseIdToReplace);
+      // Remove old exercise from superset map and add new one
+      removeFromSuperset(exerciseIdToReplace);
+      exerciseToSuperset.set(workoutExerciseId, supersetId);
+    }
+
+    // Replace the exercise using the workout store
+    updateExercise(exerciseIdToReplace, {
+      id: workoutExerciseId,
+      exercise_id: newExercise.id,
+      name: newExercise.name,
+      image_url: newExercise.image_url || null,
     });
   };
 
@@ -2405,6 +2479,19 @@ const handleTimerCompletion = async () => {
       </Text>
     
     <View style={styles.exerciseOptionsContent}>
+      {/* Replace Exercise Option */}
+      <TouchableOpacity
+                activeOpacity={0.5} style={styles.exerciseOptionItem} onPress={handleReplaceExercise}>
+        <View style={styles.exerciseOptionIcon}>
+          <IonIcon name="swap-horizontal-outline" size={24} color={colors.primaryText} />
+        </View> 
+        <View style={styles.exerciseOptionTextContainer}>
+          <Text style={styles.exerciseOptionTitle}>Replace Exercise</Text>
+          <Text style={styles.exerciseOptionSubtitle}>Choose a different exercise to replace this one</Text>
+        </View>
+        <IonIcon name="chevron-forward" size={20} color={colors.secondaryText} />
+      </TouchableOpacity>
+
       {/* Reorder Option */}
       <TouchableOpacity
                 activeOpacity={0.5} style={styles.exerciseOptionItem} onPress={handleReorderExercises}>

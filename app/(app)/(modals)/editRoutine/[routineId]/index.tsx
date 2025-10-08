@@ -199,8 +199,51 @@ export default function EditRoutine() {
   // Handle exercise selection from the exercise selection screen
   useEffect(() => {
     const handleExerciseSelection = () => {
-      // Check if we returned from exercise selection with selected exercises
-      if (params?.selectedExercises && params?.fromRoutineEdit) {
+      // Handle exercise replacement
+      if (params?.selectedExercises && params?.fromRoutineEdit && params?.replaceExerciseId) {
+        try {
+          const selectedExercises = JSON.parse(params.selectedExercises as string);
+          if (Array.isArray(selectedExercises) && selectedExercises.length > 0) {
+            const newExercise = selectedExercises[0]; // Take the first selected exercise for replacement
+            const exerciseIdToReplace = parseFloat(
+              Array.isArray(params.replaceExerciseId) 
+                ? params.replaceExerciseId[0] 
+                : params.replaceExerciseId as string
+            );
+            
+            setExercises(prevExercises => {
+              const updatedExercises = prevExercises.map(exercise => {
+                if (exercise.id === exerciseIdToReplace) {
+                  console.log("Found exercise to replace:", exercise.name, "->", newExercise.name);
+                  // Replace the exercise while preserving sets and other data
+                  return {
+                    ...exercise,
+                    exerciseId: newExercise.id,
+                    name: newExercise.name,
+                    image_url: newExercise.image_url || null,
+                    // Keep existing sets, defaultWeight, defaultRepsMin, defaultRepsMax, defaultRPE
+                    // Keep existing repMode
+                  };
+                }
+                return exercise;
+              });
+              console.log("Updated exercises:", updatedExercises.map(e => ({ id: e.id, name: e.name })));
+              return updatedExercises;
+            });
+            
+            // Clear the params
+            router.setParams({ 
+              selectedExercises: undefined, 
+              fromRoutineEdit: undefined,
+              replaceExerciseId: undefined
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing replacement exercise:', error);
+        }
+      }
+      // Check if we returned from exercise selection with selected exercises (regular add)
+      else if (params?.selectedExercises && params?.fromRoutineEdit) {
         try {
           const selectedExercises = JSON.parse(params.selectedExercises as string);
           if (Array.isArray(selectedExercises) && selectedExercises.length > 0) {
@@ -242,7 +285,7 @@ export default function EditRoutine() {
     };
 
     handleExerciseSelection();
-  }, [params?.selectedExercises, params?.fromRoutineEdit]);
+  }, [params?.selectedExercises, params?.fromRoutineEdit, params?.replaceExerciseId]);
 
 
 
@@ -1346,6 +1389,20 @@ export default function EditRoutine() {
     );
   };
 
+  const handleReplaceExercise = () => {
+    exerciseOptionsBottomSheetRef.current?.close();
+    
+    // Navigate to exercise selection in replace mode for routine editing
+    router.push({
+      pathname: '/(app)/(modals)/exerciseSelection',
+      params: { 
+        replaceExerciseId: selectedExerciseForOptions.id,
+        fromRoutineEdit: 'true',
+        routineId: routineId
+      }
+    });
+  };
+
   const showExerciseDetails = async (exercise: Exercise) => {
     // For custom exercises (exercise_id is null), we need to find the custom exercise ID
     // Custom exercises are identified by having no exercise_id and should be loaded from local storage
@@ -1785,6 +1842,18 @@ export default function EditRoutine() {
           </Text>
           
           <View style={styles.exerciseOptionsContent}>
+                        {/* Replace Exercise Option */}
+            <TouchableOpacity
+                activeOpacity={0.5} style={styles.exerciseOptionItem} onPress={handleReplaceExercise}>
+              <View style={styles.exerciseOptionIcon}>
+                <Ionicons name="swap-horizontal-outline" size={24} color={colors.primaryText} />
+              </View>
+              <View style={styles.exerciseOptionTextContainer}>
+                <Text style={styles.exerciseOptionTitle}>Replace Exercise</Text>
+                <Text style={styles.exerciseOptionSubtitle}>Choose a different exercise to replace this one</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+            </TouchableOpacity>
             {/* Reorder Option */}
             <TouchableOpacity
                 activeOpacity={0.5} style={styles.exerciseOptionItem} onPress={handleReorderExercises}>
@@ -1961,13 +2030,6 @@ export default function EditRoutine() {
                   changeExerciseRepMode(selectedSetForReps.exerciseId, 'single');
                 }
                 repSelectionBottomSheetRef.current?.close();
-                // If we came from set edit modal, return to it
-                if (selectedSetForEdit) {
-                  setTimeout(() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setEditBottomSheetRef.current?.snapToIndex(0);
-                  }, 200);
-                }
               }}
             >
               <View style={styles.repSelectionOptionIcon}>
@@ -1990,13 +2052,6 @@ export default function EditRoutine() {
                   changeExerciseRepMode(selectedSetForReps.exerciseId, 'range');
                 }
                 repSelectionBottomSheetRef.current?.close();
-                // If we came from set edit modal, return to it
-                if (selectedSetForEdit) {
-                  setTimeout(() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setEditBottomSheetRef.current?.snapToIndex(0);
-                  }, 200);
-                }
               }}
             >
               <View style={styles.repSelectionOptionIcon}>

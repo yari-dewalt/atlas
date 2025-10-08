@@ -686,6 +686,38 @@ export default function ExerciseSelection() {
   };
 
   const handleSelectExercise = async (exercise) => {
+    // Check if we're in replacement mode
+    if (params?.replaceExerciseId) {
+      // Save as recent exercise
+      await saveRecentExercise(exercise);
+      
+      // Navigate back with replacement data
+      router.back();
+      
+      // Check if we came from routine editing
+      if (params?.fromRoutineEdit && params?.routineId) {
+        router.navigate({
+          pathname: `/(app)/(modals)/editRoutine/${params.routineId}`,
+          params: {
+            selectedExercises: JSON.stringify([exercise]),
+            replaceExerciseId: params.replaceExerciseId,
+            fromRoutineEdit: 'true',
+          }
+        });
+      } else {
+        // Navigate back to newWorkout
+        router.navigate({
+          pathname: '/(app)/(modals)/newWorkout',
+          params: {
+            selectedExercise: JSON.stringify(exercise),
+            replaceExerciseId: params.replaceExerciseId,
+          }
+        });
+      }
+      return;
+    }
+
+    // Normal selection mode
     const newSelected = new Set(selectedExercises);
     const newOrder = [...selectedExercisesOrder];
     const animatedValue = getAnimatedValue(exercise.id);
@@ -917,7 +949,9 @@ export default function ExerciseSelection() {
     <Text style={styles.cancelText}>Cancel</Text>
   </TouchableOpacity>
   
-  <Text style={styles.headerTitle}>Add Exercise</Text>
+  <Text style={styles.headerTitle}>
+    {params?.replaceExerciseId ? 'Replace Exercise' : 'Add Exercise'}
+  </Text>
   
   <TouchableOpacity
                 activeOpacity={0.5} 
@@ -1077,8 +1111,8 @@ export default function ExerciseSelection() {
           />
         )}
 
-        {/* Floating Add Button */}
-        {selectedExercises.size > 0 && (
+        {/* Floating Add Button - Hide in replacement mode */}
+        {selectedExercises.size > 0 && !params?.replaceExerciseId && (
           <Animated.View 
             style={[
               styles.floatingButton,
