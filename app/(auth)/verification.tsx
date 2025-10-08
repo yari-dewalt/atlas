@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function Verification() {
   const router = useRouter();
-  const { email, isSignup } = useLocalSearchParams();
+  const { email, isSignup, isPasswordReset } = useLocalSearchParams();
   const { markEmailVerified } = useAuthStore();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,6 +19,7 @@ export default function Verification() {
   const cursorOpacity = useRef(new Animated.Value(1)).current;
   
   const isSignupFlow = isSignup === 'true';
+  const isPasswordResetFlow = isPasswordReset === 'true';
 
   // Note: We don't automatically send OTP here anymore since it's sent from the login/signup flows
   // Users can manually request a new code using the "Resend Code" button if needed
@@ -86,17 +87,34 @@ export default function Verification() {
       }
 
       if (data.user && data.session) {
-        // Update email_verified status in the profile using auth store
-        try {
-          await markEmailVerified();
-          
-          // Give a small delay to ensure the profile state is updated
-          // before the _layout routing logic runs
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-        } catch (error) {
-          console.error('Error updating email verification status:', error);
-          // Don't block the user, but log the error
+        if (isPasswordResetFlow) {
+          // For password reset, we don't want to keep the session active
+          // The session will be used to update password in the next screen
+          router.replace({
+            pathname: '/(auth)/newPassword',
+            params: { email: email }
+          });
+        } else {
+          // For signup/login flows, update email verification status
+          try {
+            await markEmailVerified();
+            
+            // Give a small delay to ensure the profile state is updated
+            // before the _layout routing logic runs
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // User is now logged in, redirect appropriately
+            if (isSignupFlow) {
+              // New user - go to onboarding
+              router.replace('/(onboarding)/welcome');
+            } else {
+              // Existing user verifying email - go to main app
+              router.replace('/(app)/(tabs)/home');
+            }
+          } catch (error) {
+            console.error('Error updating email verification status:', error);
+            // Don't block the user, but log the error
+          }
         }
       }
     } catch (error: any) {
@@ -138,13 +156,18 @@ export default function Verification() {
           <IonIcon name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
         
-        <Text style={styles.title}>Verify Your Email</Text>
+        <Text style={styles.title}>
+          {isPasswordResetFlow ? 'Reset Password' : 'Verify Your Email'}
+        </Text>
         <Text style={styles.text}>
           We've sent a 6-digit verification code to:
         </Text>
         <Text style={styles.emailText}>{email}</Text>
         <Text style={styles.text}>
-          Enter the code below to verify your email and continue.
+          {isPasswordResetFlow 
+            ? 'Enter the code below to reset your password.'
+            : 'Enter the code below to verify your email and continue.'
+          }
         </Text>
 
         <View style={styles.inputContainer}>
@@ -228,7 +251,9 @@ export default function Verification() {
           {loading ? (
             <ActivityIndicator color={colors.primaryText} />
           ) : (
-            <Text style={styles.verifyButtonText}>Verify & Log In</Text>
+            <Text style={styles.verifyButtonText}>
+              {isPasswordResetFlow ? 'Continue' : 'Verify & Log In'}
+            </Text>
           )}
         </TouchableOpacity>
 

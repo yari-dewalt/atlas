@@ -100,12 +100,15 @@ export default function RootLayout() {
         router.replace('/(auth)/auth');
       }
     } else {
+      const currentPath = segments.join('/');
       // Has session - check email verification first, then onboarding status
+      if (currentPath.includes('verification') || currentPath.includes('resetPassword') || currentPath.includes('newPassword')) {
+        return; // Let password reset flow complete
+      }
       if (profile && profile.email_verified !== true) {
-        // Don't sign out if user is currently on verification screen
-        const currentPath = segments.join('/');
+        // Don't sign out if user is currently on verification or password reset screens
         if (currentPath.includes('verification')) {
-          return; // Let verification process complete
+          return; // Let verification/password reset process complete
         }
         // Sign out users with unverified emails to prevent session persistence
         supabase.auth.signOut();

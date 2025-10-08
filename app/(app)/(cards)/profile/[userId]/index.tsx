@@ -99,7 +99,6 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (currentProfile?.id) {
-      console.log('Fetching latest post for profile ID:', currentProfile.id);
       fetchLatestPost(currentProfile.id);
       fetchWorkoutDays(currentProfile.id);
       fetchRecentWorkouts(currentProfile.id);
@@ -119,8 +118,6 @@ export default function ProfileScreen() {
       }
 
       if (currentProfile?.id && session?.user?.id) {
-        console.log('Profile screen focused - refreshing data for profile ID:', currentProfile.id);
-        
         // Refresh profile data to ensure posts_count is up-to-date
         fetchProfile(currentProfile.id, session.user.id, false);
         
@@ -548,11 +545,6 @@ export default function ProfileScreen() {
       
       // Calculate and set activity stats
       calculateActivityStats(data || []);
-      
-      // If no real data exists, provide a helpful message but still show an empty chart
-      if (!data || data.length === 0) {
-        console.log('No workout data found for the selected time period');
-      }
     } catch (err) {
       console.error('Error fetching activity data:', err);
       // Fallback to empty chart instead of mock data for real data mode
@@ -636,9 +628,7 @@ export default function ProfileScreen() {
         }
       }
     });
-
-    console.log(dataPoints);
-
+    
     // Use the weekKeys array to maintain proper order
     const labels = weekKeys;
     const values = weekKeys.map(key => dataPoints[key]);

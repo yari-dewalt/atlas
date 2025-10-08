@@ -192,6 +192,15 @@ export default function Login() {
     },
     textDisabled: {
       color: colors.secondaryText,
+    },
+    forgotPasswordButton: {
+      marginTop: -8,
+      marginBottom: 8,
+    },
+    forgotPasswordText: {
+      color: colors.brand,
+      fontSize: 14,
+      textAlign: 'center',
     }
   });
 
@@ -234,6 +243,21 @@ export default function Login() {
       >
           <Text style={styles.logInButtonText}>Log in</Text>
       </TouchableOpacity>
+      
+      {/* Forgot Password Link */}
+      <TouchableOpacity
+        activeOpacity={0.5}
+        style={styles.forgotPasswordButton}
+        onPress={() => {
+          router.push({
+            pathname: '/(auth)/resetPassword',
+            params: { email: email.trim() || '' }
+          });
+        }}
+      >
+        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+      </TouchableOpacity>
+
       <View style={styles.divider}>
         <View style={styles.dividerLine}></View>
         <Text style={styles.dividerText}>or</Text>
