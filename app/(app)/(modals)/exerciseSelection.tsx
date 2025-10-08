@@ -363,6 +363,8 @@ export default function ExerciseSelection() {
 
   useEffect(() => {
     loadExercises();
+    // Add light haptic feedback when screen loads
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
   useEffect(() => {
