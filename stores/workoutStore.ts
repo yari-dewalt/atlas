@@ -27,7 +27,6 @@ interface Workout {
   routineId?: string;
   name: string;
   exercises: WorkoutExercise[];
-  duration: number;
   notes?: string;
   isEditing?: boolean;
   editingWorkoutId?: string;
@@ -62,6 +61,7 @@ interface WorkoutSettings {
 
 interface WorkoutState {
   activeWorkout: Workout | null;
+  currentDuration: number; // Separate duration field to prevent workout object recreation
   isPaused: boolean;
   pausedAt: number | null;
   accumulatedTime: number;
@@ -103,8 +103,19 @@ interface WorkoutState {
   getDefaultRestTime: () => number;
 }
 
+// Debounced auto-save timer
+let autoSaveTimer: any = null;
+
+const debouncedAutoSave = (saveFunction: () => void) => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+  autoSaveTimer = setTimeout(saveFunction, 1000); // Debounce for 1 second
+};
+
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeWorkout: null,
+  currentDuration: 0, // Separate duration tracking
   isPaused: true, // Start paused by default
   pausedAt: null,
   accumulatedTime: 0,
@@ -148,8 +159,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         routineId,
         name: routineName + " Workout",
         exercises: [],
-        duration: 0,
       },
+      currentDuration: 0,
       // Auto-start timer based on settings
       isPaused: !workoutSettings.autoStartTimer,
       pausedAt: workoutSettings.autoStartTimer ? null : now,
@@ -164,6 +175,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   endWorkout: () => {
     set({ 
       activeWorkout: null,
+      currentDuration: 0,
       isPaused: false,
       pausedAt: null,
       accumulatedTime: 0
@@ -174,7 +186,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
   
   saveWorkoutToDatabase: async () => {
-    const { activeWorkout } = get();
+    const { activeWorkout, currentDuration } = get();
     if (!activeWorkout) return false;
     
     set({ isSaving: true, saveError: null });
@@ -205,7 +217,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
           name: activeWorkout.name,
           start_time: new Date(activeWorkout.startTime).toISOString(),
           end_time: new Date().toISOString(), // Use current time for end time
-          duration: activeWorkout.duration,
+          duration: currentDuration, // Use separate duration field
           notes: activeWorkout.notes || "",
           routine_id: activeWorkout.routineId, // This will trigger the usage count increment
         })
@@ -312,7 +324,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       
       // Success - workout is saved, clear the auto-saved state and active workout
       await get().clearSavedWorkoutState();
-      set({ activeWorkout: null, isPaused: true, pausedAt: null, accumulatedTime: 0 });
+      set({ activeWorkout: null, currentDuration: 0, isPaused: true, pausedAt: null, accumulatedTime: 0 });
       return workoutData.id;
     } catch (error) {
       console.error("Error saving workout:", error);
@@ -324,7 +336,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   updateWorkoutToDatabase: async () => {
-    const { activeWorkout } = get();
+    const { activeWorkout, currentDuration } = get();
     if (!activeWorkout || !activeWorkout.editingWorkoutId) return false;
     
     set({ isSaving: true, saveError: null });
@@ -355,7 +367,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
           notes: activeWorkout.notes || "",
           // Keep original start_time, update end_time to now and duration
           end_time: new Date().toISOString(),
-          duration: activeWorkout.duration,
+          duration: currentDuration, // Use separate duration field
         })
         .eq('id', activeWorkout.editingWorkoutId)
         .eq('user_id', userId); // Ensure user can only edit their own workouts
@@ -447,7 +459,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       
       // Success - workout is updated, clear the auto-saved state and active workout
       await get().clearSavedWorkoutState();
-      set({ activeWorkout: null, isPaused: true, pausedAt: null, accumulatedTime: 0 });
+      set({ activeWorkout: null, currentDuration: 0, isPaused: true, pausedAt: null, accumulatedTime: 0 });
       console.log(activeWorkout);
       return true;
     } catch (error) {
@@ -514,9 +526,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         return {
           activeWorkout: {
             ...state.activeWorkout,
-            duration: reset,
             startTime: new Date(now - (reset * 1000)), // Adjust start time to match the duration
           },
+          currentDuration: reset, // Update separate duration field
           // Reset timer state
           isPaused: true, // Keep paused after manual input
           pausedAt: now,
@@ -530,19 +542,25 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       
       // Calculate new duration: (current time - start time) - accumulated paused time
       const rawDuration = (new Date().getTime() - state.activeWorkout.startTime.getTime()) / 1000;
-      const duration = Math.floor(rawDuration - state.accumulatedTime);
+      const newDuration = Math.floor(rawDuration - state.accumulatedTime);
+      
+      // OPTIMIZATION: Only update separate duration field, never touch activeWorkout for timer updates
+      // This prevents activeWorkout object recreation and subsequent re-renders
+      if (state.currentDuration === newDuration) {
+        return state; // No change, return existing state
+      }
       
       return {
-        activeWorkout: {
-          ...state.activeWorkout,
-          duration
-        }
+        currentDuration: newDuration // Only update duration, leave activeWorkout unchanged
       };
     });
     
     // Auto-save after time update (but only for manual resets, not regular timer ticks)
     if (reset !== undefined) {
       setTimeout(() => get().saveWorkoutState(), 100);
+    } else {
+      // For regular timer ticks, use debounced auto-save to prevent excessive saves
+      debouncedAutoSave(() => get().saveWorkoutState());
     }
   },
   
@@ -746,11 +764,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         routineId,
         name: name,
         exercises: exercises || [],
-        duration: duration || 0,
         notes: "",
         isEditing: isEditing || false,
         editingWorkoutId: editingWorkoutId
       },
+      currentDuration: duration || 0,
       // For editing mode, start paused with the accumulated time
       isPaused: isEditing ? true : !workoutSettings.autoStartTimer,
       pausedAt: isEditing ? now : (workoutSettings.autoStartTimer ? null : now),
@@ -799,7 +817,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   // Auto-save functionality
   saveWorkoutState: async () => {
-    const { activeWorkout, isPaused, pausedAt, accumulatedTime } = get();
+    const { activeWorkout, currentDuration, isPaused, pausedAt, accumulatedTime } = get();
     
     if (!activeWorkout) {
       // No active workout, clear any saved state
@@ -820,6 +838,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
           ...activeWorkout,
           startTime: activeWorkout.startTime.toISOString(), // Convert Date to string for storage
         },
+        currentDuration,
         isPaused,
         pausedAt,
         accumulatedTime,
@@ -858,6 +877,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
             ...parsedState.activeWorkout,
             startTime: new Date(parsedState.activeWorkout.startTime), // Convert string back to Date
           },
+          currentDuration: parsedState.currentDuration || 0,
           isPaused: parsedState.isPaused,
           pausedAt: parsedState.pausedAt,
           accumulatedTime: parsedState.accumulatedTime,
@@ -955,6 +975,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   cancelEditWorkout: () => {
     set({
       activeWorkout: null,
+      currentDuration: 0,
       isPaused: true,
       pausedAt: null,
       accumulatedTime: 0,

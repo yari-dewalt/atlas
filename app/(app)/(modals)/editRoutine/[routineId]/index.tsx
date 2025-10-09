@@ -33,6 +33,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Animated } from 'react-native';
 import { useAnimatedStyle } from "react-native-reanimated";
 import { getUserWeightUnit, convertWeightForStorage, convertWeightForDisplay, type WeightUnit } from "../../../../../utils/weightUtils";
+import SetItem from "../../../../../components/SetItem";
 
 // Create a simple exercise selection interface since the main one might have complex dependencies
 interface ExerciseSelectionProps {
@@ -155,10 +156,8 @@ export default function EditRoutine() {
   // RPE FlatList ref
   const rpeFlatListRef = useRef<FlatList>(null);
 
-  // Swipe and animation state
+  // Swipe state for SetItem
   const swipeableRefs = useRef({});
-  const [deletionAnimations, setDeletionAnimations] = useState<{[key: string]: Animated.Value}>({});
-  const [pressedSets, setPressedSets] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (routineId && routineId !== 'new') {
@@ -473,7 +472,9 @@ export default function EditRoutine() {
   };
 
   const removeSet = (exerciseId: number, setId: string) => {
+    console.log(`Removing set ${setId} from exercise ${exerciseId}`);
     setExercises(exercises.map(exercise => {
+      console.log(exercise.id);
       if (exercise.id === exerciseId) {
         return { 
           ...exercise, 
@@ -482,24 +483,31 @@ export default function EditRoutine() {
       }
       return exercise;
     }));
+    
+    // Clean up swipeable refs for the removed set
+    const setKey = `${exerciseId}-${setId}`;
+    if (swipeableRefs.current[setKey]) {
+      delete swipeableRefs.current[setKey];
+    }
+    if (swipeableRefs.current[setKey + '_swiping']) {
+      delete swipeableRefs.current[setKey + '_swiping'];
+    }
   };
 
   const updateSet = (exerciseId: number, setId: string, field: keyof ExerciseSet, value: any) => {
-    setExercises(exercises.map(exercise => {
+    console.log(`Updating set ${setId} of exercise ${exerciseId}: ${field} = ${value}`);
+    setExercises(prevExercises => prevExercises.map(exercise => {
       if (exercise.id === exerciseId) {
         return {
           ...exercise,
-          sets: exercise.sets.map(set =>
+          sets: exercise.sets.map(set => 
             set.id === setId ? { ...set, [field]: value } : set
           )
         };
       }
-      console.log(exercise);
       return exercise;
     }));
-  };
-
-  // Function to close all swipeables
+  };  // Function to close all swipeables
   const closeAllSwipeables = () => {
     Object.keys(swipeableRefs.current).forEach(key => {
       const ref = swipeableRefs.current[key];
@@ -513,54 +521,7 @@ export default function EditRoutine() {
     });
   };
 
-  // Right action function for swipeable sets
-  const rightAction = (exerciseId: number, setId: string, deletionAnim: Animated.Value, setKey: string, prog: any) => {
-    if (prog.value > 2.2) {
-      // Auto-delete on full swipe
-      Animated.timing(deletionAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: false,
-      }).start(() => {
-        removeSet(exerciseId, setId);
-        
-        setDeletionAnimations(prev => {
-          const newAnims = { ...prev };
-          delete newAnims[setKey];
-          return newAnims;
-        });
-      });
-    }
-    return (
-      <View style={styles.hiddenItem}>
-        <TouchableOpacity
-          activeOpacity={0.5}
-          style={[styles.deleteButton, Platform.OS === 'android' && styles.deleteButtonAndroid]}
-          onPress={() => {
-            // Manual delete via button press
-            Animated.timing(deletionAnim, {
-              toValue: 0,
-              duration: 250,
-              useNativeDriver: false,
-            }).start(() => {
-              removeSet(exerciseId, setId);
-              
-              setDeletionAnimations(prev => {
-                const newAnims = { ...prev };
-                delete newAnims[setKey];
-                return newAnims;
-              });
-            });
-          }}
-        >
-          <View style={styles.centeredContainer}>
-            <Ionicons name="trash-outline" size={20} color="white" />
-            <Text style={styles.deleteText}>Delete</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
+
 
   // Validation function for required fields
   const validateExercises = () => {
@@ -689,7 +650,7 @@ export default function EditRoutine() {
             };
           }
         });
-        
+
         return {
           ...exercise,
           repMode,
@@ -1622,11 +1583,11 @@ export default function EditRoutine() {
                 <View style={styles.setsSection}>
                   {/* Column Headers */}
                   <View style={styles.setColumnHeaders}>
-                    <Text style={[styles.setColumnHeader, styles.columnHeaderBold]}>SET</Text>
-                    <Text style={styles.setColumnHeader}>WEIGHT</Text>
+                    <Text style={[styles.setHeaderLabel, styles.setNumberColumn]}>SET</Text>
+                    <Text style={[styles.setHeaderLabel, styles.setInputColumn]}>WEIGHT</Text>
                     <TouchableOpacity
                       activeOpacity={0.5}
-                      style={styles.repsColumnHeader}
+                      style={[styles.setInputColumn, { marginLeft: 36 }]}
                       onPress={() => {
                         // Open rep selection for the entire exercise
                         setSelectedSetForReps({ exerciseId: item.id, setId: 'exercise-level' });
@@ -1634,13 +1595,10 @@ export default function EditRoutine() {
                         repSelectionBottomSheetRef.current?.snapToIndex(0);
                       }}
                     >
-                      <Text style={styles.setColumnHeader}>
-                        REPS
-                      </Text>
+                      <Text style={styles.setHeaderLabel}>REPS</Text>
                       <Ionicons style={styles.repsHeaderIcon} name="chevron-down" size={16} color={colors.secondaryText} />
                     </TouchableOpacity>
-                    <View style={styles.rpeColumnHeaderContainer}>
-                      <Text style={styles.setColumnHeader}>RPE</Text>
+                    <View style={styles.setInputColumn}>
                       <TouchableOpacity
                         activeOpacity={0.5}
                         onPress={(event) => {
@@ -1650,138 +1608,37 @@ export default function EditRoutine() {
                             setShowRpeTooltip(true);
                           });
                         }}
-                        style={styles.rpeTooltipButton}
+                        style={styles.rpeHeaderContainer}
                       >
-                        <Ionicons name="help-circle-outline" size={16} color={colors.secondaryText} />
+                        <Text style={styles.setHeaderLabel}>RPE</Text>
+                        <Ionicons name="help-circle-outline" size={16} color={colors.secondaryText} style={styles.rpeQuestionIcon} />
                       </TouchableOpacity>
                     </View>
                   </View>
                   
                   {item.sets.map((set, setIndex) => {
-                    const setKey = `${item.id}-${set.id}`;
-                    const swipeableKey = setKey;
-                    
-                    // Create deletion animation if it doesn't exist
-                    if (!deletionAnimations[setKey]) {
-                      setDeletionAnimations(prev => ({
-                        ...prev,
-                        [setKey]: new Animated.Value(1)
-                      }));
-                    }
-                    
-                    const deletionAnim = deletionAnimations[setKey] || new Animated.Value(1);
-                    
                     return (
-                      <Animated.View
+                      <SetItem
                         key={set.id}
-                        style={{
-                          opacity: deletionAnim,
+                        set={set}
+                        setIndex={setIndex}
+                        exercise={item}
+                        userWeightUnit={weightUnit}
+                        workoutSettings={{ rpeEnabled: true }}
+                        styles={styles}
+                        colors={colors}
+                        swipeableRefs={swipeableRefs}
+                        onRemoveSet={(exerciseId, setId) => removeSet(parseFloat(exerciseId), setId)}
+                        onOpenSetEdit={(exerciseIndex, setIndex) => {
+                          const foundExerciseIndex = exercises.findIndex(ex => ex.id === item.id);
+                          setSelectedSetForEdit({ exerciseId: item.id, setId: set.id });
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setEditBottomSheetRef.current?.snapToIndex(0);
                         }}
-                      >
-                        <Swipeable
-                          // @ts-ignore - Swipeable ref callback type mismatch
-                          ref={(ref: any) => {
-                            if (ref) {
-                              swipeableRefs.current[swipeableKey] = ref;
-                            } else {
-                              delete swipeableRefs.current[swipeableKey];
-                            }
-                          }}
-                          enabled={item.sets.length > 1} // Disable swipe if only one set
-                          renderRightActions={(prog) => rightAction(item.id, set.id, deletionAnim, setKey, prog)}
-                          rightThreshold={60}
-                          onSwipeableOpenStartDrag={() => {
-                            // Mark this one as swiping first
-                            swipeableRefs.current[swipeableKey + '_swiping'] = true;
-                            
-                            // Close all other swipeables (excluding the current one)
-                            Object.keys(swipeableRefs.current).forEach(key => {
-                              const ref = swipeableRefs.current[key];
-                              if (key.endsWith('_swiping')) {
-                                // Skip swiping state tracking keys
-                                return;
-                              }
-                              if (key !== swipeableKey && ref && ref.close) {
-                                ref.close();
-                              }
-                            });
-                          }}
-                          onSwipeableWillClose={() => {
-                            swipeableRefs.current[swipeableKey + '_swiping'] = false;
-                          }}
-                        >
-                          <Pressable
-                            style={styles.setRow}
-                            onPress={() => {
-                              // Check if we're currently swiping to prevent accidental presses
-                              if (swipeableRefs.current[swipeableKey + '_swiping']) {
-                                return;
-                              }
-                              
-                              closeAllSwipeables();
-                              setSelectedSetForEdit({ exerciseId: item.id, setId: set.id });
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              setEditBottomSheetRef.current?.snapToIndex(0);
-                            }}
-                          >
-                            {({ pressed }) => (
-                              <>
-                                {/* Press feedback overlay */}
-                                {pressed && (
-                                  <View style={styles.setPressOverlay} />
-                                )}
-                                
-                                <Text style={styles.setNumber}>{setIndex + 1}</Text>
-                            
-                                <View style={styles.setInputContainer}>
-                                  <Text style={[
-                                    styles.setDisplayText,
-                                    (set.weight === null || set.weight === undefined) && styles.placeholderSetText
-                                  ]}>
-                                    {set.weight !== null && set.weight !== undefined ? `${String(set.weight)} ${weightUnit}` : "-"}
-                                  </Text>
-                                </View>
-                                
-                                <View style={styles.setInputContainer}>
-                                  {set.isRange ? (
-                                    <View style={styles.repRangeDisplay}>
-                                      <Text style={[
-                                        styles.setDisplayText,
-                                        !set.repsMin && styles.placeholderSetText
-                                      ]}>
-                                        {set.repsMin?.toString() || '-'}
-                                      </Text>
-                                      <Text style={styles.repRangeSeparator}>to</Text>
-                                      <Text style={[
-                                        styles.setDisplayText,
-                                        !set.repsMax && styles.placeholderSetText
-                                      ]}>
-                                        {set.repsMax?.toString() || '-'}
-                                      </Text>
-                                    </View>
-                                  ) : (
-                                    <Text style={[
-                                      styles.setDisplayText,
-                                      !set.reps && styles.placeholderSetText
-                                    ]}>
-                                      {set.reps?.toString() || '-'}
-                                    </Text>
-                                  )}
-                                </View>
-                                
-                                <View style={styles.setInputContainer}>
-                                  <Text style={[
-                                    styles.setDisplayText,
-                                    (!set.rpe) && styles.placeholderSetText
-                                  ]}>
-                                    {set.rpe?.toString() || '-'}
-                                  </Text>
-                                </View>
-                              </>
-                            )}
-                          </Pressable>
-                        </Swipeable>
-                      </Animated.View>
+                        onCloseAllSwipeables={closeAllSwipeables}
+                        exerciseIndex={exercises.findIndex(ex => ex.id === item.id)}
+                        showCheckbox={false}
+                      />
                     );
                   })}
                   
@@ -2133,17 +1990,13 @@ export default function EditRoutine() {
                           onChangeText={(text) => {
                             const value = text === '' ? null : parseInt(text);
                             if (text === '' || (!isNaN(value!) && value! >= 1)) {
-                              // Add constraint: if there's a max value, min must be less than max
-                              const maxValue = typeof set.repsMax === 'string' ? parseInt(set.repsMax) : set.repsMax;
-                              if (maxValue && value && value >= maxValue) {
-                                return; // Don't update if min would be >= max
-                              }
                               updateSet(selectedSetForEdit.exerciseId, selectedSetForEdit.setId, 'repsMin', value);
                             }
                           }}
                           placeholder="-"
                           placeholderTextColor="rgba(255,255,255,0.3)"
                           keyboardType="numeric"
+                          selectTextOnFocus={true}
                         />
                         <Text style={styles.setEditRepRangeSeparator}>to</Text>
                         <BottomSheetTextInput
@@ -2791,12 +2644,38 @@ reorderModalFooter: {
     borderBottomColor: colors.whiteOverlay,
   },
   setColumnHeader: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.secondaryText,
+    marginRight: 12,
+    minWidth: 20,
+  },
+  setHeaderLabel: {
     fontSize: 12,
     color: colors.secondaryText,
     textAlign: 'center',
-    marginRight: 12,
-    minWidth: 20,
+  },
+  setNumberColumn: {
+    width: 40,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  setInputColumn: {
     flex: 1,
+    flexDirection: 'row',
+    marginHorizontal: 4,
+    textAlign: 'center',
+    gap: 18,
+    justifyContent: 'center',
+  },
+  rpeHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  rpeQuestionIcon: {
+    marginLeft: 4,
   },
   
   // Add set button - full width below sets
@@ -2843,11 +2722,13 @@ reorderModalFooter: {
     fontWeight: '600',
     marginTop: 4,
   },
+  
+  // SetItem component styles (from newWorkout)
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 18,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlayLight,
     backgroundColor: colors.primaryAccent,
@@ -2863,26 +2744,27 @@ reorderModalFooter: {
     borderRadius: 8,
     pointerEvents: 'none',
   },
-  setNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primaryText,
+  setText: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    fontWeight: 'bold',
     textAlign: 'center',
-    minWidth: 20,
-    flex: 1,
-    marginRight: 12,
+    justifyContent: 'flex-end',
   },
-  setInputContainer: {
-    flex: 1,
-    marginRight: 8,
-    alignItems: 'center',
+  setValueDisplay: {
     justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 40,
+    paddingVertical: 8,
   },
-  setDisplayText: {
-    fontSize: 16,
+  setValueText: {
     color: colors.primaryText,
-    textAlign: 'center',
+    fontSize: 16,
     fontWeight: '500',
+    textAlign: 'center',
+  },
+  completedSetText: {
+    opacity: 0.7,
   },
   placeholderSetText: {
     color: colors.secondaryText,
@@ -2898,6 +2780,49 @@ reorderModalFooter: {
     fontSize: 14,
     color: colors.secondaryText,
     fontWeight: '500',
+  },
+  setRowCompletionRibbon: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(38, 194, 129, 0.2)',
+    borderRadius: 8,
+    pointerEvents: 'none',
+  },
+  setFieldErrorOverlay: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    bottom: 2,
+    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+    borderRadius: 6,
+    pointerEvents: 'none',
+  },
+  checkboxColumn: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 8,
+    borderColor: colors.secondaryText,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customCheckboxCompleted: {
+    backgroundColor: 'rgba(38, 194, 129, 0.7)',
+    borderColor: 'rgba(38, 194, 129, 0.7)',
+  },
+  disabledCheckbox: {
+    opacity: 0.4,
   },
 
   // Rep Selection Modal styles - matching exercise options

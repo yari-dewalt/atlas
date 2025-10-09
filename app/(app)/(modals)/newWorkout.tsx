@@ -49,6 +49,7 @@ export default function NewWorkout() {
   const { 
     startWorkout, 
     activeWorkout, 
+    currentDuration,
     endWorkout, 
     saveWorkoutToDatabase,
     updateWorkoutTime,
@@ -79,7 +80,6 @@ export default function NewWorkout() {
   const [routine, setRoutine] = useState(null);
   const [loading, setLoading] = useState(false);
   const timerIntervalRef = useRef(null);
-  const [workoutStats, setWorkoutStats] = useState({ exercises: 0, volume: 0, sets: 0 });
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -256,7 +256,7 @@ export default function NewWorkout() {
   const openTimeInputModal = () => {
     // Pre-fill with current workout time
     if (activeWorkout) {
-      const seconds = activeWorkout.duration;
+      const seconds = currentDuration;
       const hours = Math.floor(seconds / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
       const secs = Math.floor(seconds % 60);
@@ -435,11 +435,11 @@ const handleRemoveExercise = () => {
     }
   };
 
-  const handleScroll = (event) => {
+  const handleScroll = useCallback((event) => {
     const scrollY = event.nativeEvent.contentOffset.y;
     // Show floating timer when scrolled down more than 100 pixels
     setShowFloatingTimer(scrollY > 100 && workoutSettings.showElapsedTime);
-  };
+  }, [workoutSettings.showElapsedTime]);
 
  useEffect(() => {
     // Handle single exercise from custom creation or exercise selection (but not replacement)
@@ -653,7 +653,7 @@ const handleRemoveExercise = () => {
     });
   };
 
-  const showExerciseDetails = (exercise) => {
+  const showExerciseDetails = useCallback((exercise) => {
     // Navigate to exercise details screen with exercise data
     router.push({
       pathname: '(app)/(modals)/exerciseDetails',
@@ -663,7 +663,7 @@ const handleRemoveExercise = () => {
         fromWorkout: 'true'
       }
     });
-  };
+  }, [router]);
   
   // Function to reorder exercises
   const reorderExercises = (newOrder) => {
@@ -744,7 +744,7 @@ const handleRemoveExercise = () => {
     }
   };
 
-  const toggleExerciseMinimized = (exerciseId) => {
+  const toggleExerciseMinimized = useCallback((exerciseId) => {
     setMinimizedExercises(prev => {
       const newSet = new Set(prev);
       if (newSet.has(exerciseId)) {
@@ -754,10 +754,10 @@ const handleRemoveExercise = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  // Function to close all open swipeables
-  const closeAllSwipeables = () => {
+  // Function to close all open swipeables - memoized to prevent re-renders
+  const closeAllSwipeables = useCallback(() => {
     Object.keys(swipeableRefs.current).forEach(key => {
       const ref = swipeableRefs.current[key];
       if (key.endsWith('_swiping')) {
@@ -768,7 +768,7 @@ const handleRemoveExercise = () => {
         ref.close();
       }
     });
-  };
+  }, []);
 
   const addExerciseToWorkout = (exercise) => {
     // Generate a unique workout exercise ID
@@ -822,12 +822,12 @@ const handleRemoveExercise = () => {
     });
   };
 
-  const handleAddExercise = () => {
+  const handleAddExercise = useCallback(() => {
     router.push({
       pathname: '/(app)/(modals)/exerciseSelection',
       params: { fromNewWorkout: 'true' }
     });
-  };
+  }, [router]);
   
   // Add function to update set values
   const updateSetValue = (exerciseIndex, setIndex, field, value) => {
@@ -891,7 +891,7 @@ const handleRemoveExercise = () => {
     }
   };
 
-  const toggleTimer = () => {
+  const toggleTimer = useCallback(() => {
     if (isPaused) {
       // Resume the timer
       resumeTimer();
@@ -903,9 +903,9 @@ const handleRemoveExercise = () => {
       pauseTimer();
       clearInterval(timerIntervalRef.current);
     }
-  };
+  }, [isPaused, resumeTimer, pauseTimer, updateWorkoutTime]);
 
-  const restartTimer = () => {
+  const restartTimer = useCallback(() => {
     // Stop any existing timer
     clearInterval(timerIntervalRef.current);
     
@@ -919,35 +919,253 @@ const handleRemoveExercise = () => {
     timerIntervalRef.current = setInterval(() => {
       updateWorkoutTime();
     }, 1000);
-  };
+  }, [updateWorkoutTime, pauseTimer]);
 
-  useEffect(() => {
-    if (activeWorkout) {
-      // Calculate workout stats - only count completed sets
-      let totalCompletedSets = 0;
-      let totalVolume = 0;
-      
-      activeWorkout.exercises.forEach(exercise => {
-        exercise.sets.forEach(set => {
-          // Only count completed sets
-          if (set.isCompleted) {
-            totalCompletedSets += 1;
-            
-            // Only calculate volume for completed sets with valid weight and reps
-            if (set.weight && set.reps) {
-              totalVolume += set.weight * set.reps;
-            }
-          }
-        });
-      });
-      
-      setWorkoutStats({
-        exercises: activeWorkout.exercises.length,
-        volume: Math.round(totalVolume),
-        sets: totalCompletedSets // Now shows completed sets only
-      });
+  // Memoize workout stats calculation to prevent re-renders
+  const workoutStats = useMemo(() => {
+    if (!activeWorkout?.exercises) {
+      return { exercises: 0, volume: 0, sets: 0 };
     }
-  }, [activeWorkout]);
+    
+    let totalCompletedSets = 0;
+    let totalVolume = 0;
+    
+    activeWorkout.exercises.forEach(exercise => {
+      exercise.sets.forEach(set => {
+        // Only count completed sets
+        if (set.isCompleted) {
+          totalCompletedSets += 1;
+          
+          // Only calculate volume for completed sets with valid weight and reps
+          if (set.weight && set.reps) {
+            totalVolume += set.weight * set.reps;
+          }
+        }
+      });
+    });
+    
+    return {
+      exercises: activeWorkout.exercises.length,
+      volume: Math.round(totalVolume),
+      sets: totalCompletedSets // Now shows completed sets only
+    };
+  }, [activeWorkout?.exercises]); // Only watch exercises, not the entire activeWorkout
+
+  // Memoize the rendered exercises to prevent re-renders on timer updates
+  const renderedExercises = useMemo(() => {
+    if (!activeWorkout?.exercises) return null;
+    
+    return activeWorkout.exercises.map((exercise, exerciseIndex) => {
+      const isMinimized = minimizedExercises.has(exercise.id);
+      
+      return (
+        <View key={exercise.id} style={[
+          styles.exerciseCard,
+        ]}>
+          {/* Exercise header with name, minimize button, and options */}
+          <View style={styles.exerciseHeader}>
+            <View style={styles.exerciseNameContainer}>
+              <View style={styles.exerciseTitleRow}>
+                {/* Make the entire left side (name + minimize button) pressable */}
+                <TouchableOpacity
+                  activeOpacity={0.5} 
+                  style={styles.exerciseTitlePressable}
+                  onPress={() => {
+                    closeAllSwipeables();
+                    toggleExerciseMinimized(exercise.id);
+                  }}
+                >
+                  <View style={styles.exerciseNameAndBadgeContainer}>
+                    <TouchableOpacity
+                      activeOpacity={0.5} 
+                      onPress={() => {
+                        closeAllSwipeables();
+                        showExerciseDetails(exercise);
+                      }}
+                      style={styles.exerciseNamePressable}
+                    >
+                      <View style={styles.exerciseNameRow}>
+                        {/* Exercise Image */}
+                        {exercise.image_url && !failedImages.has(exercise.id) ? (
+                          <Image 
+                            source={{ uri: exercise.image_url }}
+                            style={styles.exerciseImage}
+                            resizeMode="cover"
+                            onError={() => {
+                              setFailedImages(prev => new Set(prev).add(exercise.id));
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.exerciseImagePlaceholder}>
+                            <IonIcon 
+                              name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
+                              size={18} 
+                              color={colors.secondaryText} 
+                            />
+                          </View>
+                        )}
+                        
+                        <View>
+                          {/* Exercise Name */}
+                          <Text style={styles.exerciseName}>{exercise.name}</Text>
+                          {/* Show notes input only when not minimized */}
+                          <TextInput
+                            style={styles.notesInput}
+                            value={exercise.notes || ''}
+                            onChangeText={(text) => updateExercise(exercise.id, { notes: text })}
+                            placeholder="Add notes..."
+                            placeholderTextColor={'rgba(255,255,255,0.6)'}
+                            maxLength={200}
+                            scrollEnabled={false}
+                            onFocus={closeAllSwipeables}
+                          />
+                        </View>
+                        
+                        {/* Custom Exercise Badge */}
+                        {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
+                          <View style={styles.customBadge}>
+                            <Text style={styles.customBadgeText}>Custom</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                    
+                    {/* Add superset badge */}
+                    {exerciseToSuperset.has(exercise.id) && (
+                      <View style={[
+                        styles.supersetBadge,
+                        { backgroundColor: getSupersetColor(exerciseToSuperset.get(exercise.id)) }
+                      ]}>
+                        <Text style={styles.supersetBadgeText}>Superset</Text>
+                      </View>
+                    )}
+                  </View>
+                  <IonIcon 
+                    name={isMinimized ? "chevron-down" : "chevron-up"} 
+                    size={20} 
+                    color={colors.secondaryText} 
+                    style={styles.minimizeIcon}
+                  />
+                </TouchableOpacity>
+                
+                {/* Keep the options button separate */}
+                <TouchableOpacity
+                  activeOpacity={0.5} 
+                  style={styles.exerciseOptionsButton}
+                  onPress={() => {
+                    closeAllSwipeables();
+                    showExerciseOptions(exercise);
+                  }}
+                >
+                  <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          
+          {/* Show exercise summary when minimized */}
+          {isMinimized ? (
+            <View style={styles.exerciseSummary}>
+              {/* Progress bar */}
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View 
+                    style={[
+                      styles.progressBarFill, 
+                      { 
+                        width: `${(exercise.sets.filter(set => set.isCompleted).length / exercise.sets.length) * 100}%` 
+                      }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.progressText}>
+                  {exercise.sets.filter(set => set.isCompleted).length}/{exercise.sets.length} sets completed
+                </Text>
+              </View>
+            </View>
+          ) : (
+            // Show full exercise details when not minimized
+            <>
+              {/* Set headers */}
+              <View style={styles.setHeader}>
+                <Text style={[styles.setHeaderLabel, styles.setNumberColumn]}>SET</Text>
+                <Text style={[styles.setHeaderLabel, styles.setInputColumn]}>
+                  WEIGHT
+                </Text>
+                <Text style={[styles.setHeaderLabel, styles.setInputColumn]}>REPS</Text>
+                {workoutSettings.rpeEnabled && (
+                  <View style={[styles.setHeaderLabel, styles.setInputColumn]}>
+                    <TouchableOpacity
+                      activeOpacity={0.5} 
+                      onPress={(event) => {
+                        closeAllSwipeables();
+                        event.target.measure((x, y, width, height, pageX, pageY) => {
+                          setRpeTooltipPosition({ x: pageX, y: pageY + height });
+                          setShowRpeTooltip(true);
+                        });
+                      }}
+                      style={styles.rpeHeaderContainer}
+                    >
+                      <Text style={styles.setHeaderLabel}>RPE</Text>
+                      <IonIcon name="help-circle" size={16} color={colors.secondaryText} style={styles.rpeQuestionIcon} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <View style={styles.checkboxColumn}>
+                  <IonIcon name="checkmark" size={16} color={colors.secondaryText} />
+                </View>
+              </View>
+              
+              {/* Sets - optimized with memoized components */}
+              {exercise.sets.map((set, setIndex) => (
+                <SetItem
+                  key={set.id}
+                  set={set}
+                  setIndex={setIndex}
+                  exercise={exercise}
+                  userWeightUnit={userWeightUnit}
+                  workoutSettings={workoutSettings}
+                  styles={styles}
+                  colors={colors}
+                  swipeableRefs={swipeableRefs}
+                  onToggleSetCompletion={toggleSetCompletion}
+                  onRemoveSet={handleRemoveSet}
+                  onOpenSetEdit={openSetEditModal}
+                  onCloseAllSwipeables={closeAllSwipeables}
+                  exerciseIndex={exerciseIndex}
+                  animationManager={animationManager}
+                />
+              ))}
+              
+              {/* Add set button */}
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.addSetButton}
+                onPress={() => {
+                  closeAllSwipeables();
+                  addSet(exercise.id);
+                }}
+              >
+                <IonIcon name="add" size={18} color={colors.primaryText} />
+                <Text style={styles.addSetButtonText}>Add Set</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      );
+    });
+  }, [
+    activeWorkout?.exercises, // Only exercises array, not entire activeWorkout
+    minimizedExercises,
+    failedImages,
+    exerciseToSuperset,
+    workoutSettings.rpeEnabled,
+    userWeightUnit,
+    workoutSettings,
+    colors,
+    // Remove function dependencies that don't change
+    // swipeableRefs, animationManager, closeAllSwipeables, etc. are stable
+  ]);
 
   useEffect(() => {
     if (activeWorkout?.name) {
@@ -968,8 +1186,8 @@ const handleRemoveExercise = () => {
     loadRoutineInfo();
   }, [activeWorkout?.routineId]);
   
-  // Format duration for display
-  const formatDuration = (seconds) => {
+  // Format duration for display - memoized to prevent re-renders
+  const formatDuration = useCallback((seconds) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
@@ -979,7 +1197,33 @@ const handleRemoveExercise = () => {
       minutes.toString().padStart(2, '0'),
       secs.toString().padStart(2, '0')
     ].join(':');
-  };
+  }, []);
+
+  // Format rest timer display - memoized to prevent re-renders
+  const formatRestTime = useCallback((seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  // Memoize the timer display to prevent re-renders on timer updates
+  const timerDisplayText = useMemo(() => {
+    return activeWorkout ? formatDuration(currentDuration) : "00:00:00";
+  }, [currentDuration, formatDuration, activeWorkout]);
+
+  // Memoize floating timer display  
+  const floatingTimerDisplayText = useMemo(() => {
+    return activeWorkout ? formatDuration(currentDuration) : "00:00:00";
+  }, [currentDuration, formatDuration, activeWorkout]);
+
+  // Memoize rest timer displays to prevent re-renders
+  const restTimerDisplayText = useMemo(() => {
+    return formatRestTime(restTime);
+  }, [restTime, formatRestTime]);
+
+  const stopwatchDisplayText = useMemo(() => {
+    return formatRestTime(stopwatchTime);
+  }, [stopwatchTime, formatRestTime]);
   
   const stopAnimations = () => {
   };
@@ -1138,13 +1382,7 @@ const handleTimerCompletion = async () => {
     setRestTime(defaultTime);
     setInitialRestTime(defaultTime);
   };
-  
-  // Format rest timer display
-  const formatRestTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+
 
   // Timer editing functions
   const startEditingTimer = (focusField = null) => {
@@ -1300,8 +1538,8 @@ const handleTimerCompletion = async () => {
     };
   }, [routineId]);
   
-  // Helper function to check if workout meets minimum requirements
-  const isWorkoutValid = () => {
+  // Helper function to check if workout meets minimum requirements - memoized
+  const isWorkoutValid = useMemo(() => {
     if (!activeWorkout?.exercises || activeWorkout.exercises.length === 0) {
       return false;
     }
@@ -1309,7 +1547,7 @@ const handleTimerCompletion = async () => {
     return activeWorkout.exercises.some(exercise => 
       exercise.sets && exercise.sets.length > 0 && exercise.sets.some(set => set.isCompleted)
     );
-  };
+  }, [activeWorkout?.exercises]);
 
   const handleSaveWorkout = () => {
     // First, check if we have any exercises at all
@@ -1510,13 +1748,13 @@ const handleTimerCompletion = async () => {
       <Text style={styles.headerTitle}>
         {restTimerActive && stopwatchActive ? (
           // Both timers active - show both
-          `Rest: ${formatRestTime(restTime)} | SW: ${formatRestTime(stopwatchTime)}`
+          `Rest: ${restTimerDisplayText} | SW: ${stopwatchDisplayText}`
         ) : restTimerActive ? (
           // Only rest timer active
-          `Rest: ${formatRestTime(restTime)}`
+          `Rest: ${restTimerDisplayText}`
         ) : (
           // Only stopwatch active
-          `Stopwatch: ${formatRestTime(stopwatchTime)}`
+          `Stopwatch: ${stopwatchDisplayText}`
         )}
       </Text>
     </TouchableOpacity>
@@ -1562,12 +1800,12 @@ const handleTimerCompletion = async () => {
       }} 
       style={[
         styles.finishButton,
-        !isWorkoutValid() && styles.finishButtonDisabled
+        !isWorkoutValid && styles.finishButtonDisabled
       ]}
     >
       <Text style={[
         styles.finishButtonText,
-        !isWorkoutValid() && styles.finishButtonTextDisabled
+        !isWorkoutValid && styles.finishButtonTextDisabled
       ]}>
         {activeWorkout?.isEditing ? 'Save' : 'Finish'}
       </Text>
@@ -1599,7 +1837,7 @@ const handleTimerCompletion = async () => {
                 styles.floatingTimerText,
                 workoutSettings.largeTimerDisplay && styles.largeFloatingTimerText
               ]}>
-                {activeWorkout ? formatDuration(activeWorkout.duration) : "00:00:00"}
+                {timerDisplayText}
               </Text>
             </View>
 
@@ -1648,7 +1886,7 @@ const handleTimerCompletion = async () => {
               styles.timerText,
               workoutSettings.largeTimerDisplay && styles.largeTimerText
             ]}>
-              {activeWorkout ? formatDuration(activeWorkout.duration) : "00:00:00"}
+              {floatingTimerDisplayText}
             </Text>
           </TouchableOpacity>
           <View style={styles.durationTimerControls}>
@@ -1729,205 +1967,7 @@ const handleTimerCompletion = async () => {
           </View>
         ) : (
           <View style={styles.exercisesContainer}>
-            {activeWorkout?.exercises.map((exercise, exerciseIndex) => {
-  const isMinimized = minimizedExercises.has(exercise.id);
-  
-  return (
-    <View key={exercise.id} style={[
-      styles.exerciseCard,
-    ]}>
-      {/* Exercise header with name, minimize button, and options */}
-      <View style={styles.exerciseHeader}>
-    <View style={styles.exerciseNameContainer}>
-    <View style={styles.exerciseTitleRow}>
-  {/* Make the entire left side (name + minimize button) pressable */}
-  <TouchableOpacity
-                activeOpacity={0.5} 
-    style={styles.exerciseTitlePressable}
-    onPress={() => {
-      closeAllSwipeables();
-      toggleExerciseMinimized(exercise.id);
-    }}
-  >
-    <View style={styles.exerciseNameAndBadgeContainer}>
-  <TouchableOpacity
-                activeOpacity={0.5} 
-    onPress={() => {
-      closeAllSwipeables();
-      showExerciseDetails(exercise);
-    }}
-    style={styles.exerciseNamePressable}
-  >
-    <View style={styles.exerciseNameRow}>
-      {/* Exercise Image */}
-      {exercise.image_url && !failedImages.has(exercise.id) ? (
-        <Image 
-          source={{ uri: exercise.image_url }}
-          style={styles.exerciseImage}
-          resizeMode="cover"
-          onError={() => {
-            setFailedImages(prev => new Set(prev).add(exercise.id));
-          }}
-        />
-      ) : (
-        <View style={styles.exerciseImagePlaceholder}>
-          <IonIcon 
-            name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
-            size={18} 
-            color={colors.secondaryText} 
-          />
-        </View>
-      )}
-      
-      <View>
-        {/* Exercise Name */}
-        <Text style={styles.exerciseName}>{exercise.name}</Text>
-        {/* Show notes input only when not minimized */}
-          <TextInput
-            style={styles.notesInput}
-            value={exercise.notes || ''}
-            onChangeText={(text) => updateExercise(exercise.id, { notes: text })}
-            placeholder="Add notes..."
-            placeholderTextColor={'rgba(255,255,255,0.6)'}
-            maxLength={200}
-            scrollEnabled={false}
-            onFocus={closeAllSwipeables}
-          />
-      </View>
-      
-      {/* Custom Exercise Badge */}
-      {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
-        <View style={styles.customBadge}>
-          <Text style={styles.customBadgeText}>Custom</Text>
-        </View>
-      )}
-    </View>
-  </TouchableOpacity>
-  
-  {/* Add superset badge */}
-  {exerciseToSuperset.has(exercise.id) && (
-    <View style={[
-      styles.supersetBadge,
-      { backgroundColor: getSupersetColor(exerciseToSuperset.get(exercise.id)) }
-    ]}>
-      <Text style={styles.supersetBadgeText}>Superset</Text>
-    </View>
-  )}
-</View>
-    <IonIcon 
-      name={isMinimized ? "chevron-down" : "chevron-up"} 
-      size={20} 
-      color={colors.secondaryText} 
-      style={styles.minimizeIcon}
-    />
-  </TouchableOpacity>
-  
-  {/* Keep the options button separate */}
-  <TouchableOpacity
-                activeOpacity={0.5} 
-    style={styles.exerciseOptionsButton}
-    onPress={() => {
-      closeAllSwipeables();
-      showExerciseOptions(exercise);
-    }}
-  >
-    <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
-  </TouchableOpacity>
-</View>
-    </View>
-  </View>
-      
-      {/* Show exercise summary when minimized */}
-      {isMinimized ? (
-        <View style={styles.exerciseSummary}>
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBarBackground}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { 
-                    width: `${(exercise.sets.filter(set => set.isCompleted).length / exercise.sets.length) * 100}%` 
-                  }
-                ]} 
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {exercise.sets.filter(set => set.isCompleted).length}/{exercise.sets.length} sets completed
-            </Text>
-          </View>
-        </View>
-      ) : (
-        // Show full exercise details when not minimized
-        <>
-          {/* Set headers */}
-          <View style={styles.setHeader}>
-            <Text style={[styles.setHeaderLabel, styles.setNumberColumn]}>SET</Text>
-            <Text style={[styles.setHeaderLabel, styles.setInputColumn]}>
-              WEIGHT
-            </Text>
-            <Text style={[styles.setHeaderLabel, styles.setInputColumn]}>REPS</Text>
-            {workoutSettings.rpeEnabled && (
-              <View style={[styles.setHeaderLabel, styles.setInputColumn]}>
-                <TouchableOpacity
-                activeOpacity={0.5} 
-                  onPress={(event) => {
-                    closeAllSwipeables();
-                    event.target.measure((x, y, width, height, pageX, pageY) => {
-                      setRpeTooltipPosition({ x: pageX, y: pageY + height });
-                      setShowRpeTooltip(true);
-                    });
-                  }}
-                  style={styles.rpeHeaderContainer}
-                >
-                  <Text style={styles.setHeaderLabel}>RPE</Text>
-                  <IonIcon name="help-circle" size={16} color={colors.secondaryText} style={styles.rpeQuestionIcon} />
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={styles.checkboxColumn}>
-              <IonIcon name="checkmark" size={16} color={colors.secondaryText} />
-            </View>
-          </View>
-          
-          {/* Sets - optimized with memoized components */}
-          {exercise.sets.map((set, setIndex) => (
-            <SetItem
-              key={set.id}
-              set={set}
-              setIndex={setIndex}
-              exercise={exercise}
-              userWeightUnit={userWeightUnit}
-              workoutSettings={workoutSettings}
-              styles={styles}
-              colors={colors}
-              swipeableRefs={swipeableRefs}
-              onToggleSetCompletion={toggleSetCompletion}
-              onRemoveSet={handleRemoveSet}
-              onOpenSetEdit={openSetEditModal}
-              onCloseAllSwipeables={closeAllSwipeables}
-              exerciseIndex={exerciseIndex}
-              animationManager={animationManager}
-            />
-          ))}
-          
-          {/* Add set button */}
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.addSetButton}
-            onPress={() => {
-              closeAllSwipeables();
-              addSet(exercise.id);
-            }}
-          >
-            <IonIcon name="add" size={18} color={colors.primaryText} />
-            <Text style={styles.addSetButtonText}>Add Set</Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
-  );
-})}     
+            {renderedExercises}
           </View>
         )}
 
@@ -2338,7 +2378,7 @@ const handleTimerCompletion = async () => {
                       />
                       <View style={styles.timerTextOverlay}>
                         <Text style={styles.circularTimerText}>
-                          {formatRestTime(stopwatchTime)}
+                          {stopwatchDisplayText}
                         </Text>
                         <Text style={styles.circularTimerLabel}>STOPWATCH</Text>
                       </View>
@@ -3475,6 +3515,7 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
     fontWeight: 'bold',
     textAlign: 'center',
+    justifyContent: 'flex-end',
   },
   setHeaderLabel: {
     fontSize: 12,
