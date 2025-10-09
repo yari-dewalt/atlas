@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   View, 
   Image, 
@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback
 } from 'react-native';
-import { Video, AVPlaybackStatus, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer, VideoSource } from 'expo-video';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
@@ -65,8 +65,11 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   const [backgroundVideoMutedBeforeFullscreen, setBackgroundVideoMutedBeforeFullscreen] = useState<boolean | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
-  const videoRefs = useRef<{[key: string]: Video | null}>({});
-  const fullscreenVideoRef = useRef<Video | null>(null);
+  const videoPlayers = useRef<{[key: string]: any}>({});
+  const fullscreenVideoPlayer = useVideoPlayer('', (player) => {
+    player.loop = true;
+    player.muted = false;
+  });
 
   useEffect(() => {
     const processContentAndUrls = async () => {
@@ -125,6 +128,27 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
 
 
 
+  // Create video players for each video item (only depend on media URLs, not mute state)
+  const videoPlayersList = media.filter(item => item.type === 'video').map(item => {
+    const mediaUrl = mediaUrls[item.id] || item.uri;
+    return {
+      id: item.id,
+      player: useVideoPlayer(mediaUrl || '', (player) => {
+        player.loop = true;
+        player.muted = true; // Start muted, will be updated separately
+      })
+    };
+  });
+
+  // Update the ref with current players
+  useEffect(() => {
+    const playersMap = {};
+    videoPlayersList.forEach(({ id, player }) => {
+      playersMap[id] = player;
+    });
+    videoPlayers.current = playersMap;
+  }, [videoPlayersList]);
+
   useEffect(() => {
     // Initialize remaining times with original durations
     const times = {};
@@ -138,34 +162,30 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
     // Handle video playback based on focus
     media.forEach((item, index) => {
       if (item.type === 'video') {
-        const videoRef = videoRefs.current[item.id];
-        if (videoRef) {
-          if (index === activeIndex) {
+        const player = videoPlayers.current[item.id];
+        if (player) {
+          if (index === activeIndex && isPostVisible) {
             // Reset and play the active video, using global mute state
-            videoRef.setPositionAsync(0).then(() => {
-              videoRef.setIsMutedAsync(globalVideoMuted).then(() => {
-                videoRef.playAsync();
-              });
-            });
+            player.currentTime = 0;
+            player.muted = globalVideoMuted;
+            player.play();
           } else {
-            // Pause and reset non-active videos
-            videoRef.pauseAsync().then(() => {
-              videoRef.setPositionAsync(0);
-            });
+            // Pause non-active videos
+            player.pause();
           }
         }
       }
     });
-  }, [activeIndex, media]);
+  }, [activeIndex, media, isPostVisible]); // Removed globalVideoMuted from dependencies
 
   // Separate effect to handle mute state changes without restarting videos
   useEffect(() => {
     media.forEach((item, index) => {
       if (item.type === 'video') {
-        const videoRef = videoRefs.current[item.id];
-        if (videoRef) {
+        const player = videoPlayers.current[item.id];
+        if (player) {
           // Only update mute state without affecting playback position
-          videoRef.setIsMutedAsync(globalVideoMuted);
+          player.muted = globalVideoMuted;
         }
       }
     });
@@ -175,16 +195,15 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   useEffect(() => {
     media.forEach((item, index) => {
       if (item.type === 'video') {
-        const videoRef = videoRefs.current[item.id];
-        if (videoRef) {
+        const player = videoPlayers.current[item.id];
+        if (player) {
           if (!isPostVisible) {
             // Pause all videos when post goes out of view or screen loses focus
-            videoRef.pauseAsync();
+            player.pause();
           } else if (index === activeIndex) {
             // Resume the active video when post comes back into view and screen is focused
-            videoRef.setIsMutedAsync(globalVideoMuted).then(() => {
-              videoRef.playAsync();
-            });
+            player.muted = globalVideoMuted;
+            player.play();
           }
         }
       }
@@ -195,19 +214,23 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   useEffect(() => {
     return () => {
       // Pause all videos when component unmounts
-      Object.values(videoRefs.current).forEach(videoRef => {
-        if (videoRef) {
-          videoRef.pauseAsync().catch(() => {
-            // Ignore errors during cleanup
-          });
+      Object.values(videoPlayers.current).forEach(player => {
+        if (player) {
+          try {
+            player.pause();
+          } catch (error) {
+            // Ignore errors if player is already deallocated
+          }
         }
       });
       
       // Also pause fullscreen video if it exists
-      if (fullscreenVideoRef.current) {
-        fullscreenVideoRef.current.pauseAsync().catch(() => {
-          // Ignore errors during cleanup
-        });
+      if (fullscreenVideoPlayer) {
+        try {
+          fullscreenVideoPlayer.pause();
+        } catch (error) {
+          // Ignore errors if player is already deallocated
+        }
       }
     };
   }, []);
@@ -219,38 +242,52 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
   
 
 
-  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus, itemId: string, totalDuration?: number) => {
-    if (status.isLoaded && !status.isBuffering) {
-      if (totalDuration) {
-        const currentPositionMillis = status.positionMillis || 0;
-        const currentPositionSecs = currentPositionMillis / 1000;
-        const remaining = totalDuration - currentPositionSecs;
-        
-        setRemainingTimes(prev => ({
-          ...prev,
-          [itemId]: Math.max(0, remaining)
-        }));
-      }
+  const handlePlaybackStatusUpdate = (itemId: string, totalDuration?: number) => {
+    const player = videoPlayers.current[itemId];
+    if (player && totalDuration) {
+      const currentPositionSecs = player.currentTime || 0;
+      const remaining = totalDuration - currentPositionSecs;
+      
+      setRemainingTimes(prev => ({
+        ...prev,
+        [itemId]: Math.max(0, remaining)
+      }));
     }
   };
 
   const handleMediaPress = (item: MediaItem, index: number) => {
     // If opening a video in fullscreen, mute the background video to prevent audio overlap
     if (item.type === 'video') {
-      const videoRef = videoRefs.current[item.id];
-      if (videoRef) {
+      const player = videoPlayers.current[item.id];
+      if (player) {
         // Store the current muted state before muting for fullscreen
         setBackgroundVideoMutedBeforeFullscreen(globalVideoMuted);
         // Mute the background video
-        videoRef.setIsMutedAsync(true);
+        player.muted = true;
       }
     }
     
+    const mediaUrl = mediaUrls[item.id] || item.uri;
     setSelectedItem({
       ...item,
-      uri: mediaUrls[item.id] || item.uri
+      uri: mediaUrl
     });
     setSelectedIndex(index);
+    
+    // Set up fullscreen player
+    if (item.type === 'video') {
+      fullscreenVideoPlayer.replace(mediaUrl);
+      fullscreenVideoPlayer.muted = false;
+      // Auto-play the video when entering fullscreen
+      setTimeout(() => {
+        try {
+          fullscreenVideoPlayer.play();
+        } catch (error) {
+          // Ignore errors if player is already deallocated
+        }
+      }, 100);
+    }
+    
     setIsFullscreen(true);
     
     // Call the parent's onMediaPress handler if needed
@@ -262,59 +299,70 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
     
     // Resume the video in the gallery if it was playing before fullscreen
     if (selectedItem && selectedItem.type === 'video') {
-      const videoRef = videoRefs.current[selectedItem.id];
-      if (videoRef && isPostVisible) {
+      const player = videoPlayers.current[selectedItem.id];
+      if (player && isPostVisible) {
         // Small delay to ensure the modal has closed
         setTimeout(() => {
           // Restore the original muted state (before fullscreen was opened)
           const originalMutedState = backgroundVideoMutedBeforeFullscreen ?? true;
-          videoRef.setIsMutedAsync(originalMutedState).then(() => {
-            videoRef.playAsync();
-          });
+          player.muted = originalMutedState;
+          if (media.findIndex(item => item.id === selectedItem.id) === activeIndex) {
+            player.play();
+          }
         }, 100);
       }
     }
+    
+    // Pause fullscreen video
+    fullscreenVideoPlayer.pause();
     
     setSelectedItem(null);
     setBackgroundVideoMutedBeforeFullscreen(null);
   };
 
-  const handleFullscreenPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      setIsVideoPlaying(status.shouldPlay || false);
-      
-      if (status.durationMillis) {
-        setVideoDuration(status.durationMillis / 1000);
+  // Track fullscreen video progress
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (fullscreenVideoPlayer && selectedItem?.type === 'video') {
+        const duration = fullscreenVideoPlayer.duration || 0;
+        const currentTime = fullscreenVideoPlayer.currentTime || 0;
+        
+        setVideoDuration(duration);
+        if (duration > 0) {
+          setVideoProgress(currentTime / duration);
+        }
+        setIsVideoPlaying(fullscreenVideoPlayer.playing);
       }
-      
-      if (status.positionMillis && status.durationMillis) {
-        const newProgress = status.positionMillis / status.durationMillis;
-        setVideoProgress(newProgress);
-      }
-    }
-  };
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [selectedItem]);
 
   const togglePlayPause = async () => {
-    if (fullscreenVideoRef.current) {
-      if (isVideoPlaying) {
-        await fullscreenVideoRef.current.pauseAsync();
-      } else {
-        await fullscreenVideoRef.current.playAsync();
+    if (fullscreenVideoPlayer) {
+      try {
+        if (isVideoPlaying) {
+          fullscreenVideoPlayer.pause();
+        } else {
+          fullscreenVideoPlayer.play();
+        }
+        setIsVideoPlaying(!isVideoPlaying);
+      } catch (error) {
+        // Ignore errors if player is already deallocated
       }
-      setIsVideoPlaying(!isVideoPlaying);
     }
   };
 
   const toggleMute = async (itemId: string) => {
-    const videoRef = videoRefs.current[itemId];
-    if (videoRef) {
+    const player = videoPlayers.current[itemId];
+    if (player) {
       const newMutedState = !globalVideoMuted;
       setGlobalVideoMuted(newMutedState);
       
-      // Update all video refs to use the new global mute state
-      Object.entries(videoRefs.current).forEach(([id, ref]) => {
-        if (ref) {
-          ref.setIsMutedAsync(newMutedState);
+      // Only update the mute state without affecting playback
+      Object.values(videoPlayers.current).forEach(player => {
+        if (player) {
+          player.muted = newMutedState;
         }
       });
     }
@@ -352,16 +400,11 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
           />
         ) : (
           <View style={styles.videoContainer}>
-            <Video
-              ref={(ref) => { videoRefs.current[item.id] = ref; }}
-              source={{ uri: mediaUrl }}
+            <VideoView
+              player={videoPlayers.current[item.id]}
               style={styles.media}
-              useNativeControls={false}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={index === activeIndex}
-              isLooping={true}
-              isMuted={globalVideoMuted}
-              onPlaybackStatusUpdate={(status) => handlePlaybackStatusUpdate(status, item.id, item.duration)}
+              nativeControls={false}
+              contentFit="cover"
             />
             <Pressable
               style={styles.muteButton}
@@ -467,16 +510,11 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({ media, exercises = [], onMe
                 onPress={togglePlayPause}
                 activeOpacity={1}
               >
-                <Video
-                  ref={fullscreenVideoRef}
-                  source={{ uri: selectedItem.uri }}
+                <VideoView
+                  player={fullscreenVideoPlayer}
                   style={styles.fullscreenMedia}
-                  useNativeControls={false}
-                  resizeMode={ResizeMode.CONTAIN}
-                  shouldPlay={true}
-                  isLooping={true}
-                  progressUpdateIntervalMillis={10}
-                  onPlaybackStatusUpdate={handleFullscreenPlaybackStatusUpdate}
+                  nativeControls={false}
+                  contentFit="contain"
                 />
                 
                 {!isVideoPlaying && (
@@ -622,21 +660,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 1.5,
   },
-  viewWorkoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: colors.primaryAccent,
-  },
-  viewWorkoutButtonText: {
-    fontSize: 16,
-    color: colors.brand,
-    fontWeight: '600',
-  },
+
 });
 
 export default MediaGallery;
