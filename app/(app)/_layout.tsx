@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 8,
     paddingBottom: 10,
-    backgroundColor: colors.primaryAccent,
+    backgroundColor: colors.background,
     position: 'relative',
     borderBottomWidth: 1,
     borderBottomColor: colors.whiteOverlayLight,
