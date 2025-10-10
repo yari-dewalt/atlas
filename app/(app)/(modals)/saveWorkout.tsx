@@ -432,8 +432,8 @@ export default function SaveWorkout() {
           style={styles.workoutTitleInput}
           value={workoutTitle}
           onChangeText={setWorkoutTitle}
-          placeholder="Workout title"
-          placeholderTextColor={colors.secondaryText}
+          placeholder="Workout Title (Optional)"
+          placeholderTextColor={`${colors.secondaryText}80`}
         />
 
         {/* Workout Summary */}
@@ -716,8 +716,9 @@ const styles = StyleSheet.create({
   },
   workoutTitleInput: {
     backgroundColor: colors.background,
+    fontWeight: 'bold',
     borderRadius: 8,
-    fontSize: 20,
+    fontSize: 24,
     color: colors.primaryText,
     marginBottom: 24,
     borderWidth: 1,
