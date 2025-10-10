@@ -42,6 +42,7 @@ export default function PostCommentsScreen() {
   const [overlayOpacity] = useState(new Animated.Value(0));
   const [shouldAutoFocus, setShouldAutoFocus] = useState(focus === 'true');
   const [selectedComment, setSelectedComment] = useState(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const REPLIES_BATCH_SIZE = 5;
   const { profile, session } = useAuthStore();
   const inputRef = useRef(null);
@@ -86,6 +87,25 @@ export default function PostCommentsScreen() {
     return closeOptions;
   }, []);
 
+  // Handle keyboard events for Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const keyboardDidShowListener = Keyboard.addListener(
+        'keyboardDidShow',
+        (e) => setKeyboardHeight(e.endCoordinates.height)
+      );
+      const keyboardDidHideListener = Keyboard.addListener(
+        'keyboardDidHide',
+        () => setKeyboardHeight(0)
+      );
+
+      return () => {
+        keyboardDidShowListener?.remove();
+        keyboardDidHideListener?.remove();
+      };
+    }
+  }, []);
+
   // Handle overlay animation
   useEffect(() => {
     if (isInputFocused) {
@@ -108,6 +128,13 @@ export default function PostCommentsScreen() {
     setIsInputFocused(false);
     setShouldAutoFocus(false); // Prevent auto-refocus when dismissing
     // Don't cancel reply when dismissing keyboard - preserve reply state
+    
+    // On Android, ensure keyboard height is reset
+    if (Platform.OS === 'android') {
+      setTimeout(() => {
+        setKeyboardHeight(0);
+      }, 100);
+    }
   };
 
   const fetchPostAndComments = async () => {
@@ -1096,7 +1123,7 @@ export default function PostCommentsScreen() {
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : (keyboardHeight > 0 ? 88 : 0)}
       >
       {/* Dark overlay when input is focused only */}
       {isInputFocused && (
@@ -1375,6 +1402,7 @@ export default function PostCommentsScreen() {
 }const styles = StyleSheet.create({
   gestureHandlerRoot: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   bottomSheetContainer: {
     position: 'absolute',
