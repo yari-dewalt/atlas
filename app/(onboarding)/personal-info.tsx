@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -36,6 +38,12 @@ export default function PersonalInfo() {
   const [selectedWeightUnit, setSelectedWeightUnit] = useState<WeightUnit | null>(null);
   const [selectedExperience, setSelectedExperience] = useState<ExperienceLevel | null>(null);
 
+  // Date picker state
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [showAndroidDatePicker, setShowAndroidDatePicker] = useState(false);
+  const datePickerBottomSheetRef = useRef<BottomSheet>(null);
+  const datePickerSnapPoints = useMemo(() => ['40%'], []);
+
   // Check if required fields are filled
   const isFormValid = selectedWeightUnit && selectedExperience;
 
@@ -51,8 +59,47 @@ export default function PersonalInfo() {
     { value: 'intermediate' as ExperienceLevel, label: 'Intermediate', description: 'Some experience' },
     { value: 'advanced' as ExperienceLevel, label: 'Advanced', description: 'Regular lifter' },
   ];  const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (selectedDate) {
-      setDateOfBirth(selectedDate);
+    if (Platform.OS === 'android') {
+      setShowAndroidDatePicker(false);
+      if (event.type === 'set' && selectedDate) {
+        setDateOfBirth(selectedDate);
+      }
+      // Close the bottom sheet after handling the date
+      datePickerBottomSheetRef.current?.close();
+    } else {
+      // iOS behavior
+      if (selectedDate) {
+        setDateOfBirth(selectedDate);
+      }
+    }
+  };
+
+  const handleDatePickerSheetChanges = useCallback((index: number) => {
+    if (index === -1) {
+      setDatePickerVisible(false);
+      setShowAndroidDatePicker(false);
+    }
+  }, []);
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+      />
+    ),
+    []
+  );
+
+  const handleDatePress = () => {
+    setDatePickerVisible(true);
+    datePickerBottomSheetRef.current?.expand();
+    // Small delay to ensure bottom sheet is open before showing Android picker
+    if (Platform.OS === 'android') {
+      setTimeout(() => {
+        setShowAndroidDatePicker(true);
+      }, 100);
     }
   };
 
@@ -112,6 +159,7 @@ export default function PersonalInfo() {
   };
 
   return (
+    <GestureHandlerRootView style={styles.gestureHandlerRoot}>
     <SafeAreaView style={styles.container}>
       {/* Progress Bar */}
       <View style={styles.progressBar}>
@@ -217,26 +265,18 @@ export default function PersonalInfo() {
                   <Text style={styles.inputLabel}>Date of Birth</Text>
                   <Text style={styles.optionalLabel}>optional</Text>
                 </View>
-                <View style={styles.dateInput}>
+                <TouchableOpacity
+                  style={styles.dateInput}
+                  onPress={handleDatePress}
+                >
                   <Text style={[
                     styles.dateText,
                     !dateOfBirth && styles.placeholderText
                   ]}>
                     {dateOfBirth ? formatDate(dateOfBirth) : 'Select your date of birth'}
                   </Text>
-                  <View style={styles.calendarIconContainer}>
-                    <Ionicons name="calendar-outline" size={20} color={colors.secondaryText} />
-                    <DateTimePicker
-                      value={dateOfBirth || new Date()}
-                      mode="date"
-                      display="default"
-                      onChange={handleDateChange}
-                      maximumDate={new Date()}
-                      minimumDate={new Date(1900, 0, 1)}
-                      style={styles.hiddenDatePicker}
-                    />
-                  </View>
-                </View>
+                  <Ionicons name="calendar-outline" size={20} color={colors.secondaryText} />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -263,11 +303,58 @@ export default function PersonalInfo() {
           </TouchableOpacity>
         </View>
 
+      {/* Date Picker Bottom Sheet */}
+      <BottomSheet
+        ref={datePickerBottomSheetRef}
+        index={-1}
+        snapPoints={datePickerSnapPoints}
+        onChange={handleDatePickerSheetChanges}
+        enablePanDownToClose={true}
+        backgroundStyle={[styles.bottomSheetBackground, Platform.OS === 'android' && { opacity: 0 }]}
+        handleIndicatorStyle={[styles.bottomSheetIndicator, Platform.OS === 'android' && { opacity: 0 }]}
+        backdropComponent={renderBackdrop}
+      >
+        <BottomSheetView style={[styles.datePickerModalContent, Platform.OS === 'android' && { opacity: 0 }]}>
+          <Text style={styles.datePickerTitle}>Select Date of Birth</Text>
+          <Text style={styles.datePickerSubtitle}>
+            Choose your date of birth
+          </Text>
+          
+          <View style={styles.datePickerContent}>
+            {(Platform.OS === 'ios' || showAndroidDatePicker) && (
+              <DateTimePicker
+                value={dateOfBirth || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                minimumDate={new Date(1900, 0, 1)}
+                style={styles.datePicker}
+              />
+            )}
+            {Platform.OS === 'android' && !showAndroidDatePicker && (
+              <TouchableOpacity
+                style={styles.androidDateButton}
+                onPress={() => setShowAndroidDatePicker(true)}
+              >
+                <Text style={styles.androidDateButtonText}>
+                  {dateOfBirth ? formatDate(dateOfBirth) : 'Select Date'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </BottomSheetView>
+      </BottomSheet>
+
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureHandlerRoot: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -359,21 +446,53 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: colors.secondaryText,
   },
-  calendarIconContainer: {
-    position: 'relative',
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  // BottomSheet styles
+  bottomSheetBackground: {
+    backgroundColor: colors.primaryAccent,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
   },
-  hiddenDatePicker: {
-    position: 'absolute',
-    top: -10,
-    left: -10,
-    opacity: 0.011,
-    width: 20,
-    height: 20,
-    zIndex: 100,
+  bottomSheetIndicator: {
+    backgroundColor: colors.secondaryText,
+    width: 50,
+  },
+  datePickerModalContent: {
+    padding: 20,
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primaryText,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  datePickerSubtitle: {
+    fontSize: 14,
+    color: colors.secondaryText,
+    textAlign: 'center',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.whiteOverlay,
+    paddingBottom: 12,
+  },
+  datePickerContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  datePicker: {
+    backgroundColor: colors.primaryAccent,
+  },
+  androidDateButton: {
+    backgroundColor: colors.brand,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  androidDateButtonText: {
+    color: colors.primaryText,
+    fontSize: 16,
+    fontWeight: '600',
   },
   continueButton: {
     backgroundColor: colors.brand,
