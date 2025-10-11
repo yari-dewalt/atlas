@@ -226,18 +226,7 @@ return (
             />
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Auto-start Timer</Text>
-              <Text style={styles.settingSubtitle}>Automatically start workout duration timer</Text>
-            </View>
-            <Switch
-              value={settings.autoStartTimer}
-              onValueChange={(value) => updateSetting('autoStartTimer', value)}
-              trackColor={{ false: 'rgba(255,255,255,0.2)', true: colors.brand }}
-              thumbColor={settings.autoStartTimer ? colors.primaryText : 'rgba(255,255,255,0.8)'}
-            />
-          </View>
+
         </View>
 
         {/* Display Settings */}
@@ -245,8 +234,8 @@ return (
         <View style={styles.section}>
           <View style={styles.settingItem}>
             <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Show Floating Timer</Text>
-              <Text style={styles.settingSubtitle}>Show floating timer ribbon after scrolling</Text>
+              <Text style={styles.settingTitle}>Show Floating Stats</Text>
+              <Text style={styles.settingSubtitle}>Show floating stats ribbon with duration, exercises, volume, and sets when scrolling</Text>
             </View>
             <Switch
               value={settings.showElapsedTime}

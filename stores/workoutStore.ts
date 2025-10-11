@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { convertWeightForStorage, WeightUnit } from "../utils/weightUtils";
 import * as Crypto from "expo-crypto";
+import { AppState } from "react-native";
 
 interface WorkoutSet {
   id: string;
@@ -30,6 +31,7 @@ interface Workout {
   notes?: string;
   isEditing?: boolean;
   editingWorkoutId?: string;
+  originalDuration?: number; // For editing mode - stores the original workout duration
 }
 
 interface WorkoutSettings {
@@ -113,6 +115,68 @@ const debouncedAutoSave = (saveFunction: () => void) => {
   autoSaveTimer = setTimeout(saveFunction, 1000); // Debounce for 1 second
 };
 
+// Global timer for workout duration tracking
+let workoutTimer: any = null;
+
+const startWorkoutTimer = () => {
+  if (workoutTimer) {
+    clearInterval(workoutTimer);
+  }
+  
+  workoutTimer = setInterval(() => {
+    const { activeWorkout, isPaused } = useWorkoutStore.getState();
+    if (activeWorkout && !isPaused && !activeWorkout.isEditing) {
+      useWorkoutStore.getState().updateWorkoutTime();
+    }
+  }, 1000);
+};
+
+const stopWorkoutTimer = () => {
+  if (workoutTimer) {
+    clearInterval(workoutTimer);
+    workoutTimer = null;
+  }
+};
+
+// Initialize the timer when the store is created if there's an active workout
+const initializeTimerIfNeeded = () => {
+  const { activeWorkout } = useWorkoutStore.getState();
+  if (activeWorkout && !activeWorkout.isEditing) {
+    startWorkoutTimer();
+  }
+};
+
+// Handle app state changes
+let appStateSubscription: any = null;
+
+const setupAppStateListener = () => {
+  if (appStateSubscription) return; // Already setup
+  
+  appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+    const { activeWorkout, isPaused } = useWorkoutStore.getState();
+    
+    if (nextAppState === 'background' || nextAppState === 'inactive') {
+      // App is going to background - save current state
+      if (activeWorkout) {
+        useWorkoutStore.getState().saveWorkoutState();
+      }
+    } else if (nextAppState === 'active') {
+      // App is becoming active - restart timer and update duration
+      if (activeWorkout && !isPaused && !activeWorkout.isEditing) {
+        useWorkoutStore.getState().updateWorkoutTime(); // Update to current time
+        startWorkoutTimer(); // Restart the timer
+      }
+    }
+  });
+};
+
+const removeAppStateListener = () => {
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
+  }
+};
+
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeWorkout: null,
   currentDuration: 0, // Separate duration tracking
@@ -168,11 +232,20 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       saveError: null
     });
     
+    // Start the global timer
+    startWorkoutTimer();
+    
     // Auto-save the new workout state
     setTimeout(() => get().saveWorkoutState(), 100);
   },
   
   endWorkout: () => {
+    // Stop the global timer
+    stopWorkoutTimer();
+    
+    // Remove app state listener when no active workout
+    removeAppStateListener();
+    
     set({ 
       activeWorkout: null,
       currentDuration: 0,
@@ -502,7 +575,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       
       // Add the paused duration to accumulated time
       const additionalTime = state.pausedAt ? 
-        (new Date().getTime() - state.pausedAt) / 1000 : 0;
+        (new Date().getTime() - state.pausedAt) : 0;
       
       return {
         isPaused: false,
@@ -542,7 +615,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       
       // Calculate new duration: (current time - start time) - accumulated paused time
       const rawDuration = (new Date().getTime() - state.activeWorkout.startTime.getTime()) / 1000;
-      const newDuration = Math.floor(rawDuration - state.accumulatedTime);
+      const newDuration = Math.floor(rawDuration - (state.accumulatedTime / 1000));
       
       // OPTIMIZATION: Only update separate duration field, never touch activeWorkout for timer updates
       // This prevents activeWorkout object recreation and subsequent re-renders
@@ -766,7 +839,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         exercises: exercises || [],
         notes: "",
         isEditing: isEditing || false,
-        editingWorkoutId: editingWorkoutId
+        editingWorkoutId: editingWorkoutId,
+        originalDuration: isEditing ? duration : undefined // Store original duration for editing
       },
       currentDuration: duration || 0,
       // For editing mode, start paused with the accumulated time
@@ -775,6 +849,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       accumulatedTime: isEditing && duration ? duration * 1000 : 0, // Convert seconds to milliseconds
       saveError: null
     });
+    
+    // Start the global timer (if not editing)
+    if (!isEditing) {
+      startWorkoutTimer();
+    }
     
     // Auto-save the new workout state
     setTimeout(() => get().saveWorkoutState(), 100);
@@ -805,6 +884,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         const parsedSettings = JSON.parse(savedSettings);
         set({ workoutSettings: { ...get().workoutSettings, ...parsedSettings } });
       }
+      
+      // Initialize timer if needed after loading settings
+      initializeTimerIfNeeded();
+      
+      // Setup app state listener for persistence
+      setupAppStateListener();
     } catch (error) {
       console.error('Error loading workout settings:', error);
     }
@@ -882,6 +967,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
           pausedAt: parsedState.pausedAt,
           accumulatedTime: parsedState.accumulatedTime,
         });
+        
+        // Start the timer for the loaded workout (if not editing and not paused)
+        if (!parsedState.activeWorkout.isEditing) {
+          startWorkoutTimer();
+        }
         
         console.log('Workout state loaded from auto-save');
         return true;
@@ -973,6 +1063,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   cancelEditWorkout: () => {
+    // Stop the global timer
+    stopWorkoutTimer();
+    
     set({
       activeWorkout: null,
       currentDuration: 0,

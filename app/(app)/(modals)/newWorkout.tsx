@@ -103,6 +103,8 @@ export default function NewWorkout() {
   const [stopwatchActive, setStopwatchActive] = useState(false);
   const [stopwatchTime, setStopwatchTime] = useState(0);
   const [stopwatchInterval, setStopwatchInterval] = useState(null);
+  const [displayDuration, setDisplayDuration] = useState(0);
+  const displayTimerRef = useRef(null);
   const swipeableRefs = useRef({});
   const [minimizedExercises, setMinimizedExercises] = useState(new Set());
   const [supersets, setSupersets] = useState(new Map()); // Map of supersetId -> Set of exerciseIds
@@ -448,7 +450,7 @@ const handleRemoveExercise = () => {
 
   const handleScroll = useCallback((event) => {
     const scrollY = event.nativeEvent.contentOffset.y;
-    // Show floating timer when scrolled down more than 100 pixels
+    // Show floating stats when scrolled down more than 100 pixels and setting is enabled
     setShowFloatingTimer(scrollY > 100 && workoutSettings.showElapsedTime);
   }, [workoutSettings.showElapsedTime]);
 
@@ -518,7 +520,15 @@ const handleRemoveExercise = () => {
   // RPE selector handles its own initialization
 
   useEffect(() => {
-    loadWorkoutSettings();
+    const initializeWorkout = async () => {
+      await loadWorkoutSettings();
+      // Force update the timer to ensure current duration is up to date
+      if (activeWorkout && !activeWorkout.isEditing && !isPaused) {
+        updateWorkoutTime();
+      }
+    };
+    
+    initializeWorkout();
   }, []);
 
   // Keep Screen On functionality
@@ -916,35 +926,18 @@ const handleRemoveExercise = () => {
     }
   };
 
-  const toggleTimer = useCallback(() => {
-    if (isPaused) {
-      // Resume the timer
-      resumeTimer();
-      timerIntervalRef.current = setInterval(() => {
-        updateWorkoutTime();
-      }, 1000);
-    } else {
-      // Pause the timer
-      pauseTimer();
-      clearInterval(timerIntervalRef.current);
-    }
-  }, [isPaused, resumeTimer, pauseTimer, updateWorkoutTime]);
 
-  const restartTimer = useCallback(() => {
-    // Stop any existing timer
-    clearInterval(timerIntervalRef.current);
-    
-    // Reset the workout time and timer state
-    updateWorkoutTime(0);
-    
-    // Pause the timer (can change to start immediately if needed)
-    pauseTimer();
-    
-    // Start the interval
-    timerIntervalRef.current = setInterval(() => {
-      updateWorkoutTime();
-    }, 1000);
-  }, [updateWorkoutTime, pauseTimer]);
+
+  // Format volume for display
+  const formatVolume = useCallback((volume) => {
+    if (volume >= 1000) {
+      const kValue = volume / 1000;
+      // Only show decimal if it's not a whole number
+      return kValue % 1 === 0 ? `${Math.round(kValue)}k` : `${kValue.toFixed(1)}k`;
+    }
+    // Only show decimal if it's not a whole number
+    return volume % 1 === 0 ? Math.round(volume).toString() : volume.toFixed(1);
+  }, []);
 
   // Memoize workout stats calculation to prevent re-renders
   const workoutStats = useMemo(() => {
@@ -971,7 +964,7 @@ const handleRemoveExercise = () => {
     
     return {
       exercises: activeWorkout.exercises.length,
-      volume: Math.round(totalVolume),
+      volume: totalVolume,
       sets: totalCompletedSets // Now shows completed sets only
     };
   }, [activeWorkout?.exercises]); // Only watch exercises, not the entire activeWorkout
@@ -1231,15 +1224,26 @@ const handleRemoveExercise = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Memoize the timer display to prevent re-renders on timer updates
-  const timerDisplayText = useMemo(() => {
-    return activeWorkout ? formatDuration(currentDuration) : "00:00:00";
-  }, [currentDuration, formatDuration, activeWorkout]);
+  // Format display duration for UI - separate from actual workout duration
+  const formatDisplayDuration = useCallback((seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    // Show format based on duration
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  }, []);
 
-  // Memoize floating timer display  
-  const floatingTimerDisplayText = useMemo(() => {
-    return activeWorkout ? formatDuration(currentDuration) : "00:00:00";
-  }, [currentDuration, formatDuration, activeWorkout]);
+  // Display timer text - uses workout store's currentDuration
+  const displayTimerText = useMemo(() => {
+    return activeWorkout ? formatDisplayDuration(currentDuration) : "0s";
+  }, [currentDuration, formatDisplayDuration, activeWorkout]);
 
   // Memoize rest timer displays to prevent re-renders
   const restTimerDisplayText = useMemo(() => {
@@ -1479,6 +1483,18 @@ const handleTimerCompletion = async () => {
     );
   };
   
+  // Sync display duration with workout store
+  useEffect(() => {
+    if (activeWorkout?.isEditing) {
+      // For edited workouts, set display duration to original workout duration
+      const originalDuration = activeWorkout.originalDuration || 0;
+      setDisplayDuration(originalDuration);
+    } else {
+      // For new workouts, sync with the workout store's currentDuration
+      setDisplayDuration(currentDuration);
+    }
+  }, [activeWorkout?.isEditing, activeWorkout, currentDuration]);
+
   // Clean up the timer when component unmounts
   useEffect(() => {
     return () => {
@@ -1491,23 +1507,9 @@ const handleTimerCompletion = async () => {
   useEffect(() => {
     // Initialize the workout
     if (!activeWorkout && routineId) {
-      startWorkout(routineId, 'routineName');
+      startWorkout(routineId as string, 'routineName');
     }
-    
-    // Start timer to update workout duration
-    if (!isPaused) {
-      timerIntervalRef.current = setInterval(() => {
-        updateWorkoutTime();
-      }, 1000);
-    }
-    
-    // Cleanup when component unmounts
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
-  }, [routineId, isPaused]);
+  }, [routineId]);
   
   useEffect(() => {
     const loadRoutineData = async () => {
@@ -1547,20 +1549,6 @@ const handleTimerCompletion = async () => {
     };
     
     loadRoutineData();
-    
-    // Start timer to update workout duration
-    if (!isPaused) {
-      timerIntervalRef.current = setInterval(() => {
-        updateWorkoutTime();
-      }, 1000);
-    }
-    
-    // Cleanup when component unmounts
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
   }, [routineId]);
   
   // Helper function to check if workout meets minimum requirements - memoized
@@ -1713,16 +1701,13 @@ const handleTimerCompletion = async () => {
           if (rpeModalVisible) {
             rpeBottomSheetRef.current?.close();
           }
-          if (timeInputModalVisible) {
-            timeInputBottomSheetRef.current?.close();
-          }
           if (setEditModalVisible) {
             setEditBottomSheetRef.current?.close();
           }
         }}
       />
     ),
-    [restTimerModalVisible, supersetModalVisible, reorderModalVisible, rpeModalVisible, timeInputModalVisible, setEditModalVisible]
+    [restTimerModalVisible, supersetModalVisible, reorderModalVisible, rpeModalVisible, setEditModalVisible]
   );
   
   return (
@@ -1838,7 +1823,7 @@ const handleTimerCompletion = async () => {
   </View>
 </View>
 
-{/* Floating Timer Ribbon */}
+{/* Floating Stats Ribbon */}
       {showFloatingTimer && (
         <Animated.View 
           style={[
@@ -1856,31 +1841,26 @@ const handleTimerCompletion = async () => {
               scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             }}
           >
-            <View style={styles.floatingTimerLeft}>
-              <IonIcon name="time-outline" size={20} color={colors.secondaryText} />
-              <Text style={[
-                styles.floatingTimerText,
-                workoutSettings.largeTimerDisplay && styles.largeFloatingTimerText
-              ]}>
-                {timerDisplayText}
-              </Text>
-            </View>
-
-            <View style={styles.floatingTimerRight}>
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                onPress={(e) => {
-                  e.stopPropagation(); // Prevent scroll to top
-                  toggleTimer();
-                }}
-                style={styles.floatingTimerButton}
-              >
-                <IonIcon
-                  name={isPaused ? "play-outline" : "pause-outline"}
-                  size={20}
-                  color={colors.brand}
-                />
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Duration</Text>
+                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{displayTimerText}</Text>
+              </View>
+              
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Exercises</Text>
+                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{workoutStats.exercises}</Text>
+              </View>
+              
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Volume</Text>
+                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{formatVolume(workoutStats.volume)} {userWeightUnit}</Text>
+              </View>
+              
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Sets</Text>
+                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{workoutStats.sets}</Text>
+              </View>
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -1897,50 +1877,7 @@ const handleTimerCompletion = async () => {
         scrollEventThrottle={16} // Improve scroll performance
         nestedScrollEnabled={false} // Prevent nested scroll conflicts
       >
-                <View style={styles.timerContainer}>
-          <IonIcon name="time-outline" size={26} color={colors.secondaryText} />
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            onPress={() => {
-              closeAllSwipeables();
-              openTimeInputModal();
-            }} 
-            style={styles.timerTextContainer}
-          >
-            <Text style={[
-              styles.timerText,
-              workoutSettings.largeTimerDisplay && styles.largeTimerText
-            ]}>
-              {floatingTimerDisplayText}
-            </Text>
-          </TouchableOpacity>
-          <View style={styles.durationTimerControls}>
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            onPress={() => {
-              closeAllSwipeables();
-              toggleTimer();
-            }} 
-            style={styles.timerControlButton}
-          >
-              <IonIcon
-                name={isPaused ? "play-outline" : "pause-outline"}
-                size={26}
-                color={colors.brand}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-                activeOpacity={0.5} 
-              onPress={() => {
-                closeAllSwipeables();
-                restartTimer();
-              }} 
-              style={styles.timerControlButton}
-            >
-              <IonIcon name="refresh-outline" size={26} color={colors.brand} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        
 
         <View style={styles.routineAndStatsContainer}>
           {routine && (
@@ -1951,6 +1888,11 @@ const handleTimerCompletion = async () => {
           )}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Duration</Text>
+              <Text style={styles.statValue}>{displayTimerText}</Text>
+            </View>
+            
+            <View style={styles.statItem}>
               <Text style={styles.statLabel}>Exercises</Text>
               <Text style={styles.statValue}>{workoutStats.exercises}</Text>
             </View>
@@ -1958,7 +1900,7 @@ const handleTimerCompletion = async () => {
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Volume</Text>
               <Text style={styles.statValue}>
-                {workoutStats.volume > 0 ? `${workoutStats.volume} ${userWeightUnit}` : `0 ${userWeightUnit}`}
+                {`${formatVolume(workoutStats.volume)} ${userWeightUnit}`}
               </Text>
             </View>
             
@@ -2011,211 +1953,7 @@ const handleTimerCompletion = async () => {
         )}
       </ScrollView>
 
-      <View>
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={timeInputModalVisible}
-        onRequestClose={() => setTimeInputModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay} 
-          onPress={() => setTimeInputModalVisible(false)}
-        >
-          <View style={styles.timeInputContainer}>
-            <Pressable
-              style={{flex: 1}}
-              onPress={() => {}}
-            >
-              <View style={styles.timeInputContent}>
-                <Text style={styles.timeInputTitle}>Set Workout Duration</Text>
-                <Text style={styles.timeInputSubtitle}>
-                  Select hours, minutes, and seconds
-                </Text>
-                
-                <View style={styles.pickerContainer}>
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Hours</Text>
-                    {Platform.OS === 'ios' ? (
-                      <Picker
-                        selectedValue={manualHours}
-                        onValueChange={(value) => setManualHours(value)}
-                        style={styles.picker}
-                        itemStyle={styles.pickerItem}
-                      >
-                        {Array.from({ length: 24 }, (_, i) => (
-                          <Picker.Item 
-                            key={i} 
-                            label={i.toString().padStart(2, '0')} 
-                            value={i.toString().padStart(2, '0')} 
-                          />
-                        ))}
-                      </Picker>
-                    ) : (
-                      <FlatList
-                        data={Array.from({ length: 24 }, (_, i) => ({
-                          value: i.toString().padStart(2, '0'),
-                          label: i.toString().padStart(2, '0')
-                        }))}
-                        keyExtractor={(item) => item.value}
-                        style={styles.androidInlinePicker}
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={[
-                              styles.androidInlinePickerItem,
-                              item.value === manualHours && styles.androidInlinePickerItemSelected
-                            ]}
-                            onPress={() => setManualHours(item.value)}
-                          >
-                            <Text style={[
-                              styles.androidInlinePickerText,
-                              item.value === manualHours && styles.androidInlinePickerTextSelected
-                            ]}>
-                              {item.label}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        getItemLayout={(data, index) => ({
-                          length: 40,
-                          offset: 40 * index,
-                          index,
-                        })}
-                        onScrollToIndexFailed={() => {}}
-                      />
-                    )}
-                  </View>
-                  
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Minutes</Text>
-                    {Platform.OS === 'ios' ? (
-                      <Picker
-                        selectedValue={manualMinutes}
-                        onValueChange={(value) => setManualMinutes(value)}
-                        style={styles.picker}
-                        itemStyle={styles.pickerItem}
-                      >
-                        {Array.from({ length: 60 }, (_, i) => (
-                          <Picker.Item 
-                            key={i} 
-                            label={i.toString().padStart(2, '0')} 
-                            value={i.toString().padStart(2, '0')} 
-                          />
-                        ))}
-                      </Picker>
-                    ) : (
-                      <FlatList
-                        data={Array.from({ length: 60 }, (_, i) => ({
-                          value: i.toString().padStart(2, '0'),
-                          label: i.toString().padStart(2, '0')
-                        }))}
-                        keyExtractor={(item) => item.value}
-                        style={styles.androidInlinePicker}
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={[
-                              styles.androidInlinePickerItem,
-                              item.value === manualMinutes && styles.androidInlinePickerItemSelected
-                            ]}
-                            onPress={() => setManualMinutes(item.value)}
-                          >
-                            <Text style={[
-                              styles.androidInlinePickerText,
-                              item.value === manualMinutes && styles.androidInlinePickerTextSelected
-                            ]}>
-                              {item.label}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        getItemLayout={(data, index) => ({
-                          length: 40,
-                          offset: 40 * index,
-                          index,
-                        })}
-                        onScrollToIndexFailed={() => {}}
-                      />
-                    )}
-                  </View>
-                  
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Seconds</Text>
-                    {Platform.OS === 'ios' ? (
-                      <Picker
-                        selectedValue={manualSeconds}
-                        onValueChange={(value) => setManualSeconds(value)}
-                        style={styles.picker}
-                        itemStyle={styles.pickerItem}
-                        mode="dialog"
-                      >
-                        {Array.from({ length: 60 }, (_, i) => (
-                          <Picker.Item 
-                            key={i} 
-                            label={i.toString().padStart(2, '0')} 
-                            value={i.toString().padStart(2, '0')} 
-                            style={{ fontSize: 18}}
-                          />
-                        ))}
-                      </Picker>
-                    ) : (
-                      <FlatList
-                        data={Array.from({ length: 60 }, (_, i) => ({
-                          value: i.toString().padStart(2, '0'),
-                          label: i.toString().padStart(2, '0')
-                        }))}
-                        keyExtractor={(item) => item.value}
-                        style={styles.androidInlinePicker}
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={[
-                              styles.androidInlinePickerItem,
-                              item.value === manualSeconds && styles.androidInlinePickerItemSelected
-                            ]}
-                            onPress={() => setManualSeconds(item.value)}
-                          >
-                            <Text style={[
-                              styles.androidInlinePickerText,
-                              item.value === manualSeconds && styles.androidInlinePickerTextSelected
-                            ]}>
-                              {item.label}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        getItemLayout={(data, index) => ({
-                          length: 40,
-                          offset: 40 * index,
-                          index,
-                        })}
-                        onScrollToIndexFailed={() => {}}
-                      />
-                    )}
-                  </View>
-                </View>
-                
-                <View style={styles.timeInputButtons}>
-                  <TouchableOpacity
-                activeOpacity={0.5} 
-                    style={styles.cancelTimeButton}
-                    onPress={() => setTimeInputModalVisible(false)}
-                  >
-                    <Text style={styles.cancelTimeButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                activeOpacity={0.5} 
-                    style={styles.applyTimeButton}
-                    onPress={applyManualTime}
-                  >
-                    <Text style={styles.applyTimeButtonText}>Apply</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-      </View>
+
 
       <View>
       <Modal

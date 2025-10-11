@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, TextInput, KeyboardAvoidingView, Platform, StatusBar, Animated, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, TextInput, KeyboardAvoidingView, Platform, StatusBar, Animated, Alert, AppState } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +18,7 @@ export default function SaveWorkout() {
   const router = useRouter();
   const { 
     activeWorkout, 
+    currentDuration,
     endWorkout, 
     saveWorkoutToDatabase,
     updateWorkoutToDatabase,
@@ -109,6 +110,17 @@ export default function SaveWorkout() {
     }
   };
 
+  // Format volume for display
+  const formatVolume = (volume: number) => {
+    if (volume >= 1000) {
+      const kValue = volume / 1000;
+      // Only show decimal if it's not a whole number
+      return kValue % 1 === 0 ? `${Math.round(kValue)}k` : `${kValue.toFixed(1)}k`;
+    }
+    // Only show decimal if it's not a whole number
+    return volume % 1 === 0 ? Math.round(volume).toString() : volume.toFixed(1);
+  };
+
   const calculateWorkoutStats = () => {
     if (!activeWorkout) return { sets: 0, volume: 0, exercises: 0 };
 
@@ -128,7 +140,7 @@ export default function SaveWorkout() {
 
     return {
       sets: totalSets,
-      volume: Math.round(totalVolume),
+      volume: totalVolume,
       exercises: activeWorkout.exercises.length
     };
   };
@@ -442,7 +454,7 @@ export default function SaveWorkout() {
           <View style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryValue}>{formatDuration(activeWorkout?.duration || 0)}</Text>
+                <Text style={styles.summaryValue}>{formatDuration(currentDuration || 0)}</Text>
                 <Text style={styles.summaryLabel}>Duration</Text>
               </View>
               <View style={styles.summaryItem}>
@@ -457,7 +469,7 @@ export default function SaveWorkout() {
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryValue}>
-                  {displayWeightForUser(convertWeight(stats.volume, userWeightUnit, 'kg'), 'kg', userWeightUnit, true)}
+                  {`${formatVolume(stats.volume)} ${userWeightUnit}`}
                 </Text>
                 <Text style={styles.summaryLabel}>Volume</Text>
               </View>
@@ -479,7 +491,7 @@ export default function SaveWorkout() {
                 <View key={exercise.id} style={styles.exerciseItem}>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
                   <Text style={styles.exerciseStats}>
-                    {completedSets} sets • {displayWeightForUser(convertWeight(stats.volume, userWeightUnit, 'kg'), 'kg', userWeightUnit, true)}
+                    {completedSets} sets • {`${formatVolume(stats.volume)} ${userWeightUnit}`}
                   </Text>
                 </View>
               );
