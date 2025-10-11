@@ -1,7 +1,7 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../../constants/colors';
-import { View, Text, SafeAreaView, Pressable, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, SafeAreaView, Pressable, StyleSheet, Image, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import CachedAvatar from '../../../components/CachedAvatar';
@@ -309,14 +309,14 @@ const styles = StyleSheet.create({
 
   workoutIndicatorContainer: {
     position: 'absolute',
-    bottom: 86, // Position above the tab bar with some spacing
+    bottom: Platform.OS === 'android' ? 85 : 86, // Position above the tab bar
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 10,
   },
   workoutIndicatorBar: {
-    width: '100%',
+    width: Platform.OS === 'android' ? '100.2%' : '100%',
     backgroundColor: colors.background,
     paddingVertical: 10,
     paddingHorizontal: 16,

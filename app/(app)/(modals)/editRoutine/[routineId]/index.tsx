@@ -9,7 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  FlatList,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -34,6 +33,7 @@ import { Animated } from 'react-native';
 import { useAnimatedStyle } from "react-native-reanimated";
 import { getUserWeightUnit, convertWeightForStorage, convertWeightForDisplay, type WeightUnit } from "../../../../../utils/weightUtils";
 import SetItem from "../../../../../components/SetItem";
+import RpeSelector from "../../../../../components/RpeSelector";
 
 // Create a simple exercise selection interface since the main one might have complex dependencies
 interface ExerciseSelectionProps {
@@ -153,8 +153,7 @@ export default function EditRoutine() {
     { value: 10, label: "Maximal", description: "Could not have done any more reps" },
   ];
   
-  // RPE FlatList ref
-  const rpeFlatListRef = useRef<FlatList>(null);
+
 
   // Swipe state for SetItem
   const swipeableRefs = useRef({});
@@ -1280,15 +1279,6 @@ export default function EditRoutine() {
     setCurrentRpeIndex(rpeIndex);
     setSelectedSetForRpe({ exerciseId, setId });
     
-    setTimeout(() => {
-      if (rpeFlatListRef.current && rpeIndex >= 0 && rpeIndex < rpeData.length) {
-        rpeFlatListRef.current.scrollToIndex({
-          index: rpeIndex,
-          animated: false,
-        });
-      }
-    }, 100);
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     rpeBottomSheetRef.current?.snapToIndex(0);
   };
@@ -2081,7 +2071,7 @@ export default function EditRoutine() {
           <Text style={styles.rpeModalTitle}>RPE</Text>
           
           <Text style={styles.rpeModalSubtitle}>
-            Swipe left or right to select your RPE
+            Scroll or tap to select your RPE
           </Text>
           
           <View style={styles.rpeSelector}>
@@ -2089,64 +2079,11 @@ export default function EditRoutine() {
               <Ionicons name="chevron-down" size={24} color={colors.primaryText} />
             </View>
 
-            <FlatList
-              ref={rpeFlatListRef}
+            <RpeSelector
               data={rpeData}
-              keyExtractor={(item) => item.value.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={120}
-              snapToAlignment="center"
-              decelerationRate="fast"
-              contentContainerStyle={styles.rpeFlatListContent}
-              getItemLayout={(data, index) => ({
-                length: 120,
-                offset: 120 * index,
-                index,
-              })}
-              initialScrollIndex={currentRpeIndex}
-              onScrollToIndexFailed={(info) => {
-                console.log('Scroll to index failed:', info);
-              }}
-              onScroll={(event) => {
-                const offsetX = event.nativeEvent.contentOffset.x;
-                const index = Math.round(offsetX / 120);
-                const newIndex = Math.max(0, Math.min(index, rpeData.length - 1));
-                
-                if (newIndex !== currentRpeIndex) {
-                  setCurrentRpeIndex(newIndex);
-                  try {
-                    // Add haptic feedback for RPE selection
-                    require('expo-haptics').selectionAsync();
-                  } catch (error) {
-                    // Fallback for devices without haptics
-                  }
-                }
-              }}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity 
-                  activeOpacity={0.5}
-                  style={styles.rpeScrollItem}
-                  onPress={() => {
-                    rpeFlatListRef.current?.scrollToIndex({ 
-                      index, 
-                      animated: true 
-                    });
-                  }}
-                >
-                  <View style={[
-                    styles.rpeNumberContainer,
-                    index === currentRpeIndex ? styles.rpeNumberContainerActive : styles.rpeNumberContainerInactive
-                  ]}>
-                    <Text style={[
-                      styles.rpeNumber,
-                      index === currentRpeIndex ? styles.rpeNumberActive : styles.rpeNumberInactive
-                    ]}>
-                      {item.value}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
+              selectedIndex={currentRpeIndex}
+              onIndexChange={setCurrentRpeIndex}
+              itemWidth={80}
             />
 
             <View style={styles.rpeArrowContainer}>

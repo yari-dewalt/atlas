@@ -41,6 +41,7 @@ import { Audio } from 'expo-av';
 import { useAnimatedStyle } from "react-native-reanimated";
 import SetItem from "../../../components/SetItem";
 import { useAnimationManager } from "../../../hooks/useAnimationManager";
+import RpeSelector from "../../../components/RpeSelector";
 
 export default function NewWorkout() {
   const { routineId } = useLocalSearchParams();
@@ -164,10 +165,10 @@ export default function NewWorkout() {
   const supersetBottomSheetRef = useRef(null);
   const reorderBottomSheetRef = useRef(null);
   const rpeBottomSheetRef = useRef(null);
-  const rpeFlatListRef = useRef(null);
   const timeInputBottomSheetRef = useRef(null);
   const exerciseOptionsBottomSheetRef = useRef(null);
   const setEditBottomSheetRef = useRef(null);
+  const setEditModalClosingRef = useRef(false); // Track if modal is being intentionally closed
   
   // Animation refs for pulse effect
   const stopwatchPulseAnimation = useRef(new Animated.Value(1)).current;
@@ -221,23 +222,36 @@ export default function NewWorkout() {
   }, [cameFromSetEdit, isConfirmingRpe]);
 
   const handleSetEditSheetChanges = useCallback((index) => {
+    // On Android, the BottomSheet can trigger onChange when keyboard appears/disappears
+    // We need to be more careful about when to actually close and reset state
     if (index === -1) {
-      setSetEditModalVisible(false);
-      
-      // Only reset editing state if we're not going to/coming from RPE modal
-      if (!cameFromSetEdit && !isConfirmingRpe) {
-        setEditingSet(null);
-        setEditingExerciseIndex(null);
-        setEditingSetIndex(null);
-        setTempWeight('');
-        setTempReps('');
-        setTempRpe('');
+      // Only proceed if the modal was actually visible and we're not in the middle of an RPE flow
+      if (setEditModalVisible && !cameFromSetEdit && !isConfirmingRpe && !setEditModalClosingRef.current) {
+        setSetEditModalVisible(false);
+        
+        // Add a small delay to ensure this isn't just a keyboard-related change
+        setTimeout(() => {
+          // Only clear state if we're really closing (not switching to RPE modal)
+          if (!setEditModalVisible && !cameFromSetEdit && !isConfirmingRpe) {
+            setEditingSet(null);
+            setEditingExerciseIndex(null);
+            setEditingSetIndex(null);
+            setTempWeight('');
+            setTempReps('');
+            setTempRpe('');
+          }
+          setEditModalClosingRef.current = false; // Reset the flag
+        }, 100);
+        
+        // Dismiss keyboard when BottomSheet closes
+        Keyboard.dismiss();
+      } else if (setEditModalClosingRef.current) {
+        // If we're intentionally closing, just update the modal state
+        setSetEditModalVisible(false);
+        setEditModalClosingRef.current = false;
       }
-      
-      // Dismiss keyboard when BottomSheet closes
-      Keyboard.dismiss();
     }
-  }, [cameFromSetEdit, isConfirmingRpe]);
+  }, [cameFromSetEdit, isConfirmingRpe, setEditModalVisible]);
 
   // Functions to open/close bottom sheets
   const toggleRestTimerModal = () => {
@@ -296,10 +310,7 @@ export default function NewWorkout() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     rpeBottomSheetRef.current?.expand();
     
-    rpeFlatListRef.current?.scrollToIndex({ 
-      index: targetIndex, 
-      animated: false 
-    });
+    // RPE selector will handle positioning internally
   };
 
   const showExerciseOptions = (exercise) => {
@@ -503,6 +514,8 @@ const handleRemoveExercise = () => {
       }
     }
   }, [params?.selectedExercise, params?.selectedExercises, params?.isMultiple]);
+
+  // RPE selector handles its own initialization
 
   useEffect(() => {
     loadWorkoutSettings();
@@ -847,6 +860,7 @@ const handleRemoveExercise = () => {
 
   // Set editing popup functions
   const openSetEditModal = (exerciseIndex, setIndex, selectedRpe) => {
+    if (exerciseIndex === null || setIndex === null) return;
     const exercise = activeWorkout?.exercises[exerciseIndex];
     const set = exercise?.sets[setIndex];
     
@@ -864,6 +878,17 @@ const handleRemoveExercise = () => {
   };
 
   const closeSetEditModal = () => {
+    // Mark that we're intentionally closing the modal
+    setEditModalClosingRef.current = true;
+    
+    // Explicitly close and reset state
+    setSetEditModalVisible(false);
+    setEditingSet(null);
+    setEditingExerciseIndex(null);
+    setEditingSetIndex(null);
+    setTempWeight('');
+    setTempReps('');
+    setTempRpe('');
     setEditBottomSheetRef.current?.close();
   };
 
@@ -1007,7 +1032,7 @@ const handleRemoveExercise = () => {
                         
                         <View>
                           {/* Exercise Name */}
-                          <Text style={styles.exerciseName}>{exercise.name}</Text>
+                          <Text style={[styles.exerciseName, { fontSize: Platform.OS === 'android' ? 16 : 16}]}>{exercise.name}</Text>
                           {/* Show notes input only when not minimized */}
                           <TextInput
                             style={styles.notesInput}
@@ -2906,63 +2931,11 @@ const handleTimerCompletion = async () => {
                 <IonIcon name="chevron-down" size={24} color={colors.primaryText} />
               </View>
 
-              <FlatList
-                ref={rpeFlatListRef}
+              <RpeSelector
                 data={rpeData}
-                keyExtractor={(item) => item.value.toString()}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={120}
-                snapToAlignment="center"
-                decelerationRate="fast"
-                contentContainerStyle={{ paddingHorizontal: 120 }}
-                getItemLayout={(data, index) => ({
-                  length: 120,
-                  offset: 120 * index,
-                  index,
-                })}
-                initialScrollIndex={currentRpeIndex}
-                onScrollToIndexFailed={(info) => {
-                  console.log('Scroll to index failed:', info);
-                }}
-                onScroll={(event) => {
-                  const offsetX = event.nativeEvent.contentOffset.x;
-                  const index = Math.round(offsetX / 120);
-                  const newIndex = Math.max(0, Math.min(index, rpeData.length - 1));
-                  
-                  if (newIndex !== currentRpeIndex) {
-                    setCurrentRpeIndex(newIndex);
-                    try {
-                      Haptics.selectionAsync();
-                    } catch (error) {
-                      // Fallback for devices without haptics
-                    }
-                  }
-                }}
-                renderItem={({ item, index }) => (
-                  <TouchableOpacity 
-                    activeOpacity={0.5}
-                    style={styles.rpeScrollItem}
-                    onPress={() => {
-                      rpeFlatListRef.current?.scrollToIndex({ 
-                        index, 
-                        animated: true 
-                      });
-                    }}
-                  >
-                    <View style={[
-                      styles.rpeNumberContainer,
-                      index === currentRpeIndex ? styles.rpeNumberContainerActive : styles.rpeNumberContainerInactive
-                    ]}>
-                      <Text style={[
-                        styles.rpeNumber,
-                        index === currentRpeIndex ? styles.rpeNumberActive : styles.rpeNumberInactive
-                      ]}>
-                        {item.value}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
+                selectedIndex={currentRpeIndex}
+                onIndexChange={setCurrentRpeIndex}
+                itemWidth={80}
               />
 
               <View style={styles.rpeArrowContainer}>
@@ -2998,6 +2971,8 @@ const handleTimerCompletion = async () => {
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
           android_keyboardInputMode="adjustResize"
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="none"
           containerStyle={{ zIndex: 4 }}
         >
           <BottomSheetView style={[styles.setEditBottomSheetContent, Platform.OS === 'android' && { height: 300 }]}>
@@ -3035,6 +3010,7 @@ const handleTimerCompletion = async () => {
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   keyboardType="numeric"
                   selectTextOnFocus={true}
+                  multiline
                 />
               </View>
               
@@ -3062,6 +3038,7 @@ const handleTimerCompletion = async () => {
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   keyboardType="numeric"
                   selectTextOnFocus={true}
+                  multiline
                 />
               </View>
               
@@ -3860,9 +3837,12 @@ const styles = StyleSheet.create({
   notesInput: {
     color: colors.secondaryText,
     fontSize: 13,
-    textAlignVertical: 'top',
     maxWidth: '100%',
-    marginTop: 4,
+    marginTop: Platform.OS === 'android' ? -6 : 4,
+    marginLeft: Platform.OS === 'android' ? -4 : 0,
+    minHeight: Platform.OS === 'android' ? 32 : 20,
+    paddingVertical: Platform.OS === 'android' ? 4 : 0,
+    textAlignVertical: 'top',
   },
   errorSetRow: {
     borderLeftWidth: 3,
