@@ -41,6 +41,21 @@ const RpeSelector: React.FC<RpeSelectorProps> = ({
   // Calculate padding to center items
   const sideSpacing = itemWidth * 2;
 
+  // Initial scroll on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (scrollViewRef.current && selectedIndex >= 0 && selectedIndex < data.length) {
+        const targetOffset = selectedIndex * itemWidth + (Platform.OS === 'android' ? -2 : 14);
+        scrollViewRef.current.scrollTo({
+          x: targetOffset,
+          animated: false,
+        });
+      }
+    }, 150);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     // Scroll to position when selectedIndex changes from outside (not from user scrolling)
     if (lastPropIndexRef.current !== selectedIndex && !isUserScrolling.current) {
