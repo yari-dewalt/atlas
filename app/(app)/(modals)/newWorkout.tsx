@@ -450,8 +450,8 @@ const handleRemoveExercise = () => {
 
   const handleScroll = useCallback((event) => {
     const scrollY = event.nativeEvent.contentOffset.y;
-    // Show floating stats when scrolled down more than 100 pixels and setting is enabled
-    setShowFloatingTimer(scrollY > 100 && workoutSettings.showElapsedTime);
+    // Show floating stats when scrolled down more than 70 pixels and setting is enabled
+    setShowFloatingTimer(scrollY > 70 && workoutSettings.showElapsedTime);
   }, [workoutSettings.showElapsedTime]);
 
  useEffect(() => {
@@ -3264,6 +3264,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: -16,
   },
   routineBadge: {
     flexDirection: 'row',
