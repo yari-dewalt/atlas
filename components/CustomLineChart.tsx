@@ -1,5 +1,5 @@
-import React, { Fragment, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { Fragment, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, Dimensions, Animated } from 'react-native';
 import Svg, { Line, Circle, Path, Text as SvgText, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -47,6 +47,13 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
 }) => {
   // Track previous selected index for haptic feedback
   const [prevSelectedIndex, setPrevSelectedIndex] = useState<number | null>(null);
+  
+  // Animation values for smooth Y position transitions
+  const animatedYPositions = useRef<Animated.Value[]>([]);
+  const [animatedPositions, setAnimatedPositions] = useState<number[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const prevDataRef = useRef<number[]>([]);
+  
   const paddingTop = 20;
   const paddingBottom = 40;
   const paddingLeft = 55;
@@ -59,6 +66,80 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
   const values = dataset?.data || [];
   const labels = data.labels || [];
   
+  // Calculate the min/max for Y position calculations
+  const minValue = values.length > 0 ? Math.min(...values) : 0;
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+  const valueRange = maxValue - minValue || 1;
+
+  // Initialize or update animated Y positions when data changes
+  useEffect(() => {
+    if (values.length === 0) return;
+    
+    // Calculate new Y positions for the current data
+    const newYPositions = values.map((value, index) => {
+      return paddingTop + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+    });
+    
+    // Check if this is a data change (not initial load)
+    const isDataChange = prevDataRef.current.length > 0 && 
+                        prevDataRef.current.length === values.length &&
+                        prevDataRef.current.some((val, idx) => val !== values[idx]);
+    
+    if (animatedYPositions.current.length !== values.length) {
+      // Initialize animated Y positions for new data
+      animatedYPositions.current = newYPositions.map((yPos, index) => {
+        const existingValue = animatedYPositions.current[index];
+        if (existingValue) {
+          return existingValue;
+        }
+        return new Animated.Value(yPos);
+      });
+      setAnimatedPositions([...newYPositions]);
+      prevDataRef.current = [...values];
+    } else if (isDataChange) {
+      // Animate Y positions to new values
+      setIsAnimating(true);
+      
+      // Set up listeners to track animated Y positions
+      const currentAnimatedPositions = [...animatedPositions];
+      const listeners: string[] = [];
+      
+      animatedYPositions.current.forEach((animValue, index) => {
+        const listenerId = animValue.addListener(({ value }) => {
+          currentAnimatedPositions[index] = value;
+          setAnimatedPositions([...currentAnimatedPositions]);
+        });
+        listeners.push(listenerId);
+      });
+      
+      const animations = newYPositions.map((newYPos, index) => {
+        return Animated.timing(animatedYPositions.current[index], {
+          toValue: newYPos,
+          duration: 200,
+          useNativeDriver: false,
+        });
+      });
+      
+      Animated.parallel(animations).start(() => {
+        // Clean up listeners
+        listeners.forEach((listenerId, index) => {
+          animatedYPositions.current[index]?.removeListener(listenerId);
+        });
+        
+        setIsAnimating(false);
+        setAnimatedPositions([...newYPositions]);
+        prevDataRef.current = [...values];
+      });
+    } else {
+      // Update without animation for initial load
+      newYPositions.forEach((yPos, index) => {
+        animatedYPositions.current[index]?.setValue(yPos);
+      });
+      setAnimatedPositions([...newYPositions]);
+      prevDataRef.current = [...values];
+    }
+  }, [values, minValue, maxValue, valueRange, chartHeight, paddingTop]);
+  
   if (values.length === 0) {
     return (
       <View style={[styles.emptyContainer, { width, height }, style]}>
@@ -67,14 +148,18 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
     );
   }
   
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const valueRange = maxValue - minValue || 1;
-  
-  // Calculate points for the line
+  // Calculate points for the line using animated Y positions when available
   const points = values.map((value, index) => {
     const x = paddingLeft + (index / (values.length - 1)) * chartWidth;
-    const y = paddingTop + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+    
+    // Use animated Y position if available and currently animating, otherwise calculate normally
+    let y;
+    if (isAnimating && animatedPositions[index] !== undefined) {
+      y = animatedPositions[index];
+    } else {
+      y = paddingTop + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+    }
+    
     return { x, y, value, index };
   });
   
@@ -373,7 +458,7 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
           {yAxisLabels.map((label, index) => (
             <SvgText
               key={`y-label-${index}`}
-              x={paddingLeft - 12}
+              x={paddingLeft - 8}
               y={label.y + 4}
               fontSize={10}
               fill={colors.secondaryText}
@@ -403,7 +488,7 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
             );
           })}
 
-          {/* Duration value above selected point */}
+          {/* Selected metric value above selected point */}
           {selectedPointIndex !== null && points[selectedPointIndex] && (
             <SvgText
               x={points[selectedPointIndex].x}
@@ -414,7 +499,7 @@ const CustomLineChart: React.FC<CustomLineChartProps> = ({
               fontFamily="System"
               fontWeight="600"
             >
-              {formatDuration(Math.round(points[selectedPointIndex].value))}
+              {formatYLabel(Math.round(points[selectedPointIndex].value).toString())}
             </SvgText>
           )}
         </Svg>

@@ -55,6 +55,9 @@ export default function ProfileScreen() {
   } | null>(null);
   
   const [weeklyMetricsData, setWeeklyMetricsData] = useState<{ [key: string]: { duration: number; volume: number; reps: number } }>({});
+  
+  // Activity metric selection state
+  const [selectedMetric, setSelectedMetric] = useState<'duration' | 'volume' | 'reps'>('duration');
 
   const { profile: authProfile, session } = useAuthStore();
   const { 
@@ -97,8 +100,24 @@ export default function ProfileScreen() {
     return parts.join(' ');
   };
 
+  // Helper function to format volume with k/m notation
+  const formatVolume = (volume: number): string => {
+    if (volume === 0) return '0';
+    
+    if (volume >= 1000000) {
+      const millions = volume / 1000000;
+      return millions % 1 === 0 ? `${millions}m` : `${millions.toFixed(1)}m`;
+    } else if (volume >= 1000) {
+      const thousands = volume / 1000;
+      return thousands % 1 === 0 ? `${thousands}k` : `${thousands.toFixed(1)}k`;
+    }
+    
+    return volume.toString();
+  };
+
   useEffect(() => {
     if (currentProfile?.id) {
+
       fetchLatestPost(currentProfile.id);
       fetchWorkoutDays(currentProfile.id);
       fetchRecentWorkouts(currentProfile.id);
@@ -208,12 +227,134 @@ export default function ProfileScreen() {
     setActivityStats(null);
   };
 
+  // Update chart data based on selected metric without refetching
+  const updateChartDataForMetric = () => {
+    if (Object.keys(weeklyMetricsData).length === 0) return;
+
+    const now = new Date();
+    const weekKeys: string[] = [];
+    
+    // Generate week keys in the same order as original
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = startOfWeek(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
+      const weekKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
+      weekKeys.push(weekKey);
+    }
+
+    // Get values based on selected metric from existing data
+    const values = weekKeys.map(key => {
+      const metrics = weeklyMetricsData[key] || { duration: 0, volume: 0, reps: 0 };
+      switch (selectedMetric) {
+        case 'duration':
+          return metrics.duration;
+        case 'volume':
+          return metrics.volume;
+        case 'reps':
+          return metrics.reps;
+        default:
+          return metrics.duration;
+      }
+    });
+    
+    // Generate Strava-style labels (only show month when it changes)
+    const finalLabels = generateStravaStyleLabels(weekKeys);
+
+    // Update chart data
+    setActivityData({
+      labels: finalLabels,
+      datasets: [{
+        data: values,
+        color: (opacity = 1) => colors.brand,
+        strokeWidth: 2
+      }]
+    });
+
+    // Preserve the currently selected point index if it exists, otherwise select the rightmost point
+    if (finalLabels.length > 0 && values.length > 0) {
+      const targetIndex = selectedPointIndex !== null && selectedPointIndex < values.length 
+        ? selectedPointIndex 
+        : finalLabels.length - 1;
+      
+      setSelectedPointIndex(targetIndex);
+      setSelectedValue(values[targetIndex]);
+      
+      // Use the display-friendly label from generateOriginalLabels which includes "This week"
+      const originalLabels = generateOriginalLabels();
+      const displayLabel = originalLabels[targetIndex] || weekKeys[targetIndex] || finalLabels[targetIndex];
+      setSelectedLabel(displayLabel);
+      
+      // Calculate the X position for the vertical line
+      const chartWidth = Dimensions.get('window').width - 55 - 20; // paddingLeft + paddingRight
+      const paddingLeft = 55;
+      const selectedPointX = paddingLeft + (targetIndex / (values.length - 1)) * chartWidth;
+      setSelectedPointX(selectedPointX);
+    }
+
+    // Update stats for the new metric
+    updateActivityStatsForMetric();
+  };
+
+  // Update activity stats based on selected metric without refetching
+  const updateActivityStatsForMetric = () => {
+    if (Object.keys(weeklyMetricsData).length === 0) {
+      setActivityStats({
+        total: 0,
+        average: 0,
+        max: 0,
+        activeDays: 0
+      });
+      return;
+    }
+
+    let totalValue = 0;
+    let maxValue = 0;
+    let activeWeeks = 0;
+
+    Object.values(weeklyMetricsData).forEach(metrics => {
+      let weekValue = 0;
+      switch (selectedMetric) {
+        case 'duration':
+          weekValue = metrics.duration;
+          break;
+        case 'volume':
+          weekValue = metrics.volume;
+          break;
+        case 'reps':
+          weekValue = metrics.reps;
+          break;
+      }
+      
+      if (weekValue > 0) {
+        activeWeeks++;
+      }
+      totalValue += weekValue;
+      maxValue = Math.max(maxValue, weekValue);
+    });
+
+    const average = activeWeeks > 0 ? Math.round(totalValue / activeWeeks) : 0;
+
+    setActivityStats({
+      total: Math.round(totalValue),
+      average,
+      max: Math.round(maxValue),
+      activeDays: activeWeeks
+    });
+  };
+
   useEffect(() => {
     if (currentProfile?.id) {
       resetSelection();
       fetchActivityData(currentProfile.id);
     }
   }, [currentProfile?.id]);
+
+  // Update chart data when metric changes (preserve selection)
+  useEffect(() => {
+    if (currentProfile?.id && Object.keys(weeklyMetricsData).length > 0) {
+      updateChartDataForMetric();
+    }
+  }, [selectedMetric]);
 
   const fetchRoutines = async (profileId: string, showLoading: boolean = true) => {
     try {
@@ -595,9 +736,8 @@ export default function ProfileScreen() {
         if (workoutDate >= weekStart && workoutDate <= weekEnd) {
           const weekKey = `${format(weekStart, 'MMM dd')} - ${format(weekEnd, 'MMM dd')}`;
           
-          // Calculate duration (for chart display)
+          // Calculate duration
           const duration = Math.floor((workout.duration || 0) / 60);
-          dataPoints[weekKey] += duration;
           allMetricsData[weekKey].duration += duration;
           
           // Calculate volume
@@ -628,10 +768,22 @@ export default function ProfileScreen() {
         }
       }
     });
-    
+
     // Use the weekKeys array to maintain proper order
     const labels = weekKeys;
-    const values = weekKeys.map(key => dataPoints[key]);
+    // Get values based on selected metric
+    const values = weekKeys.map(key => {
+      switch (selectedMetric) {
+        case 'duration':
+          return allMetricsData[key].duration;
+        case 'volume':
+          return allMetricsData[key].volume;
+        case 'reps':
+          return allMetricsData[key].reps;
+        default:
+          return allMetricsData[key].duration;
+      }
+    });
     
     // Generate Strava-style labels (only show month when it changes)
     const finalLabels = generateStravaStyleLabels(labels);
@@ -689,8 +841,31 @@ export default function ProfileScreen() {
 
       let workoutValue = 0;
       
-      // Only calculate duration for stats since chart only shows duration
-      workoutValue = Math.floor((workout.duration || 0) / 60);
+      // Calculate value based on selected metric
+      switch (selectedMetric) {
+        case 'duration':
+          workoutValue = Math.floor((workout.duration || 0) / 60);
+          break;
+        case 'volume':
+          workout.workout_exercises?.forEach((exercise: any) => {
+            exercise.workout_sets?.forEach((set: any) => {
+              if (set.is_completed && set.weight && set.reps) {
+                const displayWeight = convertWeight(set.weight, 'kg', userWeightUnit);
+                workoutValue += displayWeight * set.reps;
+              }
+            });
+          });
+          break;
+        case 'reps':
+          workout.workout_exercises?.forEach((exercise: any) => {
+            exercise.workout_sets?.forEach((set: any) => {
+              if (set.is_completed && set.reps) {
+                workoutValue += set.reps;
+              }
+            });
+          });
+          break;
+      }
       
       totalValue += workoutValue;
       maxValue = Math.max(maxValue, workoutValue);
@@ -1078,6 +1253,78 @@ export default function ProfileScreen() {
 
         {/* Activity Graph Section */}
         <View style={styles.section}>
+          {/* Metric Selection Buttons */}
+          <View style={styles.metricSelectorContainer}>
+            <TouchableOpacity
+              style={[
+                styles.metricButton,
+                selectedMetric === 'duration' && styles.metricButtonActive
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedMetric('duration');
+              }}
+            >
+              <IonIcon 
+                name="time-outline" 
+                size={16} 
+                color={selectedMetric === 'duration' ? colors.brand : colors.secondaryText} 
+              />
+              <Text style={[
+                styles.metricButtonText,
+                selectedMetric === 'duration' && styles.metricButtonTextActive
+              ]}>
+                Duration
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.metricButton,
+                selectedMetric === 'volume' && styles.metricButtonActive
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedMetric('volume');
+              }}
+            >
+              <IonIcon 
+                name="barbell-outline" 
+                size={16} 
+                color={selectedMetric === 'volume' ? colors.brand : colors.secondaryText} 
+              />
+              <Text style={[
+                styles.metricButtonText,
+                selectedMetric === 'volume' && styles.metricButtonTextActive
+              ]}>
+                Volume
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.metricButton,
+                selectedMetric === 'reps' && styles.metricButtonActive
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedMetric('reps');
+              }}
+            >
+              <IonIcon 
+                name="repeat-outline" 
+                size={16} 
+                color={selectedMetric === 'reps' ? colors.brand : colors.secondaryText} 
+              />
+              <Text style={[
+                styles.metricButtonText,
+                selectedMetric === 'reps' && styles.metricButtonTextActive
+              ]}>
+                Reps
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
           {/* Selected Point Stats Section */}
           {selectedPointIndex !== null && selectedValue !== null && selectedLabel !== null && (() => {
             // Get the week key from the original labels
@@ -1109,11 +1356,11 @@ export default function ProfileScreen() {
                   </View>
                   <View style={styles.metricItem}>
                     <Text style={styles.metricLabel}>Volume</Text>
-                    <Text style={styles.metricValue}>{Math.round(metricsForWeek.volume).toLocaleString()} {userWeightUnit}</Text>
+                    <Text style={styles.metricValue}>{formatVolume(Math.round(metricsForWeek.volume))} {userWeightUnit}</Text>
                   </View>
                   <View style={styles.metricItem}>
                     <Text style={styles.metricLabel}>Reps</Text>
-                    <Text style={styles.metricValue}>{Math.round(metricsForWeek.reps).toLocaleString()}</Text>
+                    <Text style={styles.metricValue}>{formatVolume(Math.round(metricsForWeek.reps))}</Text>
                   </View>
                 </View>
               </View>
@@ -1151,8 +1398,17 @@ export default function ProfileScreen() {
                           setSelectedPointX(x);
                         }}
                         formatYLabel={(value: string) => {
-                          const minutes = parseInt(value) || 0;
-                          return formatDuration(minutes);
+                          const numValue = parseInt(value) || 0;
+                          switch (selectedMetric) {
+                            case 'duration':
+                              return formatDuration(numValue);
+                            case 'volume':
+                              return `${formatVolume(numValue)} ${userWeightUnit}`;
+                            case 'reps':
+                              return formatVolume(numValue);
+                            default:
+                              return formatDuration(numValue);
+                          }
                         }}
                         bezier={true}
                         style={styles.chart}
@@ -1556,5 +1812,35 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
     fontSize: 14,
     opacity: 0.8,
+  },
+
+  // Metric Selector Styles
+  metricSelectorContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  metricButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: colors.primaryAccent,
+    borderWidth: 1,
+    borderColor: colors.whiteOverlay,
+  },
+  metricButtonActive: {
+    borderColor: colors.brand,
+  },
+  metricButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.primaryText,
+  },
+  metricButtonTextActive: {
+    color: colors.brand,
   },
 });
