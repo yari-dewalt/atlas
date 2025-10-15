@@ -11,7 +11,8 @@ import {
   StatusBar, 
   SafeAreaView, 
   TouchableOpacity,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  Platform
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
@@ -374,9 +375,11 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
     const index = Math.round(contentOffset / galleryWidth);
     setActiveIndex(index);
     // Wait for scroll to settle before calling the callback
-    setTimeout(() => {
-      onActiveIndexChange?.(index);
-    }, 250);
+    if (Platform.OS === 'ios') {
+      setTimeout(() => {
+        onActiveIndexChange?.(index);
+      }, 250);
+    }
   };
 
   return (
