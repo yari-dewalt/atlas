@@ -80,8 +80,6 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [mediaUrls, setMediaUrls] = useState<{[key: string]: string}>({});
   const [galleryWidth, setGalleryWidth] = useState(0);
-  const [globalVideoMuted, setGlobalVideoMuted] = useState<boolean>(externalGlobalVideoMuted);
-  
   const flatListRef = useRef<FlatList>(null);
   const videoRefs = useRef<{[key: string]: Video}>({});
   const fullscreenVideoRef = useRef<Video>(null);
@@ -97,10 +95,6 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
       });
     }
   }, [externalActiveIndex, galleryWidth, contentItems.length]);
-
-  useEffect(() => {
-    setGlobalVideoMuted(externalGlobalVideoMuted);
-  }, [externalGlobalVideoMuted]);
 
   useEffect(() => {
     const processContentAndUrls = async () => {
@@ -287,8 +281,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
   };
 
   const toggleMute = () => {
-    const newMutedState = !globalVideoMuted;
-    setGlobalVideoMuted(newMutedState);
+    const newMutedState = !externalGlobalVideoMuted;
     onMuteToggle?.(newMutedState);
   };
 
@@ -334,7 +327,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
               source={{ uri: mediaUrl }}
               shouldPlay={index === activeIndex && isPostVisible}
               isLooping
-              isMuted={globalVideoMuted}
+              isMuted={externalGlobalVideoMuted}
               resizeMode={ResizeMode.COVER}
               useNativeControls={false}
               onPlaybackStatusUpdate={(status) => handlePlaybackStatusUpdate(item.id, status)}
@@ -347,7 +340,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
               }}
             >
               <IonIcon 
-                name={globalVideoMuted ? "volume-mute" : "volume-high"} 
+                name={externalGlobalVideoMuted ? "volume-mute" : "volume-high"} 
                 size={14} 
                 color={colors.primaryText} 
               />

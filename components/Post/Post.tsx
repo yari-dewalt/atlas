@@ -43,7 +43,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const pathname = usePathname();
   const { profile, session } = useAuthStore();
   const { updatePostsCount, isCurrentUser, followUser, checkIfFollowing, isUserFollowed } = useProfileStore();
-  const { getPostState, setActiveIndex, setGlobalVideoMuted } = useMediaGalleryStore();
+  const { getPostState, setActiveIndex, setGlobalVideoMuted, globalVideoMuted } = useMediaGalleryStore();
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
@@ -57,8 +57,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   }, [data.id, setActiveIndex]);
   
   const handleMuteToggle = useCallback((muted: boolean) => {
-    setGlobalVideoMuted(data.id, muted);
-  }, [data.id, setGlobalVideoMuted]);
+    setGlobalVideoMuted(muted);
+  }, [setGlobalVideoMuted]);
 
   // Format duration function (same as workout details screen)
   const formatDuration = (seconds: number) => {
@@ -643,7 +643,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           routineData={workoutData?.routines}
           postUser={data.user}
           activeIndex={mediaGalleryState.activeIndex}
-          globalVideoMuted={mediaGalleryState.globalVideoMuted}
+          globalVideoMuted={globalVideoMuted}
           onActiveIndexChange={handleActiveIndexChange}
           onMuteToggle={handleMuteToggle}
         />

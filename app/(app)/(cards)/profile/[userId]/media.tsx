@@ -10,6 +10,7 @@ import { supabase } from '../../../../../lib/supabase';
 import { Video, ResizeMode } from 'expo-av';
 import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
 import { FlashList } from '@shopify/flash-list';
+import { useMediaGalleryStore } from '../../../../../stores/mediaGalleryStore';
 
 // Simple Video Component to avoid hook rules violations
 interface VideoItemProps {
@@ -178,7 +179,6 @@ export default function MediaScreen() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
-  const [videoMuted, setVideoMuted] = useState<{[key: string]: boolean}>({});
   const [backgroundVideoMutedBeforeFullscreen, setBackgroundVideoMutedBeforeFullscreen] = useState<boolean | null>(null);
   const [pausedVideosBeforeFullscreen, setPausedVideosBeforeFullscreen] = useState<Set<string>>(new Set());
   const [processedMediaCache, setProcessedMediaCache] = useState<{[key: string]: any}>({});
@@ -189,6 +189,9 @@ export default function MediaScreen() {
   const videoPlayers = useRef<{[key: string]: any}>({});
   const videoItemRefs = useRef<{[key: string]: any}>({});
   const fullscreenVideoPlayer = useRef<Video>(null);
+  
+  // Use global video mute state
+  const { globalVideoMuted, setGlobalVideoMuted } = useMediaGalleryStore();
 
   useEffect(() => {
     if (userId) {
@@ -255,16 +258,7 @@ export default function MediaScreen() {
   // For now, we'll use individual video players per component
   // This avoids the hook rules violation issue
 
-  // Initialize video muted states when media loads
-  useEffect(() => {
-    const mutedStates = {};
-    media.forEach(item => {
-      if (item.type === 'video') {
-        mutedStates[item.id] = true; // Videos start muted by default
-      }
-    });
-    setVideoMuted(mutedStates);
-  }, [media]);
+  // Videos now use global mute state - no need for per-video state initialization
 
   // Video handling is now managed by individual VideoItem components
 
@@ -407,14 +401,14 @@ export default function MediaScreen() {
     
     // If opening a video in fullscreen, store the muted state
     if (item.type === 'video') {
-      setBackgroundVideoMutedBeforeFullscreen(videoMuted[item.id] ?? true);
+      setBackgroundVideoMutedBeforeFullscreen(globalVideoMuted);
       // Set video to auto-play in fullscreen
       setIsVideoPlaying(true);
     }
     
     setSelectedItem(item);
     setIsFullscreen(true);
-  }, [videoMuted, fullscreenVideoPlayer, visibleVideos]);
+  }, [globalVideoMuted, fullscreenVideoPlayer, visibleVideos]);
 
   const closeFullscreen = async () => {
     setIsFullscreen(false);
@@ -478,13 +472,10 @@ export default function MediaScreen() {
     }
   };
 
-  const toggleMute = useCallback(async (itemId: string) => {
-    const newMutedState = !videoMuted[itemId];
-    setVideoMuted(prev => ({
-      ...prev,
-      [itemId]: newMutedState
-    }));
-  }, [videoMuted]);
+  const toggleMute = useCallback(async () => {
+    const newMutedState = !globalVideoMuted;
+    setGlobalVideoMuted(newMutedState);
+  }, [globalVideoMuted, setGlobalVideoMuted]);
 
   // Handle video visibility changes
   const handleVideoVisibilityChange = useCallback((itemId: string, isVisible: boolean) => {
@@ -524,8 +515,8 @@ export default function MediaScreen() {
                   }
                 }}
                 uri={item.uri}
-                muted={videoMuted[item.id] ?? true}
-                onMuteToggle={() => toggleMute(item.id)}
+                muted={globalVideoMuted}
+                onMuteToggle={toggleMute}
                 isVisible={visibleVideos.has(item.id) && viewMode === 'list'}
               />
             </VisibilitySensor>
@@ -552,7 +543,7 @@ export default function MediaScreen() {
         </TouchableOpacity>
       </View>
     );
-  }, [visibleVideos, viewMode, videoMuted, handleMediaPress, toggleMute, handleVideoVisibilityChange, router]);
+  }, [visibleVideos, viewMode, globalVideoMuted, handleMediaPress, toggleMute, handleVideoVisibilityChange, router]);
 
   const renderGridMediaItem = useCallback(({ item, index }: { item: any, index: number }) => {
     const itemSize = (width - 4) / 3; // 3 columns with 1px gaps (2px total gap space)
