@@ -1086,7 +1086,7 @@ export default function Explore() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.searchContentContainer}>
+          <ScrollView style={styles.searchContentContainer} keyboardShouldPersistTaps="handled">
             {/* Search Results */}
             {searchQuery ? (
               <View style={styles.searchSection}>
