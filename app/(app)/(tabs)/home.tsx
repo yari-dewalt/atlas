@@ -107,7 +107,7 @@ export default function Home() {
   
   // Register scroll ref for tab scroll-to-top functionality
   useEffect(() => {
-    setTabScrollRef('home', flashListRef.current);
+    setTabScrollRef('home', flashListRef);
   }, []);
   
   // Load feed posts from users the current user follows
@@ -320,7 +320,6 @@ export default function Home() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
-          maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 80}}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -60,7 +60,7 @@ export default function ProfileScreen() {
   // Activity metric selection state
   const [selectedMetric, setSelectedMetric] = useState<'duration' | 'volume' | 'reps'>('duration');
   
-  useEffect(() => {setTabScrollRef('profile', scrollViewRef.current);}, []);
+  useEffect(() => {setTabScrollRef('profile', scrollViewRef);}, []);
 
   const { profile: authProfile, session } = useAuthStore();
   const { 

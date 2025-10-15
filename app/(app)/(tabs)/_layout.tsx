@@ -20,7 +20,7 @@ const scrollRefs = {
 // Function to set scroll ref for a specific tab
 export const setTabScrollRef = (tabName, ref) => {
   if (scrollRefs[tabName]) {
-    scrollRefs[tabName].current = ref;
+    scrollRefs[tabName] = ref;
   }
 };
 
@@ -29,7 +29,12 @@ export const scrollToTop = (tabName) => {
   console.log(scrollRefs[tabName])
   if (scrollRefs[tabName]?.current) {
     console.log('Scrolling to top of', tabName);
-    scrollRefs[tabName].current.scrollTo({ y: 0, animated: true });
+    // Check if it's a FlashList (has scrollToOffset method) or ScrollView (has scrollTo method)
+    if (scrollRefs[tabName].current.scrollToOffset) {
+      scrollRefs[tabName].current.scrollToOffset({ offset: 0, animated: true });
+    } else if (scrollRefs[tabName].current.scrollTo) {
+      scrollRefs[tabName].current.scrollTo({ y: 0, animated: true });
+    }
   }
 };
 

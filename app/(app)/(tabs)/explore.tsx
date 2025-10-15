@@ -281,7 +281,7 @@ export default function Explore() {
 
   // Register scroll ref for tab scroll-to-top functionality
   useEffect(() => {
-    setTabScrollRef('explore', flashListRef.current);
+    setTabScrollRef('explore', flashListRef);
   }, []);
 
   useEffect(() => {

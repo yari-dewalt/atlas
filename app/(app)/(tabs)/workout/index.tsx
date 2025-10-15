@@ -54,7 +54,7 @@ export default function Workout() {
 
   // Register scroll ref for tab scroll-to-top functionality
   useEffect(() => {
-    setTabScrollRef('workout', scrollViewRef.current);
+    setTabScrollRef('workout', scrollViewRef);
   }, []);
 
   // Fetch a random official routine for showcase
