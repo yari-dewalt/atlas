@@ -9,6 +9,79 @@ import PostSkeleton from '../../../../../components/Post/PostSkeleton';
 import { checkIfUserLikedPost } from '../../../../../utils/postUtils';
 import { useAuthStore } from '../../../../../stores/authStore';
 
+// Helper function to process workout data for posts
+const processWorkoutData = (workout) => {
+  if (!workout) return null;
+
+  // Use the duration field directly from the database (which is already in seconds)
+  let calculatedDuration = workout.duration ?? 0;
+
+  // Calculate total volume
+  let totalVolume = 0;
+  const exercises = workout.workout_exercises || [];
+  
+  exercises.forEach(exercise => {
+    const sets = exercise.workout_sets || [];
+    sets.forEach(set => {
+      if (set.weight && set.reps) {
+        totalVolume += set.weight * set.reps;
+      }
+    });
+  });
+
+  return {
+    ...workout,
+    duration: calculatedDuration,
+    exerciseCount: exercises.length,
+    totalVolume,
+    totalSets: exercises.reduce((acc, ex) => 
+      acc + (ex.workout_sets?.length || 0), 0)
+  };
+};
+
+// Helper function to process likes data for posts
+const processLikesData = async (postLikes, currentUserId) => {
+  if (!postLikes || postLikes.length === 0) {
+    return null;
+  }
+
+  try {
+    // Find the most recent user that the current user follows (if any)
+    let featuredUser = null;
+    if (currentUserId) {
+      // Check which of these users the current user follows
+      const userIds = postLikes.map(like => like.user_id);
+      const { data: following, error: followError } = await supabase
+        .from('follows')
+        .select('following_user_id')
+        .eq('follower_user_id', currentUserId)
+        .in('following_user_id', userIds);
+
+      if (!followError && following && following.length > 0) {
+        const followingIds = following.map(f => f.following_user_id);
+        featuredUser = postLikes.find(like => followingIds.includes(like.user_id));
+      }
+    }
+    
+    // If no followed user found, use the most recent liker
+    if (!featuredUser) {
+      featuredUser = postLikes[0];
+    }
+
+    // Filter out current user from display
+    const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
+
+    return {
+      featuredUser: featuredUser?.profiles,
+      totalCount: filteredLikes.length,
+      recentLikes: filteredLikes.slice(0, 3)
+    };
+  } catch (error) {
+    console.error('Error processing likes data:', error);
+    return null;
+  }
+};
+
 export default function PostDetailScreen() {
   const { postId } = useLocalSearchParams();
   const router = useRouter();
@@ -41,7 +114,43 @@ export default function PostDetailScreen() {
           profiles:user_id(id, username, avatar_url, full_name),
           post_likes(count),
           post_comments(count),
-          post_media(id, storage_path, media_type, width, height, duration, order_index)
+          post_media(id, storage_path, media_type, width, height, duration, order_index),
+          post_likes_detailed:post_likes(
+            user_id,
+            created_at,
+            profiles:user_id(id, username, full_name, avatar_url)
+          ),
+          workouts(
+            id,
+            name,
+            start_time,
+            end_time,
+            duration,
+            notes,
+            routine_id,
+            routines(
+              id,
+              name
+            ),
+            workout_exercises(
+              id,
+              name,
+              exercise_id,
+              superset_id,
+              exercises(
+                id,
+                name,
+                image_url
+              ),
+              workout_sets(
+                id,
+                weight,
+                reps,
+                rpe,
+                is_completed
+              )
+            )
+          )
         `)
         .eq('id', postId)
         .single();
@@ -93,7 +202,9 @@ export default function PostDetailScreen() {
           })).sort((a, b) => a.order_index - b.order_index) : [],
           likes: data.likes_count || (data.post_likes?.[0]?.count || 0),
           is_liked: hasLiked,
-          comments: []
+          comments: [],
+          likes_data: await processLikesData(data.post_likes_detailed, session?.user?.id),
+          workout_data: processWorkoutData(data.workouts)
         };
         
         setPost(formattedPost);

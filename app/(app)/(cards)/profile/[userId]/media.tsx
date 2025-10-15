@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, Pressable, SafeAreaView, Modal, StatusBar, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable, SafeAreaView, Modal, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { colors } from '../../../../../constants/colors';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
@@ -7,8 +7,9 @@ import CachedImage from '../../../../../components/CachedImage';
 import VideoThumbnail from '../../../../../components/VideoThumbnail';
 import MediaSkeleton from '../../../../../components/MediaSkeleton';
 import { supabase } from '../../../../../lib/supabase';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
+import { FlashList } from '@shopify/flash-list';
 
 // Simple Video Component to avoid hook rules violations
 interface VideoItemProps {
@@ -26,66 +27,100 @@ interface VideoItemRef {
 }
 
 const VideoItem = React.forwardRef<VideoItemRef, VideoItemProps>(({ uri, muted, onMuteToggle, isVisible }, ref) => {
-  const player = useVideoPlayer(uri, (player) => {
-    player.loop = true;
-    player.muted = true; // Start muted, will be updated separately
-  });
-
+  const videoRef = React.useRef<Video>(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [isPausedByFullscreen, setIsPausedByFullscreen] = React.useState(false);
+  const [isLoaded, setIsLoaded] = React.useState(false);
+
+  // Handle video status updates
+  const handlePlaybackStatusUpdate = React.useCallback((status: any) => {
+    if (status.isLoaded && !isLoaded) {
+      setIsLoaded(true);
+    }
+    if (status.isLoaded) {
+      setIsPlaying(status.isPlaying || false);
+    }
+  }, [isLoaded]);
 
   // Expose methods to parent via ref
   React.useImperativeHandle(ref, () => ({
-    pause: () => {
-      player.pause();
-      setIsPlaying(false);
+    pause: async () => {
+      if (videoRef.current && isLoaded) {
+        try {
+          await videoRef.current.pauseAsync();
+          setIsPlaying(false);
+        } catch (error) {
+          // Ignore errors if video is not ready
+        }
+      }
     },
-    play: () => {
-      if (!isPausedByFullscreen) {
-        player.play();
-        setIsPlaying(true);
+    play: async () => {
+      if (!isPausedByFullscreen && videoRef.current && isLoaded) {
+        try {
+          await videoRef.current.playAsync();
+          setIsPlaying(true);
+        } catch (error) {
+          // Ignore errors if video is not ready
+        }
       }
     },
     pauseForFullscreen: () => {
-      const wasPlaying = player.playing;
-      player.pause();
-      setIsPausedByFullscreen(true);
-      return wasPlaying;
+      if (videoRef.current && isLoaded) {
+        try {
+          const wasPlaying = isPlaying;
+          videoRef.current.pauseAsync();
+          setIsPausedByFullscreen(true);
+          return wasPlaying;
+        } catch (error) {
+          // Ignore errors if video is not ready
+        }
+      }
+      return false;
     },
-    resumeFromFullscreen: (shouldPlay) => {
+    resumeFromFullscreen: async (shouldPlay) => {
       setIsPausedByFullscreen(false);
-      if (shouldPlay && isVisible) {
-        player.play();
-        setIsPlaying(true);
+      if (shouldPlay && isVisible && videoRef.current && isLoaded) {
+        try {
+          await videoRef.current.playAsync();
+          setIsPlaying(true);
+        } catch (error) {
+          // Ignore errors if video is not ready
+        }
       }
     }
-  }), [player, isVisible, isPausedByFullscreen]);
+  }), [isLoaded, isPlaying, isVisible, isPausedByFullscreen]);
 
   React.useEffect(() => {
-    if (!isPausedByFullscreen) {
+    if (!isPausedByFullscreen && videoRef.current && isLoaded) {
       if (isVisible) {
-        player.muted = muted;
-        player.play();
+        videoRef.current.setIsMutedAsync(muted);
+        videoRef.current.playAsync();
         setIsPlaying(true);
       } else {
-        player.pause();
-        player.currentTime = 0;
+        videoRef.current.pauseAsync();
+        videoRef.current.setPositionAsync(0);
         setIsPlaying(false);
       }
     }
-  }, [isVisible, muted, player, isPausedByFullscreen]);
+  }, [isVisible, muted, isPausedByFullscreen, isLoaded]);
 
   React.useEffect(() => {
-    player.muted = muted;
-  }, [muted, player]);
+    if (videoRef.current && isLoaded) {
+      videoRef.current.setIsMutedAsync(muted);
+    }
+  }, [muted, isLoaded]);
 
   return (
     <View style={videoItemStyles.container}>
-      <VideoView
-        player={player}
+      <Video
+        ref={videoRef}
+        source={{ uri }}
         style={videoItemStyles.video}
-        nativeControls={false}
-        contentFit="cover"
+        resizeMode={ResizeMode.COVER}
+        isLooping
+        isMuted={muted}
+        shouldPlay={isVisible && !isPausedByFullscreen}
+        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
       />
       <Pressable
         style={videoItemStyles.muteButton}
@@ -149,14 +184,11 @@ export default function MediaScreen() {
   const [processedMediaCache, setProcessedMediaCache] = useState<{[key: string]: any}>({});
   const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
   const [visibleVideos, setVisibleVideos] = useState<Set<string>>(new Set()); // Track which videos are visible
-  const flatListRef = useRef<FlatList>(null);
-  const gridListRef = useRef<FlatList>(null);
+  const flashListRef = useRef(null);
+  const gridListRef = useRef(null);
   const videoPlayers = useRef<{[key: string]: any}>({});
   const videoItemRefs = useRef<{[key: string]: any}>({});
-  const fullscreenVideoPlayer = useVideoPlayer('', (player) => {
-    player.loop = true;
-    player.muted = false;
-  });
+  const fullscreenVideoPlayer = useRef<Video>(null);
 
   useEffect(() => {
     if (userId) {
@@ -179,9 +211,9 @@ export default function MediaScreen() {
     // Only auto-scroll when we have the shouldAutoScroll flag set
     if (shouldAutoScroll && media.length > 0 && currentIndex < media.length && viewMode === 'list') {
       const timeout = setTimeout(() => {
-        if (flatListRef.current && currentIndex >= 0) {
+        if (flashListRef.current && currentIndex >= 0) {
           try {
-            flatListRef.current.scrollToIndex({ 
+            flashListRef.current.scrollToIndex({ 
               index: currentIndex, 
               animated: false, // Don't animate for better UX
               viewPosition: 0.5 // Center the item in view
@@ -190,7 +222,7 @@ export default function MediaScreen() {
             // If scrollToIndex fails, use scrollToOffset as fallback
             console.warn('scrollToIndex failed, using fallback');
             const ESTIMATED_ITEM_HEIGHT = 400;
-            flatListRef.current.scrollToOffset({
+            flashListRef.current.scrollToOffset({
               offset: currentIndex * ESTIMATED_ITEM_HEIGHT,
               animated: false
             });
@@ -208,8 +240,8 @@ export default function MediaScreen() {
     // Only auto-scroll when switching from grid to list view
     if (media.length > 0 && currentIndex < media.length && viewMode === 'list' && !mediaId) {
       const timeout = setTimeout(() => {
-        if (flatListRef.current && currentIndex > 0) {
-          flatListRef.current.scrollToIndex({ 
+        if (flashListRef.current && currentIndex > 0) {
+          flashListRef.current.scrollToIndex({ 
             index: currentIndex, 
             animated: false 
           });
@@ -254,9 +286,9 @@ export default function MediaScreen() {
         });
         
         // Also pause fullscreen video if it exists
-        if (fullscreenVideoPlayer) {
+        if (fullscreenVideoPlayer.current) {
           try {
-            fullscreenVideoPlayer.pause();
+            fullscreenVideoPlayer.current.pauseAsync();
           } catch (error) {
             // Ignore errors if player is already deallocated
           }
@@ -376,32 +408,24 @@ export default function MediaScreen() {
     // If opening a video in fullscreen, store the muted state
     if (item.type === 'video') {
       setBackgroundVideoMutedBeforeFullscreen(videoMuted[item.id] ?? true);
-      
-      // Set up fullscreen player
-      fullscreenVideoPlayer.replace(item.uri);
-      fullscreenVideoPlayer.muted = false;
-      // Auto-play the video when entering fullscreen
-      setTimeout(() => {
-        try {
-          fullscreenVideoPlayer.play();
-        } catch (error) {
-          // Ignore errors if player is already deallocated
-        }
-      }, 100);
+      // Set video to auto-play in fullscreen
+      setIsVideoPlaying(true);
     }
     
     setSelectedItem(item);
     setIsFullscreen(true);
   }, [videoMuted, fullscreenVideoPlayer, visibleVideos]);
 
-  const closeFullscreen = () => {
+  const closeFullscreen = async () => {
     setIsFullscreen(false);
     
     // Pause fullscreen video
-    try {
-      fullscreenVideoPlayer.pause();
-    } catch (error) {
-      // Ignore errors if player is already deallocated
+    if (fullscreenVideoPlayer.current) {
+      try {
+        await fullscreenVideoPlayer.current.pauseAsync();
+      } catch (error) {
+        // Ignore errors if player is already deallocated
+      }
     }
     
     // Resume videos that were playing before fullscreen (with a delay to ensure modal is closed)
@@ -422,33 +446,32 @@ export default function MediaScreen() {
     setIsVideoPlaying(true);
   };
 
-  // Track fullscreen video progress
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (fullscreenVideoPlayer && selectedItem?.type === 'video') {
-        const duration = fullscreenVideoPlayer.duration || 0;
-        const currentTime = fullscreenVideoPlayer.currentTime || 0;
-        
-        setVideoDuration(duration);
-        if (duration > 0) {
-          setVideoProgress(currentTime / duration);
-        }
-        setIsVideoPlaying(fullscreenVideoPlayer.playing);
+  // Handle fullscreen video status updates
+  const handleFullscreenVideoStatus = useCallback((status: any) => {
+    if (status.isLoaded) {
+      const duration = status.durationMillis ? status.durationMillis / 1000 : 0;
+      const currentTime = status.positionMillis ? status.positionMillis / 1000 : 0;
+      
+      setVideoDuration(duration);
+      if (duration > 0) {
+        setVideoProgress(currentTime / duration);
       }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [selectedItem]);
+      setIsVideoPlaying(status.isPlaying || false);
+    }
+  }, []);
 
   const togglePlayPause = async () => {
-    if (fullscreenVideoPlayer) {
+    if (fullscreenVideoPlayer.current) {
       try {
-        if (isVideoPlaying) {
-          fullscreenVideoPlayer.pause();
-        } else {
-          fullscreenVideoPlayer.play();
+        const status = await fullscreenVideoPlayer.current.getStatusAsync();
+        if (status.isLoaded) {
+          if (isVideoPlaying) {
+            await fullscreenVideoPlayer.current.pauseAsync();
+          } else {
+            await fullscreenVideoPlayer.current.playAsync();
+          }
+          setIsVideoPlaying(!isVideoPlaying);
         }
-        setIsVideoPlaying(!isVideoPlaying);
       } catch (error) {
         // Ignore errors if player is already deallocated
       }
@@ -508,6 +531,7 @@ export default function MediaScreen() {
             </VisibilitySensor>
           ) : (
             <CachedImage
+              key={item.id}
               path={item.uri}
               style={styles.mediaImage}
               resizeMode="cover"
@@ -549,6 +573,7 @@ export default function MediaScreen() {
           />
         ) : (
           <CachedImage
+            key={item.id}
             path={item.uri}
             style={styles.mediaImage}
             resizeMode="cover"
@@ -565,18 +590,7 @@ export default function MediaScreen() {
 
 
 
-  const onScrollToIndexFailed = useCallback((info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
-    // Handle scroll failures by scrolling to the nearest measured frame
-    const wait = new Promise(resolve => setTimeout(resolve, 500));
-    wait.then(() => {
-      if (flatListRef.current) {
-        flatListRef.current.scrollToIndex({ 
-          index: Math.min(info.index, info.highestMeasuredFrameIndex), 
-          animated: false // Don't animate to prevent glitches
-        });
-      }
-    });
-  }, []);
+    // FlashList handles scroll failures internally, so we don't need this callback
 
   // Memoize keyExtractor to prevent unnecessary re-renders
   const keyExtractor = useCallback((item: any) => item.id, []);
@@ -714,26 +728,22 @@ export default function MediaScreen() {
             </View>
 
             {viewMode === 'grid' ? (
-              <FlatList
+              <FlashList
                 key="grid-view"
                 ref={gridListRef}
                 data={media}
                 renderItem={renderGridMediaItem}
                 keyExtractor={keyExtractor}
                 numColumns={3}
-                columnWrapperStyle={styles.gridRow}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.gridContent}
-                initialNumToRender={18}
-                maxToRenderPerBatch={18}
-                windowSize={10}
                 removeClippedSubviews={true}
-                getItemLayout={undefined}
+                getItemType={() => 'media'}
               />
             ) : (
-              <FlatList
+              <FlashList
                 key="list-view"
-                ref={flatListRef}
+                ref={flashListRef}
                 data={media}
                 renderItem={renderListMediaItem}
                 keyExtractor={keyExtractor}
@@ -741,12 +751,8 @@ export default function MediaScreen() {
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
                 removeClippedSubviews={false}
-                onScrollToIndexFailed={onScrollToIndexFailed}
                 contentContainerStyle={styles.listContent}
-                initialNumToRender={6}
-                maxToRenderPerBatch={6}
-                windowSize={10}
-                getItemLayout={getItemLayout}
+                getItemType={() => 'media'}
               />
             )}
           </>
@@ -799,11 +805,15 @@ export default function MediaScreen() {
                 onPress={togglePlayPause}
                 activeOpacity={1}
               >
-                <VideoView
-                  player={fullscreenVideoPlayer}
+                <Video
+                  ref={fullscreenVideoPlayer}
+                  source={{ uri: selectedItem.uri }}
                   style={styles.fullscreenVideo}
-                  nativeControls={false}
-                  contentFit="contain"
+                  resizeMode={ResizeMode.CONTAIN}
+                  isLooping
+                  isMuted={false}
+                  shouldPlay={isVideoPlaying}
+                  onPlaybackStatusUpdate={handleFullscreenVideoStatus}
                 />
                 
                 {!isVideoPlaying && (
@@ -904,10 +914,7 @@ const styles = StyleSheet.create({
   gridContent: {
     padding: 1,
   },
-  gridRow: {
-    justifyContent: 'space-between',
-    marginBottom: 1,
-  },
+
   gridMediaContainer: {
     position: 'relative',
     borderRadius: 0,

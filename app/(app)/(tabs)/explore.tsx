@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, Pressable, TouchableOpacity, SafeAreaView, Animated, ActivityIndicator, RefreshControl, Keyboard, Platform } from "react-native";
+import { FlashList } from '@shopify/flash-list';
 import { colors } from "../../../constants/colors";
 import Post from "../../../components/Post/Post";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -18,6 +19,79 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateGlobalScrollPosition } from "../../../hooks/usePostVisibility";
 import { setTabScrollRef } from "./_layout";
 
+// Helper function to process workout data for posts
+const processWorkoutData = (workout) => {
+  if (!workout) return null;
+
+  // Use the duration field directly from the database (which is already in seconds)
+  let calculatedDuration = workout.duration ?? 0;
+
+  // Calculate total volume
+  let totalVolume = 0;
+  const exercises = workout.workout_exercises || [];
+  
+  exercises.forEach(exercise => {
+    const sets = exercise.workout_sets || [];
+    sets.forEach(set => {
+      if (set.weight && set.reps) {
+        totalVolume += set.weight * set.reps;
+      }
+    });
+  });
+
+  return {
+    ...workout,
+    duration: calculatedDuration,
+    exerciseCount: exercises.length,
+    totalVolume,
+    totalSets: exercises.reduce((acc, ex) => 
+      acc + (ex.workout_sets?.length || 0), 0)
+  };
+};
+
+// Helper function to process likes data for posts
+const processLikesData = async (postLikes, currentUserId) => {
+  if (!postLikes || postLikes.length === 0) {
+    return null;
+  }
+
+  try {
+    // Find the most recent user that the current user follows (if any)
+    let featuredUser = null;
+    if (currentUserId) {
+      // Check which of these users the current user follows
+      const userIds = postLikes.map(like => like.user_id);
+      const { data: following, error: followError } = await supabase
+        .from('follows')
+        .select('following_user_id')
+        .eq('follower_user_id', currentUserId)
+        .in('following_user_id', userIds);
+
+      if (!followError && following && following.length > 0) {
+        const followingIds = following.map(f => f.following_user_id);
+        featuredUser = postLikes.find(like => followingIds.includes(like.user_id));
+      }
+    }
+    
+    // If no followed user found, use the most recent liker
+    if (!featuredUser) {
+      featuredUser = postLikes[0];
+    }
+
+    // Filter out current user from display
+    const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
+
+    return {
+      featuredUser: featuredUser?.profiles,
+      totalCount: filteredLikes.length,
+      recentLikes: filteredLikes.slice(0, 3)
+    };
+  } catch (error) {
+    console.error('Error processing likes data:', error);
+    return null;
+  }
+};
+
 export default function Explore() {
   const router = useRouter();
   const { session } = useAuthStore();
@@ -30,7 +104,7 @@ export default function Explore() {
   const [searchQuery, setSearchQuery] = useState("");
   const searchOverlayOpacity = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef(null);
-  const scrollViewRef = useRef(null);
+  const flashListRef = useRef(null);
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
@@ -74,8 +148,50 @@ export default function Explore() {
           workout_id,
           profiles:user_id(id, username, avatar_url, full_name),
           post_likes(count),
-          post_comments(count),
-          post_media(id, storage_path, media_type, width, height, duration, order_index)
+          post_comments(
+            id,
+            text,
+            likes_count,
+            created_at,
+            profiles:user_id(id, username, avatar_url)
+          ),
+          post_media(id, storage_path, media_type, width, height, duration, order_index),
+          post_likes_detailed:post_likes(
+            user_id,
+            created_at,
+            profiles:user_id(id, username, full_name, avatar_url)
+          ),
+          workouts(
+            id,
+            name,
+            start_time,
+            end_time,
+            duration,
+            notes,
+            routine_id,
+            routines(
+              id,
+              name
+            ),
+            workout_exercises(
+              id,
+              name,
+              exercise_id,
+              superset_id,
+              exercises(
+                id,
+                name,
+                image_url
+              ),
+              workout_sets(
+                id,
+                weight,
+                reps,
+                rpe,
+                is_completed
+              )
+            )
+          )
         `)
         .neq('user_id', session.user.id) // Exclude current user's posts
         .order('created_at', { ascending: false })
@@ -85,7 +201,7 @@ export default function Explore() {
       
       if (posts) {
         // Transform the data to match Post component format
-        const formattedPosts = posts.map(post => {
+        const formattedPosts = await Promise.all(posts.map(async post => {
           const profileData = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
           
           return {
@@ -113,9 +229,26 @@ export default function Explore() {
             })).sort((a, b) => a.order_index - b.order_index) : [],
             likes: post.likes_count || (post.post_likes?.[0]?.count || 0),
             is_liked: false, // Will implement checking later
-            comments: []
+            comments: post.post_comments ? post.post_comments.map(comment => {
+              const commentProfile = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
+              return {
+                id: comment.id,
+                text: comment.text,
+                likes_count: comment.likes_count || 0,
+                created_at: comment.created_at,
+                user: {
+                  id: commentProfile?.id,
+                  username: commentProfile?.username,
+                  avatar_url: commentProfile?.avatar_url
+                },
+                is_liked: false // We'll need to check this separately if needed
+              };
+            }).slice(0, 2) : [], // Only take first 2 for preview
+            comments_count: post.post_comments?.length || 0,
+            likes_data: await processLikesData(post.post_likes_detailed, session.user.id),
+            workout_data: processWorkoutData(post.workouts)
           };
-        });
+        }));
         
         if (isLoadMore) {
           setTrendingPosts(prev => [...prev, ...formattedPosts]);
@@ -148,7 +281,7 @@ export default function Explore() {
 
   // Register scroll ref for tab scroll-to-top functionality
   useEffect(() => {
-    setTabScrollRef('explore', scrollViewRef.current);
+    setTabScrollRef('explore', flashListRef.current);
   }, []);
 
   useEffect(() => {
@@ -768,6 +901,66 @@ export default function Explore() {
     </TouchableOpacity>
   );
 
+  // Render post item for FlashList
+  const renderPost = useCallback(({ item }) => (
+    <View key={item.id}>
+      <Post data={item} onDelete={() => {}} />
+    </View>
+  ), []);
+
+  // Suggested Users Header Component
+  const SuggestedUsersHeader = useCallback(() => (
+    <View style={styles.sectionContainer}>
+      {loadingUsers ? (
+        <SuggestedUsersSkeleton count={4} />
+      ) : (
+        <>
+          <Text style={styles.suggestedUsersHeader}>Suggested Users</Text>
+          
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.suggestedUsersContainer}
+          >
+            {suggestedUsers.length > 0 ? (
+              suggestedUsers.map(renderSuggestedUser)
+            ) : (
+              <Text style={styles.emptyStateText}>No suggestions available</Text>
+            )}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  ), [loadingUsers, suggestedUsers, renderSuggestedUser]);
+
+  // Empty Posts Component
+  const EmptyPostsComponent = useCallback(() => (
+    <View style={styles.emptyPostsContainer}>
+      <IonIcon name="trending-up" size={40} color={colors.secondaryText} />
+      <Text style={styles.emptyStateText}>No trending posts available</Text>
+    </View>
+  ), []);
+
+  // Footer Component for loading states
+  const FooterComponent = useCallback(() => {
+    if (loadingMorePosts) {
+      return (
+        <View style={styles.loadingMoreContainer}>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <Text style={styles.loadingMoreText}>Loading more posts...</Text>
+        </View>
+      );
+    }
+    if (!hasMorePosts && trendingPosts.length > 0) {
+      return (
+        <View style={styles.endOfFeedContainer}>
+          <Text style={styles.endOfFeedText}>You've reached the end!</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [loadingMorePosts, hasMorePosts, trendingPosts.length]);
+
   return (
     <View style={styles.container}>
       <Animated.View 
@@ -805,84 +998,39 @@ export default function Explore() {
           )}
         </View>
       </Animated.View>
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.brand]}
-            tintColor={colors.brand}
-            progressBackgroundColor={colors.primaryAccent}
-          />
-        }
-      >
-        {/* Show skeleton when loading initial data */}
-        {(loadingUsers || postsLoading) && !refreshing ? (
+      {/* Show skeleton when loading initial data */}
+      {(loadingUsers || postsLoading) && !refreshing ? (
+        <View style={styles.container}>
           <ExploreSkeleton />
-        ) : (
-          <>
-            {/* Suggested Users Section */}
-            <View style={styles.sectionContainer}>
-              {loadingUsers ? (
-                <SuggestedUsersSkeleton count={4} />
-              ) : (
-                <>
-                  <Text style={styles.suggestedUsersHeader}>Suggested Users</Text>
-                  
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.suggestedUsersContainer}
-                  >
-                    {suggestedUsers.length > 0 ? (
-                      suggestedUsers.map(renderSuggestedUser)
-                    ) : (
-                      <Text style={styles.emptyStateText}>No suggestions available</Text>
-                    )}
-                  </ScrollView>
-                </>
-              )}
-            </View>
-            
-            {/* Trending Posts */}
-            <View style={styles.postsContainer}>
-              {postsLoading ? (
-                <FeedSkeleton count={3} />
-              ) : trendingPosts.length > 0 ? (
-                <>
-                  {trendingPosts.map(post => (
-                    <Post key={post.id} data={post} onDelete={() => {}} />
-                  ))}
-                  {/* Loading more indicator */}
-                  {loadingMorePosts && (
-                    <View style={styles.loadingMoreContainer}>
-                      <ActivityIndicator size="small" color={colors.brand} />
-                      <Text style={styles.loadingMoreText}>Loading more posts...</Text>
-                    </View>
-                  )}
-                  {/* End of feed indicator */}
-                  {!hasMorePosts && trendingPosts.length > 0 && (
-                    <View style={styles.endOfFeedContainer}>
-                      <Text style={styles.endOfFeedText}>You've reached the end!</Text>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyPostsContainer}>
-                  <IonIcon name="trending-up" size={40} color={colors.secondaryText} />
-                  <Text style={styles.emptyStateText}>No trending posts available</Text>
-                </View>
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
+        </View>
+      ) : (
+        <FlashList
+          ref={flashListRef}
+          data={trendingPosts}
+          renderItem={renderPost}
+          keyExtractor={(item) => item.id}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.brand]}
+              tintColor={colors.brand}
+              progressBackgroundColor={colors.primaryAccent}
+            />
+          }
+          contentContainerStyle={styles.contentContainer}
+          ListHeaderComponent={SuggestedUsersHeader}
+          ListEmptyComponent={!postsLoading ? EmptyPostsComponent : null}
+          ListFooterComponent={FooterComponent}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={true}
+          getItemType={() => 'post'}
+        />
+      )}
       
       {/* Search Overlay (keeping your existing implementation) */}
       <Animated.View 

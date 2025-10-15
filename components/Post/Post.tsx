@@ -17,21 +17,21 @@ import { supabase } from "../../lib/supabase";
 import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser } from "../../utils/weightUtils";
 import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
+import { useMediaGalleryStore } from "../../stores/mediaGalleryStore";
 
 const Post = ({ data, onDelete, isDetailView = false }) => {
   const [liked, setLiked] = useState(data.is_liked || false);
   const [likesCount, setLikesCount] = useState(data.likes || 0);
   const [commentsCount, setCommentsCount] = useState(data.comments_count || 0);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
-  const [isCommentLoading, setIsCommentLoading] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const [workoutData, setWorkoutData] = useState(null);
+  const [workoutData, setWorkoutData] = useState(data.workout_data || null);
   const [isWorkoutLoading, setIsWorkoutLoading] = useState(false);
   const [followButtonState, setFollowButtonState] = useState<'follow' | 'following' | 'hidden'>('follow');
   const [isFollowAnimating, setIsFollowAnimating] = useState(false);
-  const [likesData, setLikesData] = useState(null);
-  const [previewComments, setPreviewComments] = useState([]);
+  const [likesData, setLikesData] = useState(data.likes_data || null);
+  const [previewComments, setPreviewComments] = useState(data.comments || []);
   const [commentLikes, setCommentLikes] = useState(new Map()); // Track comment like states
   const [followingUsers, setFollowingUsers] = useState(new Set());
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
@@ -43,9 +43,22 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const pathname = usePathname();
   const { profile, session } = useAuthStore();
   const { updatePostsCount, isCurrentUser, followUser, checkIfFollowing, isUserFollowed } = useProfileStore();
+  const { getPostState, setActiveIndex, setGlobalVideoMuted } = useMediaGalleryStore();
   
   // Get user's preferred weight unit
   const userWeightUnit = getUserWeightUnit(profile);
+  
+  // Get media gallery state for this post
+  const mediaGalleryState = getPostState(data.id);
+  
+  // Handlers for media gallery state changes
+  const handleActiveIndexChange = useCallback((index: number) => {
+    setActiveIndex(data.id, index);
+  }, [data.id, setActiveIndex]);
+  
+  const handleMuteToggle = useCallback((muted: boolean) => {
+    setGlobalVideoMuted(data.id, muted);
+  }, [data.id, setGlobalVideoMuted]);
 
   // Format duration function (same as workout details screen)
   const formatDuration = (seconds: number) => {
@@ -219,36 +232,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     }, [data.id, session?.user?.id])
   );
 
-  // Load comment count on mount
-  useEffect(() => {
-    const getCommentCount = async () => {
-      if (data.id) {
-        setIsCommentLoading(true);
-        try {
-          const comments = await fetchComments(data.id, session?.user?.id);
-          let totalCount = comments.length;
-          
-          // Add the count of any replies
-          comments.forEach(comment => {
-            if (comment.replies) {
-              totalCount += comment.replies.length;
-            }
-          });
-          
-          setCommentsCount(totalCount);
-          
-          // Set preview comments (top 2) with proper likes data
-          setPreviewComments(comments.slice(0, 2));
-        } catch (error) {
-          console.error('Error getting comments count:', error);
-        } finally {
-          setIsCommentLoading(false);
-        }
-      }
-    };
-    
-    getCommentCount();
-  }, [data.id, session?.user?.id]);
+  // Comments and comment count are now loaded from initial post data - no need to fetch separately
 
   useEffect(() => {
     // Check if the current user has already liked this post
@@ -262,151 +246,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     checkLikeStatus();
   }, [session?.user?.id, data.id]);
 
-  // Fetch likes data for display
-  useEffect(() => {
-    const fetchLikesData = async () => {
-      if (data.id && likesCount > 0) {
-        try {
-          const { data: likes, error } = await supabase
-            .from('post_likes')
-            .select(`
-              user_id,
-              created_at,
-              profiles:user_id (
-                id,
-                username,
-                full_name,
-                avatar_url
-              )
-            `)
-            .eq('post_id', data.id)
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-
-          if (likes && likes.length > 0) {
-            // Find the most recent user that the current user follows (if any)
-            let featuredUser = null;
-            if (session?.user?.id) {
-              // Check which of these users the current user follows
-              const userIds = likes.map(like => like.user_id);
-              const { data: following, error: followError } = await supabase
-                .from('follows')
-                .select('following_user_id')
-                .eq('follower_user_id', session.user.id)
-                .in('following_user_id', userIds);
-
-              if (!followError && following && following.length > 0) {
-                const followingIds = following.map(f => f.following_user_id);
-                featuredUser = likes.find(like => followingIds.includes(like.user_id));
-              }
-            }
-            
-            // If no followed user found, use the most recent liker
-            if (!featuredUser) {
-              featuredUser = likes[0];
-            }
-
-            // Filter out current user from display
-            const filteredLikes = likes.filter(like => like.user_id !== session?.user?.id);
-
-            setLikesData({
-              featuredUser: featuredUser?.profiles,
-              totalCount: filteredLikes.length,
-              recentLikes: filteredLikes.slice(0, 3)
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching likes data:', error);
-        }
-      } else {
-        setLikesData(null);
-      }
-    };
-
-    fetchLikesData();
-  }, [data.id, likesCount, session?.user?.id]);
-
-  // Fetch workout data if workout_id exists
-  useEffect(() => {
-    const fetchWorkoutData = async () => {
-      if (data.workout_id) {
-        setIsWorkoutLoading(true);
-        try {
-          const { data: workout, error } = await supabase
-            .from('workouts')
-            .select(`
-              id,
-              name,
-              start_time,
-              end_time,
-              duration,
-              notes,
-              routine_id,
-              routines(
-                id,
-                name
-              ),
-              workout_exercises(
-                id,
-                name,
-                exercise_id,
-                superset_id,
-                exercises(
-                  id,
-                  name,
-                  image_url
-                ),
-                workout_sets(
-                  id,
-                  weight,
-                  reps,
-                  rpe,
-                  is_completed
-                )
-              )
-            `)
-            .eq('id', data.workout_id)
-            .single();
-
-          if (error) throw error;
-
-          if (workout) {
-            // Use the duration field directly from the database (which is already in seconds)
-            let calculatedDuration = workout.duration ?? 0;
-
-            // Calculate total volume
-            let totalVolume = 0;
-            const exercises = workout.workout_exercises || [];
-            
-            exercises.forEach(exercise => {
-              const sets = exercise.workout_sets || [];
-              sets.forEach(set => {
-                if (set.weight && set.reps) {
-                  totalVolume += set.weight * set.reps;
-                }
-              });
-            });
-
-            setWorkoutData({
-              ...workout,
-              duration: calculatedDuration,
-              exerciseCount: exercises.length,
-              totalVolume,
-              totalSets: exercises.reduce((acc, ex) => 
-                acc + (ex.workout_sets?.length || 0), 0)
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching workout data:', error);
-        } finally {
-          setIsWorkoutLoading(false);
-        }
-      }
-    };
-
-    fetchWorkoutData();
-  }, [data.workout_id]);
+  // Likes data and workout data are now passed from parent components - no need to fetch separately
 
   const handleDeletePost = async () => {
     if (!session?.user?.id) {
@@ -693,7 +533,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       onChange={(isVisible) => setIsPostVisible(isVisible)}
       threshold={{ top: 500, bottom: 560 }}
     >
-      <View style={styles.container}>
+      <View style={styles.container} key={data.id}>
       {/* Need to stop propagation on these elements */}
       <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
         <View style={styles.postHeader}>
@@ -751,8 +591,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
         </View>
       </TouchableWithoutFeedback>
 
-      {(data.title || workoutData?.name) && (
-        <Text style={styles.postTitle}>{data.title || workoutData?.name || ''}</Text>
+      {data.title && (
+        <Text style={styles.postTitle}>{data.title || ''}</Text>
       )}
 
       {data.text && <Text style={styles.postText}>{data.text || ''}</Text>}
@@ -802,6 +642,10 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           workoutName={workoutData?.name}
           routineData={workoutData?.routines}
           postUser={data.user}
+          activeIndex={mediaGalleryState.activeIndex}
+          globalVideoMuted={mediaGalleryState.globalVideoMuted}
+          onActiveIndexChange={handleActiveIndexChange}
+          onMuteToggle={handleMuteToggle}
         />
       )}
       <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
@@ -907,7 +751,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 </TouchableOpacity>
                 <TouchableOpacity
                 activeOpacity={0.5} onPress={() => router.push(`/post/${data.id}/comments`)}>
-                  <Text style={styles.commentText}>
+                  <Text style={styles.commentText} numberOfLines={2}>
                     {comment.text}
                   </Text>
                 </TouchableOpacity>

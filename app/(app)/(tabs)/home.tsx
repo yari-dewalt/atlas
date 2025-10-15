@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, RefreshControl, TouchableOpacity } from 'react-native';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { FlashList } from '@shopify/flash-list';
 import { colors } from '../../../constants/colors';
 import Post from '../../../components/Post/Post';
 import FeedSkeleton from '../../../components/Post/FeedSkeleton';
@@ -12,11 +13,84 @@ import { Ionicons } from '@expo/vector-icons';
 import { updateGlobalScrollPosition } from '../../../hooks/usePostVisibility';
 import { setTabScrollRef } from './_layout';
 
+// Helper function to process workout data for posts
+const processWorkoutData = (workout) => {
+  if (!workout) return null;
+
+  // Use the duration field directly from the database (which is already in seconds)
+  let calculatedDuration = workout.duration ?? 0;
+
+  // Calculate total volume
+  let totalVolume = 0;
+  const exercises = workout.workout_exercises || [];
+  
+  exercises.forEach(exercise => {
+    const sets = exercise.workout_sets || [];
+    sets.forEach(set => {
+      if (set.weight && set.reps) {
+        totalVolume += set.weight * set.reps;
+      }
+    });
+  });
+
+  return {
+    ...workout,
+    duration: calculatedDuration,
+    exerciseCount: exercises.length,
+    totalVolume,
+    totalSets: exercises.reduce((acc, ex) => 
+      acc + (ex.workout_sets?.length || 0), 0)
+  };
+};
+
+// Helper function to process likes data for posts
+const processLikesData = async (postLikes, currentUserId) => {
+  if (!postLikes || postLikes.length === 0) {
+    return null;
+  }
+
+  try {
+    // Find the most recent user that the current user follows (if any)
+    let featuredUser = null;
+    if (currentUserId) {
+      // Check which of these users the current user follows
+      const userIds = postLikes.map(like => like.user_id);
+      const { data: following, error: followError } = await supabase
+        .from('follows')
+        .select('following_user_id')
+        .eq('follower_user_id', currentUserId)
+        .in('following_user_id', userIds);
+
+      if (!followError && following && following.length > 0) {
+        const followingIds = following.map(f => f.following_user_id);
+        featuredUser = postLikes.find(like => followingIds.includes(like.user_id));
+      }
+    }
+    
+    // If no followed user found, use the most recent liker
+    if (!featuredUser) {
+      featuredUser = postLikes[0];
+    }
+
+    // Filter out current user from display
+    const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
+
+    return {
+      featuredUser: featuredUser?.profiles,
+      totalCount: filteredLikes.length,
+      recentLikes: filteredLikes.slice(0, 3)
+    };
+  } catch (error) {
+    console.error('Error processing likes data:', error);
+    return null;
+  }
+};
+
 export default function Home() {
   const { session } = useAuthStore();
   const { initializeFollowedUsers } = useProfileStore();
   const { showError } = useBannerStore();
-  const scrollViewRef = useRef(null);
+  const flashListRef = useRef(null);
   
   const [feedPosts, setFeedPosts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +107,7 @@ export default function Home() {
   
   // Register scroll ref for tab scroll-to-top functionality
   useEffect(() => {
-    setTabScrollRef('home', scrollViewRef.current);
+    setTabScrollRef('home', flashListRef.current);
   }, []);
   
   // Load feed posts from users the current user follows
@@ -75,8 +149,50 @@ export default function Home() {
           workout_id,
           profiles:user_id(id, username, avatar_url, full_name),
           post_likes(count),
-          post_comments(count),
-          post_media(id, storage_path, media_type, width, height, duration, order_index)
+          post_comments(
+            id,
+            text,
+            likes_count,
+            created_at,
+            profiles:user_id(id, username, avatar_url)
+          ),
+          post_media(id, storage_path, media_type, width, height, duration, order_index),
+          post_likes_detailed:post_likes(
+            user_id,
+            created_at,
+            profiles:user_id(id, username, full_name, avatar_url)
+          ),
+          workouts(
+            id,
+            name,
+            start_time,
+            end_time,
+            duration,
+            notes,
+            routine_id,
+            routines(
+              id,
+              name
+            ),
+            workout_exercises(
+              id,
+              name,
+              exercise_id,
+              superset_id,
+              exercises(
+                id,
+                name,
+                image_url
+              ),
+              workout_sets(
+                id,
+                weight,
+                reps,
+                rpe,
+                is_completed
+              )
+            )
+          )
         `)
         .in('user_id', followingIds)
         .order('created_at', { ascending: false })
@@ -124,7 +240,24 @@ export default function Home() {
           })).sort((a, b) => a.order_index - b.order_index) : [],
           likes: post.likes_count || (post.post_likes?.[0]?.count || 0),
           is_liked: hasLiked,
-          comments: []
+          comments: post.post_comments ? post.post_comments.map(comment => {
+            const commentProfile = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
+            return {
+              id: comment.id,
+              text: comment.text,
+              likes_count: comment.likes_count || 0,
+              created_at: comment.created_at,
+              user: {
+                id: commentProfile?.id,
+                username: commentProfile?.username,
+                avatar_url: commentProfile?.avatar_url
+              },
+              is_liked: false // We'll need to check this separately if needed
+            };
+          }).slice(0, 2) : [], // Only take first 2 for preview
+          comments_count: post.post_comments?.length || 0,
+          likes_data: await processLikesData(post.post_likes_detailed, session.user.id),
+          workout_data: processWorkoutData(post.workouts)
         };
       }));
       
@@ -151,57 +284,59 @@ export default function Home() {
     updateGlobalScrollPosition(scrollY);
   }, []);
 
+  // Render item for FlashList
+  const renderPost = useCallback(({ item }) => (
+    <View style={styles.postContainer} key={item.id}>
+      <Post 
+        data={item} 
+        onDelete={(postId) => {
+          setFeedPosts(prev => prev.filter(p => p.id !== postId));
+        }}
+      />
+    </View>
+  ), []);
+
+  // Empty state component
+  const EmptyComponent = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="people-outline" size={56} color={colors.secondaryText} />
+      <Text style={styles.emptyTitle}>Your feed is empty</Text>
+      <Text style={styles.emptyText}>
+        Explore and find people to follow to see their posts here
+      </Text>
+    </View>
+  );
+
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[colors.brand]}
-          tintColor={colors.brand}
-          progressBackgroundColor={colors.primaryAccent}
-        />
-      }
-    >
+    <View style={styles.container}>
       {loading && !refreshing ? (
         <FeedSkeleton count={4} />
       ) : (
-        <>
-          {/* Regular Feed Content */}
-          {feedPosts.length > 0 && (
-            <>
-              {feedPosts.map(post => (
-                <View key={post.id} style={styles.postContainer}>
-                  <Post 
-                    data={post} 
-                    onDelete={(postId) => {
-                      setFeedPosts(prev => prev.filter(p => p.id !== postId));
-                    }}
-                  />
-                </View>
-              ))}
-            </>
-          )}
-          
-          {/* No posts at all state - show when user follows no one OR follows people but they have no posts */}
-          {!loading && feedPosts.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={56} color={colors.secondaryText} />
-              <Text style={styles.emptyTitle}>Your feed is empty</Text>
-              <Text style={styles.emptyText}>
-                Explore and find people to follow to see their posts here
-              </Text>
-            </View>
-          )}
-        </>
+        <FlashList
+          ref={flashListRef}
+          data={feedPosts}
+          renderItem={renderPost}
+          keyExtractor={(item) => item.id}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 80}}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.brand]}
+              tintColor={colors.brand}
+              progressBackgroundColor={colors.primaryAccent}
+            />
+          }
+          contentContainerStyle={styles.contentContainer}
+          ListEmptyComponent={!loading ? EmptyComponent : null}
+          removeClippedSubviews={true}
+          getItemType={() => 'post'}
+        />
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -217,6 +352,8 @@ const styles = StyleSheet.create({
     padding: 50,
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
+    minHeight: 400, // Ensure empty state has proper height for FlashList
   },
   emptyTitle: {
     fontSize: 20,
