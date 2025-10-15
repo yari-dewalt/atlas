@@ -26,6 +26,21 @@ const ActivityChartSkeleton: React.FC = () => {
 
   return (
     <Animated.View style={[styles.container, { opacity }]}>
+              {/* Metric Selector Skeleton */}
+        <View style={styles.metricSelectorContainer}>
+          <View style={styles.metricButton}>
+            <View style={styles.metricButtonIconSkeleton} />
+            <View style={styles.metricButtonTextSkeleton} />
+          </View>
+          <View style={styles.metricButton}>
+            <View style={styles.metricButtonIconSkeleton} />
+            <View style={styles.metricButtonTextSkeleton} />
+          </View>
+          <View style={styles.metricButton}>
+            <View style={styles.metricButtonIconSkeleton} />
+            <View style={styles.metricButtonTextSkeleton} />
+          </View>
+        </View>
       {/* Selected point stats */}
       <View style={styles.selectedPointStatsContainer}>
         <View style={styles.selectedPointDateContainer}>
@@ -52,24 +67,37 @@ const ActivityChartSkeleton: React.FC = () => {
       {/* Chart skeleton */}
       <View style={styles.chartContainer}>
         <View style={styles.chartSkeleton}>
-          {/* Chart lines skeleton */}
-          <View style={styles.chartLinesSkeleton}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <View key={index} style={styles.chartHorizontalLine} />
+          {/* Chart border outline */}
+          <View style={styles.chartBorderOutline} />
+          
+          {/* Vertical grid lines */}
+          <View style={styles.chartVerticalLinesContainer}>
+            {Array.from({ length: 13 }).map((_, index) => (
+              // Skip the first and last vertical lines like in CustomLineChart
+              index > 0 && index < 14 ? (
+                <View key={index} style={styles.chartVerticalLine} />
+              ) : null
             ))}
           </View>
           
-          {/* Chart dots skeleton */}
+          {/* Chart dots skeleton positioned at bottom like data points */}
           <View style={styles.chartDotsContainer}>
             {Array.from({ length: 12 }).map((_, index) => (
               <ChartDotSkeleton key={index} delay={index * 100} />
             ))}
           </View>
           
-          {/* Chart labels skeleton */}
-          <View style={styles.chartLabelsContainer}>
+          {/* Y-axis labels skeleton (left side) */}
+          <View style={styles.yAxisLabelsContainer}>
             {Array.from({ length: 3 }).map((_, index) => (
-              <View key={index} style={styles.chartLabelSkeleton} />
+              <View key={index} style={styles.yAxisLabelSkeleton} />
+            ))}
+          </View>
+          
+          {/* X-axis labels skeleton (bottom) */}
+          <View style={styles.xAxisLabelsContainer}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <View key={index} style={styles.xAxisLabelSkeleton} />
             ))}
           </View>
         </View>
@@ -113,6 +141,7 @@ const ChartDotSkeleton: React.FC<ChartDotSkeletonProps> = ({ delay }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.background,
+    paddingVertical: 8,
   },
   
   // Selected Point Stats Skeleton
@@ -172,25 +201,43 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: -8,
   },
-  chartLinesSkeleton: {
+  // Chart border outline (like CustomLineChart)
+  chartBorderOutline: {
     position: 'absolute',
     top: 20,
     left: 55,
     right: 20,
     bottom: 40,
+    borderWidth: 1,
+    borderColor: colors.secondaryText,
+    opacity: 0.4,
+    borderRadius: 0,
+  },
+  
+  // Vertical grid lines container
+  chartVerticalLinesContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 55,
+    right: 20,
+    bottom: 40,
+    flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  chartHorizontalLine: {
-    height: 1,
+  chartVerticalLine: {
+    width: 1,
+    height: '100%',
     backgroundColor: colors.secondaryText,
     opacity: 0.4,
   },
+  
+  // Data points positioned at bottom of chart area
   chartDotsContainer: {
     position: 'absolute',
-    top: 30,
+    top: 20,
     left: 55,
     right: 20,
-    bottom: 50,
+    bottom: 40,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -202,19 +249,71 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
     opacity: 0.6,
   },
-  chartLabelsContainer: {
+  
+  // Y-axis labels (left side)
+  yAxisLabelsContainer: {
     position: 'absolute',
-    bottom: 22,
-    left: 55,
-    right: 20,
+    top: 20,
+    left: 2,
+    bottom: 40,
+    width: 45,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  yAxisLabelSkeleton: {
+    height: 10,
+    backgroundColor: colors.whiteOverlay,
+    borderRadius: 2,
+    width: 35,
+  },
+  
+  // X-axis labels (bottom)
+  xAxisLabelsContainer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 75,
+    right: 35,
+    height: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  chartLabelSkeleton: {
+  xAxisLabelSkeleton: {
     height: 10,
     backgroundColor: colors.whiteOverlay,
     borderRadius: 2,
     width: 30,
+  },
+  
+  // Metric Selector Skeleton Styles
+  metricSelectorContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  metricButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: colors.primaryAccent,
+    borderWidth: 1,
+    borderColor: colors.whiteOverlay,
+  },
+  metricButtonIconSkeleton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.whiteOverlay,
+  },
+  metricButtonTextSkeleton: {
+    height: 12,
+    backgroundColor: colors.whiteOverlay,
+    borderRadius: 2,
+    width: 50,
   },
 });
 
