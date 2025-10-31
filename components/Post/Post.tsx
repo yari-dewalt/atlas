@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
 import { useCallback } from "react";
 import { supabase } from "../../lib/supabase";
-import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser } from "../../utils/weightUtils";
+import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser, convertWeightForDisplay } from "../../utils/weightUtils";
 import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
 import { useMediaGalleryStore } from "../../stores/mediaGalleryStore";
@@ -69,6 +69,21 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
+  };
+
+  // Helper function to format volume with k/m notation
+  const formatVolume = (volume: number): string => {
+    if (volume === 0) return '0';
+    
+    if (volume >= 1000000) {
+      const millions = volume / 1000000;
+      return millions % 1 === 0 ? `${millions}m` : `${millions.toFixed(1)}m`;
+    } else if (volume >= 1000) {
+      const thousands = volume / 1000;
+      return thousands % 1 === 0 ? `${thousands}k` : `${thousands.toFixed(1)}k`;
+    }
+    
+    return volume.toString();
   };
 
   // Check if we should show the follow button
@@ -625,7 +640,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     <View style={styles.workoutInfo}> 
       <Text style={styles.workoutInfoHeaderText}>Volume</Text>
       <Text style={styles.workoutInfoText}>
-        {displayWeightForUser(workoutData.totalVolume, 'kg', userWeightUnit, true)}
+        {formatVolume(convertWeightForDisplay(workoutData.totalVolume, 'kg', userWeightUnit))} {userWeightUnit}
       </Text>
     </View>
   )}
