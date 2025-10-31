@@ -48,6 +48,9 @@ export interface BatchedNotificationContent {
 class PushNotificationService {
   private static instance: PushNotificationService;
   
+  // Feature flag to enable/disable push notifications
+  private static readonly PUSH_NOTIFICATIONS_ENABLED = false;
+  
   static getInstance(): PushNotificationService {
     if (!PushNotificationService.instance) {
       PushNotificationService.instance = new PushNotificationService();
@@ -59,6 +62,11 @@ class PushNotificationService {
    * Register for push notifications and store token
    */
   async registerForPushNotifications(): Promise<string | null> {
+    if (!PushNotificationService.PUSH_NOTIFICATIONS_ENABLED) {
+      console.log('Push notifications are disabled');
+      return null;
+    }
+    
     if (!Device.isDevice) {
       console.log('Must use physical device for Push Notifications');
       return null;
@@ -262,6 +270,11 @@ class PushNotificationService {
    * Queue a push notification (with batching and duplicate prevention)
    */
   async queuePushNotification(data: PushNotificationData): Promise<void> {
+    if (!PushNotificationService.PUSH_NOTIFICATIONS_ENABLED) {
+      console.log('Push notifications are disabled - skipping notification queue');
+      return;
+    }
+    
     try {
       // Check if user has notifications enabled
       const notificationSettings = await this.getUserNotificationSettings(data.recipientId);
@@ -420,6 +433,11 @@ class PushNotificationService {
    * Process and send queued notifications (should be called by background job)
    */
   async processQueuedNotifications(): Promise<void> {
+    if (!PushNotificationService.PUSH_NOTIFICATIONS_ENABLED) {
+      console.log('Push notifications are disabled - skipping notification processing');
+      return;
+    }
+    
     try {
       // Get notifications that haven't been sent yet and are older than 5 seconds
       // (to allow for brief batching while keeping notifications fast)

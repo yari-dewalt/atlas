@@ -6,11 +6,19 @@ import { supabase } from '../lib/supabase';
  * These integrate with your existing notification creation helpers
  */
 
+// Feature flag to enable/disable push notifications
+const PUSH_NOTIFICATIONS_ENABLED = false;
+
 export const sendPostLikePushNotification = async (
   recipientId: string,
   actorId: string,
   postId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping post like notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -45,6 +53,11 @@ export const sendFollowPushNotification = async (
   recipientId: string,
   actorId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping follow notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -71,6 +84,11 @@ export const sendRoutineLikePushNotification = async (
   actorId: string,
   routineId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping routine like notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -106,6 +124,11 @@ export const sendRoutineSavePushNotification = async (
   actorId: string,
   routineId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping routine save notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -141,6 +164,11 @@ export const sendCommentLikePushNotification = async (
   actorId: string,
   commentId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping comment like notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -176,6 +204,11 @@ export const sendCommentReplyPushNotification = async (
   actorId: string,
   commentId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping comment reply notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
@@ -212,6 +245,11 @@ export const sendPostCommentPushNotification = async (
   postId: string,
   commentId: string
 ) => {
+  if (!PUSH_NOTIFICATIONS_ENABLED) {
+    console.log('Push notifications are disabled - skipping post comment notification');
+    return;
+  }
+  
   try {
     // Get actor info
     const { data: actor } = await supabase
