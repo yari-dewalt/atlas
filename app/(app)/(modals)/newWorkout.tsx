@@ -3680,6 +3680,7 @@ const styles = StyleSheet.create({
   },
   
   customBadge: {
+    marginBottom: 'auto',
     backgroundColor: colors.customBadgeBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
