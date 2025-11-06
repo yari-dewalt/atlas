@@ -11,6 +11,7 @@ export default function Signup() {
   const [email, onChangeEmail] = useState('');
   const [password, onChangePassword] = useState('');
   const [confirmPassword, onChangeConfirmPassword] = useState('');
+  const [eulaAccepted, setEulaAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -22,7 +23,16 @@ export default function Signup() {
     router.push('/(legal)/privacy');
   };
 
+  const handleEulaPress = () => {
+    router.push('/(legal)/eula');
+  };
+
   async function handleGoogleSignUp() {
+    if (!eulaAccepted) {
+      Alert.alert('EULA Required', 'You must agree to the End User License Agreement to create an account.');
+      return;
+    }
+
     setLoading(true);
     try {
       const { data, error, googleUserInfo } = await signInWithGoogle();
@@ -47,6 +57,11 @@ export default function Signup() {
     Keyboard.dismiss();
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (!eulaAccepted) {
+      Alert.alert('EULA Required', 'You must agree to the End User License Agreement to create an account.');
       return;
     }
 
@@ -163,7 +178,7 @@ export default function Signup() {
       fontSize: 13,
     },
     signUpButton: {
-      backgroundColor: (email && password && confirmPassword) ? colors.brand : colors.secondaryAccent,
+      backgroundColor: colors.brand,
       color: colors.primaryText,
       width: '100%',
       height: 48,
@@ -225,7 +240,35 @@ export default function Signup() {
     },
     textDisabled: {
       color: colors.secondaryText,
-    }
+    },
+    eulaContainer: {
+      width: '100%',
+      marginBottom: 12,
+    },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderWidth: 2,
+      borderColor: colors.secondaryAccent,
+      borderRadius: 4,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkboxChecked: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+    eulaText: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.primaryText,
+      lineHeight: 20,
+    },
   });
 
   return (
@@ -266,6 +309,27 @@ export default function Signup() {
           secureTextEntry={true}
         />
       </View>
+      
+      <View style={styles.eulaContainer}>
+        <TouchableOpacity 
+          style={styles.checkboxContainer} 
+          onPress={() => setEulaAccepted(!eulaAccepted)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, eulaAccepted && styles.checkboxChecked]}>
+            {eulaAccepted && (
+              <IonIcon name="checkmark" size={16} color={colors.primaryText} />
+            )}
+          </View>
+          <Text style={styles.eulaText}>
+            I agree to the{' '}
+            <Text style={styles.linkText} onPress={handleEulaPress}>
+              End User License Agreement
+            </Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.infoText}>
         By signing up you are agreeing to our{' '}
         <Text style={styles.linkText} onPress={handleTermsPress}>
@@ -281,10 +345,10 @@ export default function Signup() {
                 activeOpacity={0.5} 
         style={[
           styles.signUpButton, 
-          (loading || !email || !password || !confirmPassword) && styles.signUpButtonDisabled
+          (loading || !email || !password || !confirmPassword || !eulaAccepted) && styles.signUpButtonDisabled
         ]}
         onPress={signUpWithEmail}
-        disabled={loading || !email || !password || !confirmPassword}
+        disabled={loading || !email || !password || !confirmPassword || !eulaAccepted}
       >
           <Text style={styles.signUpButtonText}>Sign up</Text>
       </TouchableOpacity>
