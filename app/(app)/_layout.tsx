@@ -583,7 +583,9 @@ const TopNavBar = () => {
           {/* Main tab action buttons */}
           {isMainTab && (
             <>
-              <TouchableOpacity
+            {// RE-ENABLE WHEN MESSAGES ARE SUPPORTED
+            }
+              {/* <TouchableOpacity
                 activeOpacity={0.5} 
                 style={styles.headerButton}
                 onPress={() => router.push('/messages')}
@@ -596,7 +598,7 @@ const TopNavBar = () => {
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </TouchableOpacity> */}
               <TouchableOpacity
                 activeOpacity={0.5} 
                 style={styles.headerButton}

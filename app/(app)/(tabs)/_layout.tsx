@@ -252,8 +252,17 @@ export default function AppLayout() {
               handleTabPress('workout');
             }
           }}
-        />
+        ></Tabs.Screen>
+        {// Placeholder screen for Clubs tab to disable navigation (REMOVE WHEN ADDING CLUBS FEATURE)
+        } 
         <Tabs.Screen
+          name="clubs/index"
+          options={{
+            href: null
+          }}
+        />
+
+        {/* <Tabs.Screen
           name="clubs/index"
           options={{
             tabBarLabel: createTabBarLabel('Clubs'),
@@ -266,7 +275,7 @@ export default function AppLayout() {
               handleTabPress('clubs');
             }
           }}
-        />
+        /> */}
         <Tabs.Screen
           name="profile"
           options={{
