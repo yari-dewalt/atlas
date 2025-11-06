@@ -25,6 +25,7 @@ type ProfileState = {
   error: string | null;
   followLoading: boolean;
   followedUsers: Set<string>; // Track globally followed users
+  blockedUsers: Set<string>; // Track globally blocked users
   
   // Actions
   fetchProfile: (userId: string, currentUserId?: string | null, showLoading?: boolean) => Promise<void>;
@@ -32,10 +33,15 @@ type ProfileState = {
   followUser: (targetUserId: string, currentUserId: string) => Promise<void>;
   unfollowUser: (targetUserId: string, currentUserId: string) => Promise<void>;
   checkIfFollowing: (targetUserId: string, currentUserId: string) => Promise<boolean>;
+  blockUser: (targetUserId: string) => Promise<void>;
+  unblockUser: (targetUserId: string) => Promise<void>;
+  checkIfBlocked: (targetUserId: string) => boolean;
   updatePostsCount: (change: number) => void;
   updateCurrentProfile: (updatedProfile: Partial<ProfileData>) => void;
   initializeFollowedUsers: (currentUserId: string) => Promise<void>;
+  initializeBlockedUsers: (currentUserId: string) => Promise<void>;
   isUserFollowed: (userId: string) => boolean;
+  isUserBlocked: (userId: string) => boolean;
 };
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -45,6 +51,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   error: null,
   followLoading: false,
   followedUsers: new Set(),
+  blockedUsers: new Set(),
   
   fetchProfile: async (userId, currentUserId, showLoading = true) => {
     try {
@@ -286,5 +293,75 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   isUserFollowed: (userId) => {
     return get().followedUsers.has(userId);
+  },
+
+  blockUser: async (targetUserId) => {
+    try {
+      set({ followLoading: true });
+      
+      const { blockUser } = await import('../utils/blockingUtils');
+      const result = await blockUser(targetUserId);
+      
+      if (result.success) {
+        // Add to local blocked users set
+        set(state => ({
+          blockedUsers: new Set([...state.blockedUsers, targetUserId]),
+          // Remove from followed users if they were followed
+          followedUsers: new Set([...state.followedUsers].filter(id => id !== targetUserId))
+        }));
+      } else {
+        console.error('Failed to block user:', result.error);
+      }
+    } catch (error) {
+      console.error('Error blocking user:', error);
+    } finally {
+      set({ followLoading: false });
+    }
+  },
+
+  unblockUser: async (targetUserId) => {
+    try {
+      set({ followLoading: true });
+      
+      const { unblockUser } = await import('../utils/blockingUtils');
+      const result = await unblockUser(targetUserId);
+      
+      if (result.success) {
+        // Remove from local blocked users set
+        set(state => ({
+          blockedUsers: new Set([...state.blockedUsers].filter(id => id !== targetUserId))
+        }));
+      } else {
+        console.error('Failed to unblock user:', result.error);
+      }
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+    } finally {
+      set({ followLoading: false });
+    }
+  },
+
+  checkIfBlocked: (targetUserId) => {
+    return get().blockedUsers.has(targetUserId);
+  },
+
+  initializeBlockedUsers: async (currentUserId) => {
+    try {
+      const { getBlockedUsers } = await import('../utils/blockingUtils');
+      const result = await getBlockedUsers();
+      
+      if (!result.error) {
+        const blockedIds = new Set(result.data?.map(block => block.blocked_id) || []);
+        set({ blockedUsers: blockedIds });
+      } else {
+        console.error('Error fetching blocked users:', result.error);
+      }
+    } catch (error) {
+      console.error('Error initializing blocked users:', error);
+    }
+  },
+
+  isUserBlocked: (userId) => {
+    return get().blockedUsers.has(userId);
   }
 }));

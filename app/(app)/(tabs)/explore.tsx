@@ -250,10 +250,15 @@ export default function Explore() {
           };
         }));
         
+        // Filter out posts from blocked users
+        const filteredPosts = formattedPosts.filter(post => 
+          !isUserBlocked(post.user.id)
+        );
+        
         if (isLoadMore) {
-          setTrendingPosts(prev => [...prev, ...formattedPosts]);
+          setTrendingPosts(prev => [...prev, ...filteredPosts]);
         } else {
-          setTrendingPosts(formattedPosts);
+          setTrendingPosts(filteredPosts);
         }
         
         // Check if we have more posts to load
@@ -270,7 +275,7 @@ export default function Explore() {
     }
   };
   
-  const { followUser, unfollowUser } = useProfileStore();
+  const { followUser, unfollowUser, isUserBlocked } = useProfileStore();
   
   // Data states
   const [suggestedUsers, setSuggestedUsers] = useState([]);

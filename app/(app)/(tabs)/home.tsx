@@ -88,7 +88,7 @@ const processLikesData = async (postLikes, currentUserId) => {
 
 export default function Home() {
   const { session } = useAuthStore();
-  const { initializeFollowedUsers } = useProfileStore();
+  const { initializeFollowedUsers, initializeBlockedUsers, isUserBlocked } = useProfileStore();
   const { showError } = useBannerStore();
   const flashListRef = useRef(null);
   
@@ -101,6 +101,8 @@ export default function Home() {
     if (session?.user?.id) {
       // Initialize followed users when session is available
       initializeFollowedUsers(session.user.id);
+      // Initialize blocked users to filter them out
+      initializeBlockedUsers(session.user.id);
       loadFeed();
     }
   }, [session?.user?.id]);
@@ -261,8 +263,13 @@ export default function Home() {
         };
       }));
       
+      // Filter out posts from blocked users
+      const filteredPosts = formattedPosts.filter(post => 
+        !isUserBlocked(post.user.id)
+      );
+      
       // Set the formatted posts as feed posts
-      setFeedPosts(formattedPosts);
+      setFeedPosts(filteredPosts);
     } catch (error) {
       console.error("Error loading feed:", error);
       showError("Failed to load your feed");

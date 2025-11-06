@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator, Modal, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator, Modal, TouchableOpacity, Image, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { colors } from '../../../../../constants/colors';
@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   
   // Activity metric selection state
   const [selectedMetric, setSelectedMetric] = useState<'duration' | 'volume' | 'reps'>('duration');
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const { profile: authProfile, session } = useAuthStore();
   const { 
@@ -67,6 +68,9 @@ export default function ProfileScreen() {
     followLoading,
     followUser,
     unfollowUser,
+    blockUser,
+    unblockUser,
+    isUserBlocked,
     fetchProfile,
     updateCurrentProfile
   } = useProfileStore();
@@ -117,7 +121,9 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (currentProfile?.id) {
-
+      // Check if user is blocked
+      setIsBlocked(isUserBlocked(currentProfile.id));
+      
       fetchLatestPost(currentProfile.id);
       fetchWorkoutDays(currentProfile.id);
       fetchRecentWorkouts(currentProfile.id);
@@ -125,7 +131,7 @@ export default function ProfileScreen() {
       fetchActivityData(currentProfile.id);
       fetchRecentMedia(currentProfile.id);
     }
-  }, [currentProfile?.id]);
+  }, [currentProfile?.id, isUserBlocked]);
 
   // Refresh profile data when screen comes into focus (e.g., after deleting a routine or post)
   useFocusEffect(
@@ -1105,6 +1111,44 @@ export default function ProfileScreen() {
     setIsAvatarFullscreen(!isAvatarFullscreen);
   };
 
+  const handleBlockAction = async () => {
+    if (!session?.user?.id || !currentProfile) return;
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    try {
+      if (isBlocked) {
+        await unblockUser(currentProfile.id);
+        setIsBlocked(false);
+      } else {
+        // Show confirmation dialog for blocking
+        Alert.alert(
+          'Block User',
+          `Are you sure you want to block ${currentProfile.username || 'this user'}? You will no longer see their posts or be able to interact with them.`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Block',
+              style: 'destructive',
+              onPress: async () => {
+                await blockUser(currentProfile.id);
+                setIsBlocked(true);
+                // Navigate back after blocking
+                router.back();
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error handling block action:', error);
+    }
+  };
+
 
   
   // Generate workout days if none exist
@@ -1182,6 +1226,21 @@ export default function ProfileScreen() {
               >
                 <Text style={styles.buttonText}>
                   {currentProfile?.is_following ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={[styles.blockButton, isBlocked && styles.blockedButton]}
+                onPress={handleBlockAction}
+              >
+                <IonIcon 
+                  name={isBlocked ? "person-remove" : "person-remove-outline"} 
+                  size={16} 
+                  color={isBlocked ? colors.notification : colors.primaryText} 
+                />
+                <Text style={[styles.buttonText, isBlocked && styles.blockedButtonText]}>
+                  {isBlocked ? 'Blocked' : 'Block'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1654,6 +1713,22 @@ const styles = StyleSheet.create({
   },
   followingButton: {
     backgroundColor: colors.secondaryAccent,
+  },
+  blockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.notification,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: -6,
+  },
+  blockedButton: {
+    backgroundColor: colors.secondaryAccent, // 20% opacity
+  },
+  blockedButtonText: {
+    color: colors.notification,
   },
   fullscreenModalContainer: {
     flex: 1,
