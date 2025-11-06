@@ -20,7 +20,7 @@ export default {
       supportsTablet: false,
       orientation: "portrait",
       infoPlist: {
-        UIBackgroundModes: ["audio", "remote-notification", "fetch"],
+        UIBackgroundModes: ["remote-notification", "fetch"],
         "ITSAppUsesNonExemptEncryption": false,
         NSCameraUsageDescription: "This app uses the camera to take photos and videos for your fitness posts and progress tracking.",
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to select and share photos and videos for your fitness posts.",
