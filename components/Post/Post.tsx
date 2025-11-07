@@ -18,6 +18,7 @@ import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser, c
 import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
 import { useMediaGalleryStore } from "../../stores/mediaGalleryStore";
+import { ReportModal } from "../ReportModal";
 
 const Post = ({ data, onDelete, isDetailView = false }) => {
   const [liked, setLiked] = useState(data.is_liked || false);
@@ -36,6 +37,8 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const [followingUsers, setFollowingUsers] = useState(new Set());
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const [isPostVisible, setIsPostVisible] = useState(false);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [hasUserReported, setHasUserReported] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -524,6 +527,26 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     }
   };
 
+  const handleReport = () => {
+    // Don't allow reporting own posts
+    if (data.user.id === session?.user?.id) {
+      Alert.alert('Unable to Report', 'You cannot report your own post.');
+      return;
+    }
+
+    // Don't allow reporting if already reported
+    if (hasUserReported) {
+      Alert.alert('Already Reported', 'You have already reported this post.');
+      return;
+    }
+
+    setIsReportModalVisible(true);
+  };
+
+  const handleReportSubmitted = () => {
+    setHasUserReported(true);
+  };
+
   const showBottomSheet = () => {
     setOptionsVisible(true);
     Animated.timing(slideAnim, {
@@ -690,6 +713,20 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                 activeOpacity={0.5} onPress={handleShare} style={styles.button}>
             <IonIcon name="share-outline" size={26} color={colors.primaryText} />
           </TouchableOpacity>
+          {/* Report Button - Only show for other users' posts */}
+          {data.user.id !== session?.user?.id && (
+            <TouchableOpacity
+              activeOpacity={0.5} 
+              onPress={handleReport} 
+              style={styles.button}
+            >
+              <IonIcon 
+                name={hasUserReported ? "flag" : "flag-outline"} 
+                size={26} 
+                color={hasUserReported ? colors.notification : colors.primaryText} 
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableWithoutFeedback>
 
@@ -892,6 +929,14 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Report Modal */}
+      <ReportModal
+        postId={data.id}
+        isVisible={isReportModalVisible}
+        onClose={() => setIsReportModalVisible(false)}
+        onReportSubmitted={handleReportSubmitted}
+      />
     </View>
     </VisibilitySensor>
   );
