@@ -139,6 +139,18 @@ export default function SettingsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
               </TouchableOpacity>
+              
+              <TouchableOpacity
+                activeOpacity={0.5} 
+                style={styles.settingItem}
+                onPress={() => router.push('/settings/content-filtering')}
+              >
+                <View style={styles.settingTextContainer}>
+                  <Ionicons name="eye-off-outline" size={22} color={colors.primaryText} />
+                  <Text style={styles.settingText}>Content Filtering</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
+              </TouchableOpacity>
             </View>
             
             <View style={styles.section}>

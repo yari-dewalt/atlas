@@ -220,6 +220,7 @@ const TopNavBar = () => {
       if (pathname.includes('/settings/password')) return 'Password';
       if (pathname.includes('/settings/notifications')) return 'Notifications';
       if (pathname.includes('/settings/privacy')) return 'Privacy';
+      if (pathname.includes('/settings/content-filtering')) return 'Content Filtering';
       if (pathname.includes('/settings/about')) return 'About';
       if (pathname.includes('/settings/help')) return 'Help Center';
       if (pathname.includes('/settings/support/contact')) return 'Contact Support';
