@@ -490,42 +490,85 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   };
 
   const handleShare = async () => {
-    try {
-      // For now, we'll create a temporary share URL
-      // Once the app is on the app store, this can be updated to deep link
-      const shareUrl = `https://atlas-app.com/post/${data.id}`;
-      const shareTitle = data.title || `${data.user.full_name || data.user.username || 'Someone'}'s workout`;
-      const shareMessage = `Check out this post from ${data.user.username} on Atlas!`;
-
-      const result = await Share.share({
-        message: `${shareMessage}\n\n${shareUrl}`,
-        url: shareUrl, // iOS will use this for the URL
-        title: shareTitle,
-      }, {
-        // Options for Android
-        dialogTitle: 'Share this post',
-        subject: shareTitle, // For email
-      });
-
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // Shared with activity type of result.activityType
-          console.log('Shared via:', result.activityType);
-        } else {
-          // Shared successfully
-          console.log('Post shared successfully');
-        }
-      } else if (result.action === Share.dismissedAction) {
-        // Share was dismissed
-        console.log('Share dismissed');
+  try {
+    const shareUrl = `https://apps.apple.com/app/atlas/id6751509546`;
+    const username = data.user.username || data.user.full_name || 'Someone';
+    
+    // Start with a more general message
+    let shareMessage = `Check out ${username}'s post on Atlas`;
+    
+    // If there's workout data, mention it's a workout
+    if (workoutData && (workoutData.duration > 0 || workoutData.exerciseCount > 0 || workoutData.totalVolume > 0)) {
+      // Add workout details if available
+      const workoutDetails = [];
+      if (workoutData.duration && workoutData.duration > 0) {
+        workoutDetails.push(`⏱️ ${formatDuration(workoutData.duration)}`);
       }
-    } catch (error) {
-      console.error('Error sharing post:', error);
+      if (workoutData.exerciseCount && workoutData.exerciseCount > 0) {
+        workoutDetails.push(`💪 ${workoutData.exerciseCount} exercises`);
+      }
+      if (workoutData.totalVolume && workoutData.totalVolume > 0) {
+        const volume = formatVolume(convertWeightForDisplay(workoutData.totalVolume, 'kg', userWeightUnit));
+        workoutDetails.push(`🏋️ ${volume} ${userWeightUnit} volume`);
+      }
       
-      const { showError } = useBannerStore.getState();
-      showError('Unable to share this post. Please try again.');
+      if (workoutDetails.length > 0) {
+        shareMessage += `:\n${workoutDetails.join('\n')}`;
+      }
     }
-  };
+    
+    // Add post title if available
+    if (data.title) {
+      shareMessage += `\n\n"${data.title}"`;
+    }
+    
+    // Add post text preview if available
+    if (data.text) {
+      const textPreview = data.text.length > 100 ? 
+        `${data.text.substring(0, 100)}...` : 
+        data.text;
+      shareMessage += data.title ? `\n${textPreview}` : `\n\n"${textPreview}"`;
+    }
+    
+    // Add media info if available
+    if (data.media && data.media.length > 0) {
+      const mediaCount = data.media.length;
+      const mediaTypes = [...new Set(data.media.map(m => m.type))];
+      if (mediaTypes.length === 1) {
+        shareMessage += `\n📸 ${mediaCount} ${mediaTypes[0]}${mediaCount > 1 ? 's' : ''}`;
+      } else {
+        shareMessage += `\n📸 ${mediaCount} photos & videos`;
+      }
+    }
+    
+    // Different call-to-action based on content type
+    if (workoutData && (workoutData.duration > 0 || workoutData.exerciseCount > 0 || workoutData.totalVolume > 0)) {
+      shareMessage += `\n\nView the full workout on Atlas! 💪`;
+    } else {
+      shareMessage += `\n\nSee more on Atlas! 💪`;
+    }
+
+    const shareTitle = data.title || `${username}'s post on Atlas`;
+
+    const result = await Share.share({
+      message: shareMessage,
+      url: shareUrl,
+      title: shareTitle,
+    }, {
+      dialogTitle: 'Share this post',
+      subject: shareTitle,
+    });
+
+    if (result.action === Share.sharedAction) {
+      console.log('Post shared successfully');
+    }
+  } catch (error) {
+    console.error('Error sharing post:', error);
+    
+    const { showError } = useBannerStore.getState();
+    showError('Unable to share this post. Please try again.');
+  }
+};
 
   const handleReport = () => {
     // Don't allow reporting own posts
