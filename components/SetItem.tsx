@@ -734,6 +734,7 @@ const SetItem = memo<SetItemProps>(({
               {/* Completion checkbox - only show if enabled */}
               {showCheckbox && (
                 <TouchableOpacity
+                  hitSlop={{ top: 30, bottom: 30, left: 20, right: 30 }}
                   activeOpacity={0.5}
                   onPress={handleCheckboxPress}
                   style={[
