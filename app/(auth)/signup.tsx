@@ -254,7 +254,7 @@ export default function Signup() {
       width: 20,
       height: 20,
       borderWidth: 2,
-      borderColor: colors.secondaryAccent,
+      borderColor: colors.secondaryText,
       borderRadius: 4,
       justifyContent: 'center',
       alignItems: 'center',
