@@ -3954,7 +3954,7 @@ const styles = StyleSheet.create({
   reorderScrollContainer: {
     flex: 1,
     paddingBottom: 20,
-    maxHeight: '35%',
+    maxHeight: '60%',
   },
   
   reorderScrollView: {
