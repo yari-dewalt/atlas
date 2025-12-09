@@ -491,7 +491,7 @@ export default function SaveWorkout() {
                 <View key={exercise.id} style={styles.exerciseItem}>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
                   <Text style={styles.exerciseStats}>
-                    {completedSets} sets • {`${formatVolume(stats.volume)} ${userWeightUnit}`}
+                    {completedSets} sets • {`${formatVolume(exerciseVolume)} ${userWeightUnit}`}
                   </Text>
                 </View>
               );
