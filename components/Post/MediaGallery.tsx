@@ -1,17 +1,15 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  View, 
-  Image, 
-  Text, 
-  StyleSheet, 
-  Dimensions, 
-  Pressable, 
-  FlatList, 
-  Modal, 
-  StatusBar, 
-  SafeAreaView, 
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import {
+  View,
+  Image,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  Modal,
+  StatusBar,
+  SafeAreaView,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Platform
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
@@ -19,8 +17,6 @@ import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import ExercisesList from './ExercisesList';
-import VideoThumbnail from '../VideoThumbnail';
-import { useRouter } from 'expo-router';
 
 interface MediaItem {
   id: string;
@@ -54,35 +50,27 @@ interface MediaGalleryProps {
   onMuteToggle?: (muted: boolean) => void;
 }
 
-const MediaGallery: React.FC<MediaGalleryProps> = ({ 
-  media, 
-  exercises = [], 
-  onMediaPress, 
-  isDetailView, 
-  isPostVisible = true, 
-  workoutId, 
-  workoutName, 
-  routineData, 
+const MediaGallery: React.FC<MediaGalleryProps> = ({
+  media,
+  exercises = [],
+  onMediaPress,
+  isDetailView,
+  workoutId,
+  workoutName,
+  routineData,
   postUser,
   activeIndex: externalActiveIndex = 0,
-  globalVideoMuted: externalGlobalVideoMuted = true,
   onActiveIndexChange,
-  onMuteToggle
 }) => {
-  const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(externalActiveIndex);
-  const [remainingTimes, setRemainingTimes] = useState<{[key: string]: number}>({});
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [contentItems, setContentItems] = useState<Array<{type: string; data: any}>>([]);
   const [videoProgress, setVideoProgress] = useState(0);
-  const [videoDuration, setVideoDuration] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [mediaUrls, setMediaUrls] = useState<{[key: string]: string}>({});
   const [galleryWidth, setGalleryWidth] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const videoRefs = useRef<{[key: string]: Video}>({});
   const fullscreenVideoRef = useRef<Video>(null);
 
   // Sync external state with internal state
@@ -154,53 +142,18 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
 
 
 
-  // Initialize remaining times for videos
-  useEffect(() => {
-    const times = {};
-    media.forEach(item => {
-      if (item.type === 'video' && item.duration) {
-        times[item.id] = item.duration;
-      }
-    });
-    setRemainingTimes(times);
-  }, [media]);
-
-  // Cleanup effect - pause all videos when component unmounts or media changes
+  // Cleanup: pause fullscreen video on unmount to release the decoder
   useEffect(() => {
     return () => {
-      // Pause all video refs when component unmounts or media changes
-      Object.values(videoRefs.current).forEach((videoRef) => {
-        if (videoRef) {
-          // Use a non-blocking approach to check and pause videos
-          videoRef.getStatusAsync()
-            .then((status) => {
-              if (status.isLoaded) {
-                return videoRef.pauseAsync();
-              }
-            })
-            .catch(() => {
-              // Ignore errors if video is already deallocated
-            });
-        }
-      });
-      
-      // Also pause fullscreen video if it exists
       if (fullscreenVideoRef.current) {
         fullscreenVideoRef.current.getStatusAsync()
           .then((status) => {
-            if (status.isLoaded) {
-              return fullscreenVideoRef.current.pauseAsync();
-            }
+            if (status.isLoaded) return fullscreenVideoRef.current?.pauseAsync();
           })
-          .catch(() => {
-            // Ignore errors if video is already deallocated
-          });
+          .catch(() => {});
       }
-      
-      // Clear refs to prevent memory leaks
-      videoRefs.current = {};
     };
-  }, [media]); // Re-run cleanup when media changes
+  }, []);
 
   const handleLayout = (event) => {
     const { width } = event.nativeEvent.layout;
@@ -209,81 +162,45 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
   
 
 
-  const handlePlaybackStatusUpdate = async (itemId: string, status: any) => {
-    if (status.isLoaded && status.durationMillis) {
-      const currentPositionSecs = (status.positionMillis || 0) / 1000;
-      const totalDurationSecs = status.durationMillis / 1000;
-      const remaining = totalDurationSecs - currentPositionSecs;
-      
-      setRemainingTimes(prev => ({
-        ...prev,
-        [itemId]: Math.max(0, remaining)
-      }));
-    }
-  };
-
   const handleMediaPress = (item: MediaItem, index: number) => {
     const mediaUrl = mediaUrls[item.id] || item.uri;
-    setSelectedItem({
-      ...item,
-      uri: mediaUrl
-    });
-    setSelectedIndex(index);
+    setSelectedItem({ ...item, uri: mediaUrl });
     setIsFullscreen(true);
-    
-    // Call the parent's onMediaPress handler if needed
     onMediaPress && onMediaPress(item, index);
   };
 
   const closeFullscreen = () => {
     setIsFullscreen(false);
     setSelectedItem(null);
+    setVideoProgress(0);
+    setIsVideoPlaying(true);
   };
 
-  // Track fullscreen video progress
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (fullscreenVideoRef.current && selectedItem?.type === 'video') {
-        try {
-          const status = await fullscreenVideoRef.current.getStatusAsync();
-          if (status.isLoaded && status.durationMillis) {
-            setVideoDuration(status.durationMillis / 1000);
-            setVideoProgress(status.positionMillis / status.durationMillis);
-            if ('isPlaying' in status) {
-              setIsVideoPlaying(status.isPlaying);
-            }
-          }
-        } catch (error) {
-          // Ignore errors - video might not be loaded yet or has been deallocated
-        }
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [selectedItem]);
-
-  const togglePlayPause = async () => {
-    if (fullscreenVideoRef.current) {
-      try {
-        // Check if video is loaded before attempting to play/pause
-        const status = await fullscreenVideoRef.current.getStatusAsync();
-        if (status.isLoaded) {
-          if (isVideoPlaying) {
-            await fullscreenVideoRef.current.pauseAsync();
-          } else {
-            await fullscreenVideoRef.current.playAsync();
-          }
-          setIsVideoPlaying(!isVideoPlaying);
-        }
-      } catch (error) {
-        // Ignore errors if video is already deallocated
+  // Handle fullscreen video playback status updates (event-driven, no polling)
+  const handleFullscreenPlaybackStatus = useCallback((status: any) => {
+    if (status.isLoaded && status.durationMillis) {
+      setVideoProgress(status.positionMillis / status.durationMillis);
+      if ('isPlaying' in status) {
+        setIsVideoPlaying(status.isPlaying);
       }
     }
-  };
+  }, []);
 
-  const toggleMute = () => {
-    const newMutedState = !externalGlobalVideoMuted;
-    onMuteToggle?.(newMutedState);
+  const togglePlayPause = async () => {
+    if (!fullscreenVideoRef.current) return;
+    try {
+      const status = await fullscreenVideoRef.current.getStatusAsync();
+      if (status.isLoaded) {
+        if (isVideoPlaying) {
+          await fullscreenVideoRef.current.pauseAsync();
+        } else {
+          await fullscreenVideoRef.current.playAsync();
+        }
+        setIsVideoPlaying(!isVideoPlaying);
+      }
+    } catch {
+      // video already deallocated
+    }
   };
 
   const renderContentItem = ({ item, index }: { item: any; index: number }) => {
@@ -302,50 +219,34 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
     return null;
   };
 
-  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => {
+  const renderMediaItem = ({ item }: { item: MediaItem; index: number }) => {
     const mediaUrl = mediaUrls[item.id] || item.uri;
 
     return (
       <Pressable
         style={[styles.mediaItem, { width: galleryWidth }]}
-        onPress={() => handleMediaPress(item, index)}
+        onPress={() => handleMediaPress(item, 0)}
       >
         {item.type === 'image' ? (
           <Image
             source={{ uri: mediaUrl }}
             style={styles.media}
             resizeMode="cover"
+            progressiveRenderingEnabled={true}
+            fadeDuration={0}
           />
         ) : (
-          <View style={styles.videoContainer}>
-            <Video
-              ref={(ref) => {
-                if (ref) {
-                  videoRefs.current[item.id] = ref;
-                }
-              }}
-              style={styles.media}
-              source={{ uri: mediaUrl }}
-              shouldPlay={index === activeIndex && isPostVisible}
-              isLooping
-              isMuted={externalGlobalVideoMuted}
-              resizeMode={ResizeMode.COVER}
-              useNativeControls={false}
-              onPlaybackStatusUpdate={(status) => handlePlaybackStatusUpdate(item.id, status)}
-            />
-            <Pressable
-              style={styles.muteButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                toggleMute();
-              }}
-            >
-              <IonIcon 
-                name={externalGlobalVideoMuted ? "volume-mute" : "volume-high"} 
-                size={14} 
-                color={colors.primaryText} 
-              />
-            </Pressable>
+          // Static placeholder for videos in the feed — avoids loading the full
+          // video and the memory spike it causes. Tap opens fullscreen on demand.
+          <View style={styles.videoPlaceholder}>
+            <IonIcon name="play-circle" size={56} color="rgba(255, 255, 255, 0.85)" />
+            {item.duration != null && item.duration > 0 && (
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>
+                  {Math.floor(item.duration / 60)}:{String(Math.floor(item.duration % 60)).padStart(2, '0')}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </Pressable>
@@ -402,6 +303,9 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
           onScroll={handleScroll}
           snapToAlignment="start"
           initialScrollIndex={0}
+          initialNumToRender={1}
+          maxToRenderPerBatch={2}
+          windowSize={3}
           getItemLayout={(_, index) => ({
             length: galleryWidth,
             offset: galleryWidth * index,
@@ -412,7 +316,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
 
       {renderPaginationDots()}
 
-      {/* Fullscreen Modal */}
+      {/* Fullscreen Modal — video is loaded here on demand, never in the feed */}
       <Modal
         visible={isFullscreen}
         transparent={false}
@@ -422,14 +326,14 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
       >
         <StatusBar hidden />
         <SafeAreaView style={styles.fullscreenContainer}>
-          <TouchableOpacity 
-            style={styles.closeButton} 
+          <TouchableOpacity
+            style={styles.closeButton}
             onPress={closeFullscreen}
             activeOpacity={0.7}
           >
             <IonIcon name="close" size={24} color={colors.primaryText} />
           </TouchableOpacity>
-          
+
           {selectedItem && selectedItem.type === 'image' ? (
             <Image
               source={{ uri: selectedItem.uri }}
@@ -438,7 +342,7 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
             />
           ) : selectedItem && (
             <View style={styles.fullscreenVideoContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.videoOverlay}
                 onPress={togglePlayPause}
                 activeOpacity={1}
@@ -452,23 +356,18 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
                   isMuted={false}
                   resizeMode={ResizeMode.CONTAIN}
                   useNativeControls={false}
+                  onPlaybackStatusUpdate={handleFullscreenPlaybackStatus}
                 />
-                
                 {!isVideoPlaying && (
                   <View style={styles.playButtonOverlay}>
                     <IonIcon name="play" size={60} color="rgba(255, 255, 255, 0.8)" />
                   </View>
                 )}
               </TouchableOpacity>
-              
+
               <View style={styles.videoControlsContainer}>
                 <View style={styles.progressBarBackground} />
-                <View 
-                  style={[
-                    styles.progressBar, 
-                    { width: `${videoProgress * 100}%` }
-                  ]} 
-                />
+                <View style={[styles.progressBar, { width: `${videoProgress * 100}%` }]} />
               </View>
             </View>
           )}
@@ -523,16 +422,26 @@ const styles = StyleSheet.create({
     height: '100%',
     position: 'relative',
   },
-  muteButton: {
+  videoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.secondaryAccent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  durationBadge: {
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.overlay,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  durationText: {
+    color: colors.primaryText,
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Fullscreen styles
   fullscreenContainer: {
@@ -600,4 +509,4 @@ const styles = StyleSheet.create({
 
 });
 
-export default MediaGallery;
+export default memo(MediaGallery);

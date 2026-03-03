@@ -17,7 +17,6 @@ import CustomLineChart from '../../../../components/CustomLineChart';
 
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import VideoThumbnail from '../../../../components/VideoThumbnail';
 import { setTabScrollRef } from '../_layout'; 
 
 export default function ProfileScreen() {
@@ -1212,10 +1211,9 @@ export default function ProfileScreen() {
                       {index === 3 && recentMedia.length > 4 ? (
                         <View style={styles.allMediaOverlay}>
                           {media.type === 'video' ? (
-                            <VideoThumbnail
-                              videoUri={media.uri}
-                              style={styles.mediaImage}
-                            />
+                            <View style={styles.videoPreviewPlaceholder}>
+                              <IonIcon name="play-circle" size={24} color="rgba(255, 255, 255, 0.85)" />
+                            </View>
                           ) : (
                             <CachedImage
                               path={media.uri}
@@ -1229,10 +1227,9 @@ export default function ProfileScreen() {
                       ) : (
                         <>
                           {media.type === 'video' ? (
-                            <VideoThumbnail
-                              videoUri={media.uri}
-                              style={styles.mediaImage}
-                            />
+                            <View style={styles.videoPreviewPlaceholder}>
+                              <IonIcon name="play-circle" size={24} color="rgba(255, 255, 255, 0.85)" />
+                            </View>
                           ) : (
                             <CachedImage
                               path={media.uri}
@@ -1735,6 +1732,14 @@ const styles = StyleSheet.create({
   mediaImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 8,
+  },
+  videoPreviewPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.secondaryAccent,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: 8,
   },
   allMediaOverlay: {

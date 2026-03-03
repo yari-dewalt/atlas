@@ -3,17 +3,15 @@ import { colors } from "../../constants/colors";
 import { Ionicons as IonIcon, AntDesign } from '@expo/vector-icons';
 import ExercisesList from "./ExercisesList";
 import MediaGallery from "./MediaGallery";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, memo } from "react";
 import CachedAvatar from "../CachedAvatar";
 import { useRouter, useFocusEffect, usePathname } from "expo-router";
-import { checkIfUserLikedPost, deletePost, likePost, formatTimeAgo, likeComment } from "../../utils/postUtils";
+import { deletePost, likePost, formatTimeAgo, likeComment } from "../../utils/postUtils";
 import { useAuthStore } from "../../stores/authStore";
 import { fetchComments } from "../../utils/postUtils";
 import { useProfileStore } from "../../stores/profileStore";
 import * as Haptics from 'expo-haptics';
 import { VisibilitySensor } from '@futurejj/react-native-visibility-sensor';
-import { useCallback } from "react";
-import { supabase } from "../../lib/supabase";
 import { convertWeight, getUserWeightUnit, formatWeight, displayWeightForUser, convertWeightForDisplay } from "../../utils/weightUtils";
 import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
@@ -34,8 +32,6 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
   const [likesData, setLikesData] = useState(data.likes_data || null);
   const [previewComments, setPreviewComments] = useState(data.comments || []);
   const [commentLikes, setCommentLikes] = useState(new Map()); // Track comment like states
-  const [followingUsers, setFollowingUsers] = useState(new Set());
-  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   const [isPostVisible, setIsPostVisible] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [hasUserReported, setHasUserReported] = useState(false);
@@ -104,47 +100,6 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     data.user.id !== profile?.id &&
     !isUserFollowed(data.user.id); // Use global follow state
 
-  // Check following status on mount
-  useEffect(() => {
-    // No need for local state management - we'll use the global state
-    // The global state will be updated when following/unfollowing users
-    fetchFollowingRelationships();
-  }, []);
-
-  // Fetch who we're following and who's following us
-  const fetchFollowingRelationships = async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      // Get users we're following
-      const { data: followingData, error: followingError } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', session.user.id);
-
-      if (followingError) {
-        console.error('Error fetching following:', followingError);
-      } else {
-        const followingSet = new Set(followingData.map(f => f.following_id));
-        setFollowingUsers(followingSet);
-      }
-
-      // Get users who are following us
-      const { data: followersData, error: followersError } = await supabase
-        .from('follows')
-        .select('follower_id')
-        .eq('following_id', session.user.id);
-
-      if (followersError) {
-        console.error('Error fetching followers:', followersError);
-      } else {
-        const followersSet = new Set(followersData.map(f => f.follower_id));
-        setFollowingBackUsers(followersSet);
-      }
-    } catch (error) {
-      console.error('Error fetching follow relationships:', error);
-    }
-  };
 
   // Handle follow button press
   const handleFollowPress = async () => {
@@ -203,35 +158,22 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
     }, [])
   );
 
-  // Refresh preview comments when returning from comments screen
+  // Refresh preview comments when returning from comments screen (detail view only)
   useFocusEffect(
     useCallback(() => {
+      if (!isDetailView) return;
       let timeoutId: any;
-      
+
       const refreshCommentsOnFocus = async () => {
-        // Small delay to avoid too frequent refreshes
         timeoutId = setTimeout(async () => {
           if (data.id && session?.user?.id) {
             try {
               const comments = await fetchComments(data.id, session?.user?.id);
               let totalCount = comments.length;
-              
-              // Add the count of any replies
               comments.forEach(comment => {
-                if (comment.replies) {
-                  totalCount += comment.replies.length;
-                }
+                if (comment.replies) totalCount += comment.replies.length;
               });
-              
-              // Only update if the count has changed (to avoid unnecessary re-renders)
-              setCommentsCount(prevCount => {
-                if (prevCount !== totalCount) {
-                  return totalCount;
-                }
-                return prevCount;
-              });
-              
-              // Update preview comments (always update as they might have changed order due to hotness)
+              setCommentsCount(prevCount => prevCount !== totalCount ? totalCount : prevCount);
               setPreviewComments(comments.slice(0, 2));
             } catch (error) {
               console.error('Error refreshing comments on focus:', error);
@@ -241,30 +183,13 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
       };
 
       refreshCommentsOnFocus();
-      
-      return () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-      };
-    }, [data.id, session?.user?.id])
+      return () => { if (timeoutId) clearTimeout(timeoutId); };
+    }, [data.id, session?.user?.id, isDetailView])
   );
 
   // Comments and comment count are now loaded from initial post data - no need to fetch separately
 
-  useEffect(() => {
-    // Check if the current user has already liked this post
-    const checkLikeStatus = async () => {
-      if (session?.user?.id && data.id) {
-        const hasLiked = await checkIfUserLikedPost(data.id, session.user.id);
-        setLiked(hasLiked);
-      }
-    };
-    
-    checkLikeStatus();
-  }, [session?.user?.id, data.id]);
-
-  // Likes data and workout data are now passed from parent components - no need to fetch separately
+  // Likes data and workout data are passed from parent components - no need to fetch separately
 
   const handleDeletePost = async () => {
     if (!session?.user?.id) {
@@ -663,8 +588,7 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
                   styles.followButtonText,
                   followButtonState === 'following' && styles.followingButtonText
                 ]}>
-                  {followButtonState === 'following' ? 'Following' : 
-                   (followingBackUsers.has(data.user.id) ? 'Follow Back' : 'Follow')}
+                  {followButtonState === 'following' ? 'Following' : 'Follow'}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -1301,4 +1225,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Post;
+export default memo(Post);

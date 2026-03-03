@@ -8,7 +8,6 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useProfileStore } from '../../../stores/profileStore';
 import { useBannerStore } from '../../../stores/bannerStore';
 import { supabase } from '../../../lib/supabase';
-import { checkIfUserLikedPost } from '../../../utils/postUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { updateGlobalScrollPosition } from '../../../hooks/usePostVisibility';
 import { setTabScrollRef } from './_layout';
@@ -43,47 +42,18 @@ const processWorkoutData = (workout) => {
   };
 };
 
-// Helper function to process likes data for posts
-const processLikesData = async (postLikes, currentUserId) => {
-  if (!postLikes || postLikes.length === 0) {
-    return null;
-  }
+// Helper function to process likes data for posts (synchronous — uses pre-fetched followingIdSet)
+const processLikesData = (postLikes, currentUserId, followingIdSet) => {
+  if (!postLikes || postLikes.length === 0) return null;
 
-  try {
-    // Find the most recent user that the current user follows (if any)
-    let featuredUser = null;
-    if (currentUserId) {
-      // Check which of these users the current user follows
-      const userIds = postLikes.map(like => like.user_id);
-      const { data: following, error: followError } = await supabase
-        .from('follows')
-        .select('following_user_id')
-        .eq('follower_user_id', currentUserId)
-        .in('following_user_id', userIds);
+  const featuredUser = postLikes.find(like => followingIdSet.has(like.user_id)) ?? postLikes[0];
+  const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
 
-      if (!followError && following && following.length > 0) {
-        const followingIds = following.map(f => f.following_user_id);
-        featuredUser = postLikes.find(like => followingIds.includes(like.user_id));
-      }
-    }
-    
-    // If no followed user found, use the most recent liker
-    if (!featuredUser) {
-      featuredUser = postLikes[0];
-    }
-
-    // Filter out current user from display
-    const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
-
-    return {
-      featuredUser: featuredUser?.profiles,
-      totalCount: filteredLikes.length,
-      recentLikes: filteredLikes.slice(0, 3)
-    };
-  } catch (error) {
-    console.error('Error processing likes data:', error);
-    return null;
-  }
+  return {
+    featuredUser: featuredUser?.profiles,
+    totalCount: filteredLikes.length,
+    recentLikes: filteredLikes.slice(0, 3),
+  };
 };
 
 export default function Home() {
@@ -135,6 +105,8 @@ export default function Home() {
       }
       
       const followingIds = followingData.map(f => f.following_id);
+      // Build set from actual follows (before adding self) for likes attribution
+      const followingIdSet = new Set(followingIds);
       // Add the current user's ID to see their own posts
       followingIds.push(session.user.id);
       
@@ -208,15 +180,14 @@ export default function Home() {
         return;
       }
       
-      // Transform posts to match Post component format
-      const formattedPosts = await Promise.all(posts.map(async post => {
-        // Check if current user has liked this post
-        let hasLiked = false;
-        hasLiked = await checkIfUserLikedPost(post.id, session.user.id);
-        
+      // Transform posts to match Post component format (no per-post DB calls)
+      const formattedPosts = posts.map(post => {
+        // Derive like status from already-fetched data — no extra DB call
+        const hasLiked = post.post_likes_detailed?.some(like => like.user_id === session.user.id) ?? false;
+
         // Handle profiles data (could be array or single object)
         const profileData = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
-        
+
         return {
           id: post.id,
           user: {
@@ -232,8 +203,8 @@ export default function Home() {
           media: post.post_media ? post.post_media.map(media => ({
             id: media.id,
             type: media.media_type,
-            uri: media.storage_path.startsWith('http') 
-              ? media.storage_path 
+            uri: media.storage_path.startsWith('http')
+              ? media.storage_path
               : `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-content/${media.storage_path}`,
             width: media.width,
             height: media.height,
@@ -254,14 +225,14 @@ export default function Home() {
                 username: commentProfile?.username,
                 avatar_url: commentProfile?.avatar_url
               },
-              is_liked: false // We'll need to check this separately if needed
+              is_liked: false,
             };
-          }).slice(0, 2) : [], // Only take first 2 for preview
+          }).slice(0, 2) : [],
           comments_count: post.post_comments?.length || 0,
-          likes_data: await processLikesData(post.post_likes_detailed, session.user.id),
+          likes_data: processLikesData(post.post_likes_detailed, session.user.id, followingIdSet),
           workout_data: processWorkoutData(post.workouts)
         };
-      }));
+      });
       
       // Filter out posts from blocked users
       const filteredPosts = formattedPosts.filter(post => 
@@ -325,7 +296,7 @@ export default function Home() {
           renderItem={renderPost}
           keyExtractor={(item) => item.id}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
+          scrollEventThrottle={100}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

@@ -4,7 +4,6 @@ import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-rou
 import { colors } from '../../../../../constants/colors';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import CachedImage from '../../../../../components/CachedImage';
-import VideoThumbnail from '../../../../../components/VideoThumbnail';
 import MediaSkeleton from '../../../../../components/MediaSkeleton';
 import { supabase } from '../../../../../lib/supabase';
 import { Video, ResizeMode } from 'expo-av';
@@ -558,10 +557,7 @@ export default function MediaScreen() {
         }}
       >
         {item.type === 'video' ? (
-          <VideoThumbnail
-            videoUri={item.uri}
-            style={styles.mediaImage}
-          />
+          <View style={styles.gridVideoPlaceholder} />
         ) : (
           <CachedImage
             key={item.id}
@@ -910,6 +906,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 0,
     overflow: 'hidden',
+  },
+  gridVideoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.secondaryAccent,
   },
   gridVideoIndicator: {
     position: 'absolute',

@@ -6,7 +6,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../../../lib/supabase";
 import { useProfileStore } from "../../../../../stores/profileStore";
-import { checkIfUserLikedPost } from "../../../../../utils/postUtils";
 import { useAuthStore } from "../../../../../stores/authStore";
 import { FlashList } from '@shopify/flash-list';
 
@@ -40,47 +39,18 @@ const processWorkoutData = (workout) => {
   };
 };
 
-// Helper function to process likes data for posts
-const processLikesData = async (postLikes, currentUserId) => {
-  if (!postLikes || postLikes.length === 0) {
-    return null;
-  }
+// Helper function to process likes data for posts (synchronous — uses pre-fetched followingIdSet)
+const processLikesData = (postLikes, currentUserId, followingIdSet) => {
+  if (!postLikes || postLikes.length === 0) return null;
 
-  try {
-    // Find the most recent user that the current user follows (if any)
-    let featuredUser = null;
-    if (currentUserId) {
-      // Check which of these users the current user follows
-      const userIds = postLikes.map(like => like.user_id);
-      const { data: following, error: followError } = await supabase
-        .from('follows')
-        .select('following_user_id')
-        .eq('follower_user_id', currentUserId)
-        .in('following_user_id', userIds);
+  const featuredUser = postLikes.find(like => followingIdSet.has(like.user_id)) ?? postLikes[0];
+  const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
 
-      if (!followError && following && following.length > 0) {
-        const followingIds = following.map(f => f.following_user_id);
-        featuredUser = postLikes.find(like => followingIds.includes(like.user_id));
-      }
-    }
-    
-    // If no followed user found, use the most recent liker
-    if (!featuredUser) {
-      featuredUser = postLikes[0];
-    }
-
-    // Filter out current user from display
-    const filteredLikes = postLikes.filter(like => like.user_id !== currentUserId);
-
-    return {
-      featuredUser: featuredUser?.profiles,
-      totalCount: filteredLikes.length,
-      recentLikes: filteredLikes.slice(0, 3)
-    };
-  } catch (error) {
-    console.error('Error processing likes data:', error);
-    return null;
-  }
+  return {
+    featuredUser: featuredUser?.profiles,
+    totalCount: filteredLikes.length,
+    recentLikes: filteredLikes.slice(0, 3),
+  };
 };
 
 const Posts = () => {
@@ -96,17 +66,6 @@ const Posts = () => {
   const fetchUserPosts = async (profileId) => {
     try {
       setError(null);
-      
-      // First fetch the profile data
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url, full_name')
-        .eq('id', profileId)
-        .single();
-      
-      if (profileError) {
-        console.log('Profile fetch error:', profileError);
-      }
       
       const { data, error } = await supabase
         .from('posts')
@@ -172,14 +131,18 @@ const Posts = () => {
         throw error;
       }
 
+      // Pre-fetch following IDs once for likes attribution
+      const { data: followingData } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', session?.user?.id ?? '');
+      const followingIdSet = new Set((followingData ?? []).map(f => f.following_id));
+
       // Transform the data to match your Post component's expected format
-      const formattedPosts = await Promise.all(data.map(async post => {
-        // Check if current user has liked this post
-        let hasLiked = false;
-        if (session?.user?.id) {
-          hasLiked = await checkIfUserLikedPost(post.id, session.user.id);
-        }
-        
+      const formattedPosts = data.map(post => {
+        const profileData = Array.isArray(post.profiles) ? post.profiles[0] : post.profiles;
+        const hasLiked = post.post_likes_detailed?.some(like => like.user_id === session?.user?.id) ?? false;
+
         return {
           id: post.id,
           user: {
@@ -195,8 +158,8 @@ const Posts = () => {
           media: post.post_media ? post.post_media.map(media => ({
             id: media.id,
             type: media.media_type,
-            uri: media.storage_path.startsWith('http') 
-              ? media.storage_path 
+            uri: media.storage_path.startsWith('http')
+              ? media.storage_path
               : `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-content/${media.storage_path}`,
             width: media.width,
             height: media.height,
@@ -217,14 +180,14 @@ const Posts = () => {
                 username: commentProfile?.username,
                 avatar_url: commentProfile?.avatar_url
               },
-              is_liked: false // We'll need to check this separately if needed
+              is_liked: false
             };
-          }).slice(0, 2) : [], // Only take first 2 for preview
+          }).slice(0, 2) : [],
           comments_count: post.post_comments?.length || 0,
-          likes_data: await processLikesData(post.post_likes_detailed, session?.user?.id),
+          likes_data: processLikesData(post.post_likes_detailed, session?.user?.id, followingIdSet),
           workout_data: processWorkoutData(post.workouts)
         };
-      }));
+      });
       
       setPosts(formattedPosts);
     } catch (err) {
