@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, Pressable, SafeAreaView, Modal, StatusBar, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable, SafeAreaView, Modal, StatusBar, TouchableOpacity, Image, PanResponder, Animated } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { colors } from '../../../../../constants/colors';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
@@ -34,13 +34,14 @@ const VideoItem = React.forwardRef<VideoItemRef, VideoItemProps>(({ uri, muted, 
 
   // Handle video status updates
   const handlePlaybackStatusUpdate = React.useCallback((status: any) => {
-    if (status.isLoaded && !isLoaded) {
-      setIsLoaded(true);
+    if (!status.isLoaded) return;
+    if (!isLoaded) setIsLoaded(true);
+    if (status.didJustFinish && isVisible && !isPausedByFullscreen) {
+      videoRef.current?.setPositionAsync(0).then(() => videoRef.current?.playAsync()).catch(() => {});
+      return;
     }
-    if (status.isLoaded) {
-      setIsPlaying(status.isPlaying || false);
-    }
-  }, [isLoaded]);
+    setIsPlaying(status.isPlaying || false);
+  }, [isLoaded, isVisible, isPausedByFullscreen]);
 
   // Expose methods to parent via ref
   React.useImperativeHandle(ref, () => ({
@@ -117,7 +118,6 @@ const VideoItem = React.forwardRef<VideoItemRef, VideoItemProps>(({ uri, muted, 
         source={{ uri }}
         style={videoItemStyles.video}
         resizeMode={ResizeMode.COVER}
-        isLooping
         isMuted={muted}
         shouldPlay={isVisible && !isPausedByFullscreen}
         onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
@@ -177,7 +177,9 @@ export default function MediaScreen() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [videoPosition, setVideoPosition] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubberTrackWidthState, setScrubberTrackWidthState] = useState(0);
   const [backgroundVideoMutedBeforeFullscreen, setBackgroundVideoMutedBeforeFullscreen] = useState<boolean | null>(null);
   const [pausedVideosBeforeFullscreen, setPausedVideosBeforeFullscreen] = useState<Set<string>>(new Set());
   const [processedMediaCache, setProcessedMediaCache] = useState<{[key: string]: any}>({});
@@ -188,6 +190,14 @@ export default function MediaScreen() {
   const videoPlayers = useRef<{[key: string]: any}>({});
   const videoItemRefs = useRef<{[key: string]: any}>({});
   const fullscreenVideoPlayer = useRef<Video>(null);
+  const dismissPan = useRef(new Animated.ValueXY()).current;
+  const muteIconOpacity = useRef(new Animated.Value(0)).current;
+  const muteIconName = useRef<'volume-mute' | 'volume-high'>('volume-high');
+  const isSeeking = useRef(false);
+  const scrubberWidthRef = useRef(0);
+  const videoDurationRef = useRef(0);
+  const closeFullscreenRef = useRef<() => void>(() => {});
+  const seekMediaToRef = useRef<(ratio: number) => void>(() => {});
   
   // Use global video mute state
   const { globalVideoMuted, setGlobalVideoMuted } = useMediaGalleryStore();
@@ -436,40 +446,116 @@ export default function MediaScreen() {
     setPausedVideosBeforeFullscreen(new Set());
     setVideoProgress(0);
     setVideoDuration(0);
-    setIsVideoPlaying(true);
+    setVideoPosition(0);
+    dismissPan.setValue({ x: 0, y: 0 });
   };
+  closeFullscreenRef.current = closeFullscreen;
 
   // Handle fullscreen video status updates
   const handleFullscreenVideoStatus = useCallback((status: any) => {
-    if (status.isLoaded) {
-      const duration = status.durationMillis ? status.durationMillis / 1000 : 0;
-      const currentTime = status.positionMillis ? status.positionMillis / 1000 : 0;
-      
-      setVideoDuration(duration);
-      if (duration > 0) {
-        setVideoProgress(currentTime / duration);
-      }
-      setIsVideoPlaying(status.isPlaying || false);
+    if (!status.isLoaded) return;
+    if (status.didJustFinish) {
+      setVideoProgress(0);
+      setVideoPosition(0);
+      fullscreenVideoPlayer.current?.setPositionAsync(0)
+        .then(() => fullscreenVideoPlayer.current?.playAsync())
+        .catch(() => {});
+      return;
+    }
+    if (isSeeking.current || !status.durationMillis) return;
+    setVideoDuration(status.durationMillis);
+    setVideoPosition(status.positionMillis);
+    setVideoProgress(status.positionMillis / status.durationMillis);
+    videoDurationRef.current = status.durationMillis;
+  }, []);
+
+  const seekMediaTo = useCallback(async (ratio: number) => {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    const posMs = Math.floor(clamped * videoDurationRef.current);
+    setVideoProgress(clamped);
+    setVideoPosition(posMs);
+    if (fullscreenVideoPlayer.current && videoDurationRef.current > 0) {
+      try { await fullscreenVideoPlayer.current.setPositionAsync(posMs); } catch {}
     }
   }, []);
 
-  const togglePlayPause = async () => {
-    if (fullscreenVideoPlayer.current) {
-      try {
-        const status = await fullscreenVideoPlayer.current.getStatusAsync();
-        if (status.isLoaded) {
-          if (isVideoPlaying) {
-            await fullscreenVideoPlayer.current.pauseAsync();
-          } else {
-            await fullscreenVideoPlayer.current.playAsync();
-          }
-          setIsVideoPlaying(!isVideoPlaying);
+  seekMediaToRef.current = seekMediaTo;
+
+  const scrubResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        isSeeking.current = true;
+        setIsScrubbing(true);
+        fullscreenVideoPlayer.current?.pauseAsync().catch(() => {});
+        seekMediaToRef.current(e.nativeEvent.locationX / scrubberWidthRef.current);
+      },
+      onPanResponderMove: (e) => {
+        seekMediaToRef.current(Math.max(0, e.nativeEvent.locationX) / scrubberWidthRef.current);
+      },
+      onPanResponderRelease: () => {
+        isSeeking.current = false;
+        setIsScrubbing(false);
+        fullscreenVideoPlayer.current?.playAsync().catch(() => {});
+      },
+      onPanResponderTerminate: () => {
+        isSeeking.current = false;
+        setIsScrubbing(false);
+        fullscreenVideoPlayer.current?.playAsync().catch(() => {});
+      },
+    })
+  ).current;
+
+  const dismissResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy) > 10,
+      onPanResponderMove: (_, gs) => {
+        dismissPan.setValue({ x: gs.dx, y: gs.dy });
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dist = Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy);
+        const vel = Math.sqrt(gs.vx * gs.vx + gs.vy * gs.vy);
+        if (dist > 120 || vel > 1.2) {
+          const scale = 700 / Math.max(dist, 1);
+          Animated.timing(dismissPan, {
+            toValue: { x: gs.dx * scale, y: gs.dy * scale },
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => {
+            closeFullscreenRef.current();
+            dismissPan.setValue({ x: 0, y: 0 });
+          });
+        } else {
+          Animated.spring(dismissPan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
         }
-      } catch (error) {
-        // Ignore errors if player is already deallocated
-      }
-    }
-  };
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dismissPan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  const handleFullscreenTap = useCallback(() => {
+    const newMuted = !globalVideoMuted;
+    setGlobalVideoMuted(newMuted);
+    muteIconName.current = newMuted ? 'volume-mute' : 'volume-high';
+    muteIconOpacity.setValue(1);
+    Animated.timing(muteIconOpacity, {
+      toValue: 0,
+      duration: 800,
+      delay: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [globalVideoMuted, setGlobalVideoMuted, muteIconOpacity]);
+
+  const formatTime = useCallback((ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }, []);
 
   const toggleMute = useCallback(async () => {
     const newMutedState = !globalVideoMuted;
@@ -780,46 +866,79 @@ export default function MediaScreen() {
           )}
           
           {selectedItem && selectedItem.type === 'image' ? (
-            <Image
-              source={{ uri: selectedItem.uri }}
-              style={styles.fullscreenImage}
-              resizeMode="contain"
-            />
+            <Animated.View
+              style={[styles.fullscreenImageWrap, { transform: [{ translateX: dismissPan.x }, { translateY: dismissPan.y }] }]}
+              {...dismissResponder.panHandlers}
+            >
+              <Image
+                source={{ uri: selectedItem.uri }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            </Animated.View>
           ) : selectedItem && (
-            <View style={styles.fullscreenVideoContainer}>
-              <TouchableOpacity 
-                style={styles.videoOverlay}
-                onPress={togglePlayPause}
-                activeOpacity={1}
+            <Animated.View
+              style={[styles.fullscreenVideoContainer, { transform: [{ translateX: dismissPan.x }, { translateY: dismissPan.y }] }]}
+              {...dismissResponder.panHandlers}
+            >
+              <Video
+                ref={fullscreenVideoPlayer}
+                source={{ uri: selectedItem.uri }}
+                style={styles.fullscreenVideo}
+                resizeMode={ResizeMode.CONTAIN}
+                isMuted={globalVideoMuted}
+                shouldPlay={true}
+                onPlaybackStatusUpdate={handleFullscreenVideoStatus}
+              />
+
+              {/* Tap overlay — mute toggle */}
+              <Pressable style={StyleSheet.absoluteFill} onPress={handleFullscreenTap} />
+
+              {/* Fading mute icon */}
+              <Animated.View
+                style={[styles.muteIconOverlay, { opacity: muteIconOpacity }]}
+                pointerEvents="none"
               >
-                <Video
-                  ref={fullscreenVideoPlayer}
-                  source={{ uri: selectedItem.uri }}
-                  style={styles.fullscreenVideo}
-                  resizeMode={ResizeMode.CONTAIN}
-                  isLooping
-                  isMuted={false}
-                  shouldPlay={isVideoPlaying}
-                  onPlaybackStatusUpdate={handleFullscreenVideoStatus}
-                />
-                
-                {!isVideoPlaying && (
-                  <View style={styles.playButtonOverlay}>
-                    <IonIcon name="play" size={60} color="rgba(255, 255, 255, 0.8)" />
+                <View style={styles.muteIconCircle}>
+                  <IonIcon name={muteIconName.current} size={36} color={colors.primaryText} />
+                </View>
+              </Animated.View>
+
+              {/* Scrubber */}
+              {(() => {
+                const THUMB_R = 8;
+                const thumbX = videoProgress * scrubberTrackWidthState;
+                const popupW = 88;
+                const popupLeft = Math.max(0, Math.min(scrubberTrackWidthState - popupW, thumbX - popupW / 2));
+                return (
+                  <View style={styles.scrubberOuter}>
+                    {isScrubbing && (
+                      <View style={[styles.scrubTimePopup, { left: popupLeft, width: popupW }]}>
+                        <Text style={styles.scrubTimeText}>
+                          {formatTime(videoPosition)} / {formatTime(videoDuration)}
+                        </Text>
+                      </View>
+                    )}
+                    <View
+                      style={styles.scrubberTrack}
+                      onLayout={(e) => {
+                        scrubberWidthRef.current = e.nativeEvent.layout.width;
+                        setScrubberTrackWidthState(e.nativeEvent.layout.width);
+                      }}
+                      {...scrubResponder.panHandlers}
+                    >
+                      <View style={[styles.scrubberBar, isScrubbing && styles.scrubberBarActive]}>
+                        <View style={[styles.scrubberFill, { flex: videoProgress }]} />
+                        <View style={[styles.scrubberEmpty, { flex: Math.max(0, 1 - videoProgress) }]} />
+                      </View>
+                      {isScrubbing && (
+                        <View style={[styles.scrubberThumb, { left: thumbX - THUMB_R }]} />
+                      )}
+                    </View>
                   </View>
-                )}
-              </TouchableOpacity>
-              
-              <View style={styles.videoControlsContainer}>
-                <View style={styles.progressBarBackground} />
-                <View 
-                  style={[
-                    styles.progressBar, 
-                    { width: `${videoProgress * 100}%` }
-                  ]} 
-                />
-              </View>
-            </View>
+                );
+              })()}
+            </Animated.View>
           )}
         </SafeAreaView>
       </Modal>
@@ -944,7 +1063,13 @@ const styles = StyleSheet.create({
   // Fullscreen styles
   fullscreenContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImageWrap: {
+    flex: 1,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -972,41 +1097,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  videoOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  playButtonOverlay: {
+  muteIconOverlay: {
     position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.overlay,
-    borderRadius: 40,
-    width: 80,
-    height: 80,
   },
-  videoControlsContainer: {
+  muteIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrubberOuter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  scrubTimePopup: {
     position: 'absolute',
     bottom: 28,
-    left: 0,
-    right: 0,
-    height: 3,
-  },
-  progressBarBackground: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 3,
     backgroundColor: colors.overlay,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  progressBar: {
-    position: 'absolute',
-    left: 0,
+  scrubTimeText: {
+    color: colors.primaryText,
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  scrubberTrack: {
+    width: '100%',
+    height: 28,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  scrubberBar: {
+    flexDirection: 'row',
     height: 3,
-    backgroundColor: colors.primaryText,
     borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  scrubberBarActive: {
+    height: 5,
+    borderRadius: 2.5,
+  },
+  scrubberFill: {
+    height: '100%',
+    backgroundColor: colors.primaryText,
+  },
+  scrubberEmpty: {
+    height: '100%',
+    backgroundColor: colors.primaryText,
+    opacity: 0.35,
+  },
+  scrubberThumb: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primaryText,
+    top: '50%',
+    marginTop: -8,
   },
   viewPostButton: {
     position: 'absolute',
