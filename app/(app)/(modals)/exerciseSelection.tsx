@@ -100,42 +100,10 @@ const ExerciseSkeletonLoader = () => {
   );
 };
 
-export default function ExerciseSelection() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  
-  const [exercises, setExercises] = useState([]);
-  const [customExercises, setCustomExercises] = useState([]);
-  const [recentExercises, setRecentExercises] = useState([]);
-  const [sectionsData, setSectionsData] = useState([]);
-  const [flattenedData, setFlattenedData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState("All");
-  const [selectedEquipment, setSelectedEquipment] = useState("All");
-  const [selectedExercises, setSelectedExercises] = useState(new Set());
-  const [selectedExercisesOrder, setSelectedExercisesOrder] = useState([]); // Track selection order
-  const [animatedValues] = useState(new Map());
-  const [muscleGroupModalVisible, setMuscleGroupModalVisible] = useState(false);
-  const [equipmentModalVisible, setEquipmentModalVisible] = useState(false);
-  const [failedImages, setFailedImages] = useState(new Set()); // Track failed image loads
-  
-  // Bottom Sheet refs
-  const muscleGroupBottomSheetRef = useRef(null);
-  const equipmentBottomSheetRef = useRef(null);
-  
-  // FlashList ref for auto-scrolling
-  const flashListRef = useRef(null);
-  const searchInputRef = useRef(null);
+const CUSTOM_EXERCISES_KEY = 'custom_exercises';
+const RECENT_EXERCISES_KEY = 'recent_exercises';
 
-  // Bottom Sheet snap points
-  const selectionSnapPoints = useMemo(() => [600], []);
-
-  const CUSTOM_EXERCISES_KEY = 'custom_exercises';
-  const RECENT_EXERCISES_KEY = 'recent_exercises';
-
-  const muscleGroups = [
+const muscleGroups = [
     { 
       label: "All Muscles", 
       value: "All",
@@ -326,6 +294,98 @@ export default function ExerciseSelection() {
     };
     return iconMap[equipmentValue] || 'fitness-outline';
   };
+
+type ExerciseItemProps = {
+  item: any;
+  isSelected: boolean;
+  onSelect: (item: any) => void;
+  onViewDetails: (item: any) => void;
+  failedImages: Set<any>;
+  onImageError: (id: any) => void;
+};
+
+const ExerciseItem = React.memo(({ item, isSelected, onSelect, onViewDetails, failedImages, onImageError }: ExerciseItemProps) => {
+  const anim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, { toValue: isSelected ? 1 : 0, duration: 200, useNativeDriver: false }).start();
+  }, [isSelected]);
+
+  const translateX = useMemo(() => anim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }), [anim]);
+  const ribbonOpacity = useMemo(() => anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }), [anim]);
+  const ribbonWidth = useMemo(() => anim.interpolate({ inputRange: [0, 1], outputRange: [0, 4] }), [anim]);
+  const backgroundColor = useMemo(() => anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', 'rgba(52, 152, 219, 0.1)'],
+  }), [anim]);
+
+  const muscleGroupsText = item.is_custom && item.muscle_groups ? item.muscle_groups.join(', ') : item.primary_muscle_group;
+
+  return (
+    <Pressable style={styles.exerciseItemWrapper} onPress={() => onSelect(item)}>
+      <Animated.View style={[styles.selectionRibbon, { opacity: ribbonOpacity, width: ribbonWidth }]} />
+      <Animated.View
+        style={[
+          styles.exerciseItemContent,
+          { transform: [{ translateX }], backgroundColor },
+        ]}
+      >
+        <View style={styles.exerciseSelectableArea}>
+          {item.image_url && !failedImages.has(item.id) ? (
+            <Image source={{ uri: item.image_url }} style={styles.exerciseImage} resizeMode="cover" onError={() => onImageError(item.id)} />
+          ) : (
+            <View style={styles.exerciseImagePlaceholder}>
+              <Ionicons name={item.is_custom ? 'construct-outline' : 'barbell-outline'} size={20} color={colors.secondaryText} />
+            </View>
+          )}
+          <View style={styles.exerciseInfo}>
+            <View style={styles.exerciseNameRow}>
+              <Text style={styles.exerciseItemName}>{item.name}</Text>
+              {item.is_custom && (
+                <View style={styles.customBadge}>
+                  <Text style={styles.customBadgeText}>Custom</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.exerciseItemDetails}>
+              <Text style={styles.exerciseItemGroup}>{muscleGroupsText}</Text>
+            </View>
+          </View>
+        </View>
+        <TouchableOpacity activeOpacity={0.5} style={styles.infoButton} onPress={() => onViewDetails(item)}>
+          <Ionicons name="information-circle-outline" size={24} color={colors.secondaryText} />
+        </TouchableOpacity>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+export default function ExerciseSelection() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+
+  const [exercises, setExercises] = useState([]);
+  const [customExercises, setCustomExercises] = useState([]);
+  const [recentExercises, setRecentExercises] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState('All');
+  const [selectedEquipment, setSelectedEquipment] = useState('All');
+  const [selectedExercises, setSelectedExercises] = useState(new Set());
+  const [selectedExercisesOrder, setSelectedExercisesOrder] = useState([]);
+  const [muscleGroupModalVisible, setMuscleGroupModalVisible] = useState(false);
+  const [equipmentModalVisible, setEquipmentModalVisible] = useState(false);
+  const [failedImages, setFailedImages] = useState(new Set());
+
+  const muscleGroupBottomSheetRef = useRef(null);
+  const equipmentBottomSheetRef = useRef(null);
+  const flashListRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const selectionSnapPoints = useMemo(() => [600], []);
+
   const handleMuscleGroupSheetChanges = useCallback((index) => {
     if (index === -1) {
       setMuscleGroupModalVisible(false);
@@ -367,9 +427,13 @@ export default function ExerciseSelection() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
+  // Debounce search query to avoid filtering on every keystroke
   useEffect(() => {
-    filterAndOrganizeExercises();
-  }, [searchQuery, selectedMuscleGroup, selectedEquipment, exercises, customExercises, recentExercises]);
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Keyboard event listeners for auto-scroll
   useEffect(() => {
@@ -526,8 +590,8 @@ export default function ExerciseSelection() {
       });
     }
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase();
       const startsWithMatches = [];
       const containsMatches = [];
       const primaryMuscleMatches = [];
@@ -567,77 +631,39 @@ export default function ExerciseSelection() {
     return filtered;
   };
 
-  const filterAndOrganizeExercises = () => {
+  const flattenedData = useMemo(() => {
     const sections = [];
 
-    if (searchQuery || (selectedMuscleGroup && selectedMuscleGroup !== "All") || (selectedEquipment && selectedEquipment !== "All")) {
+    if (debouncedSearchQuery || (selectedMuscleGroup && selectedMuscleGroup !== 'All') || (selectedEquipment && selectedEquipment !== 'All')) {
       const allExercises = [...exercises, ...customExercises];
       const filtered = filterExercises(allExercises);
-      
-      // Only add section if we have results or if it's not a search query
-      if (filtered.length > 0 || !searchQuery) {
-        let title = 'Filtered Results';
-        if (searchQuery) {
-          title = 'Search Results';
-        } else {
-          title = 'All Exercises';
-        }
-        
+
+      if (filtered.length > 0 || !debouncedSearchQuery) {
         sections.push({
-          title: title,
+          title: debouncedSearchQuery ? 'Search Results' : 'All Exercises',
           data: filtered,
-          key: 'filtered'
+          key: 'filtered',
         });
       }
     } else {
       if (recentExercises.length > 0) {
-        sections.push({
-          title: 'Recent Exercises',
-          data: recentExercises,
-          key: 'recent'
-        });
+        sections.push({ title: 'Recent Exercises', data: recentExercises, key: 'recent' });
       }
-
       if (customExercises.length > 0) {
-        sections.push({
-          title: 'Custom Exercises',
-          data: customExercises,
-          key: 'custom'
-        });
+        sections.push({ title: 'Custom Exercises', data: customExercises, key: 'custom' });
       }
-
-      sections.push({
-        title: 'All Exercises',
-        data: exercises,
-        key: 'all'
-      });
+      sections.push({ title: 'All Exercises', data: exercises, key: 'all' });
     }
 
-    setSectionsData(sections);
-
-    // Create flattened data for FlashList
     const flattened = [];
     sections.forEach((section) => {
-      // Add section header
-      flattened.push({
-        type: 'sectionHeader',
-        title: section.title,
-        key: `header-${section.key}`,
-      });
-      
-      // Add section items with unique keys per section
+      flattened.push({ type: 'sectionHeader', title: section.title, key: `header-${section.key}` });
       section.data.forEach((item) => {
-        flattened.push({
-          type: 'exercise',
-          data: item,
-          key: `${section.key}-exercise-${item.id}`, // Make key unique per section
-          sectionKey: section.key,
-        });
+        flattened.push({ type: 'exercise', data: item, key: `${section.key}-exercise-${item.id}`, sectionKey: section.key });
       });
     });
-    
-    setFlattenedData(flattened);
-  };
+    return flattened;
+  }, [debouncedSearchQuery, selectedMuscleGroup, selectedEquipment, exercises, customExercises, recentExercises]);
 
   // Updated selection handlers
   const handleMuscleGroupSelect = (muscleGroup) => {
@@ -677,13 +703,9 @@ export default function ExerciseSelection() {
 
   // ...existing functions remain the same (getAnimatedValue, handleSelectExercise, etc.)...
 
-  const getAnimatedValue = (exerciseId) => {
-    if (!animatedValues.has(exerciseId)) {
-      const initialValue = selectedExercises.has(exerciseId) ? 1 : 0;
-      animatedValues.set(exerciseId, new Animated.Value(initialValue));
-    }
-    return animatedValues.get(exerciseId);
-  };
+  const handleImageError = useCallback((id) => {
+    setFailedImages(prev => new Set(prev).add(id));
+  }, []);
 
   const handleSelectExercise = async (exercise) => {
     // Check if we're in replacement mode
@@ -720,29 +742,16 @@ export default function ExerciseSelection() {
     // Normal selection mode
     const newSelected = new Set(selectedExercises);
     const newOrder = [...selectedExercisesOrder];
-    const animatedValue = getAnimatedValue(exercise.id);
-    
+
     if (selectedExercises.has(exercise.id)) {
-      // Remove from selection
       newSelected.delete(exercise.id);
       const orderIndex = newOrder.findIndex(ex => ex.id === exercise.id);
       if (orderIndex !== -1) {
         newOrder.splice(orderIndex, 1);
       }
-      Animated.timing(animatedValue, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: false,
-      }).start();
     } else {
-      // Add to selection in order
       newSelected.add(exercise.id);
       newOrder.push(exercise);
-      Animated.timing(animatedValue, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: false,
-      }).start();
     }
     
     setSelectedExercises(newSelected);
@@ -782,16 +791,16 @@ export default function ExerciseSelection() {
     }
   };
 
-  const handleViewExerciseDetails = (exercise) => {
+  const handleViewExerciseDetails = useCallback((exercise) => {
     router.push({
       pathname: '/(app)/(modals)/exerciseDetails',
-      params: { 
+      params: {
         exerciseId: exercise.id,
         exerciseName: exercise.name,
-        fromSelection: 'true'
+        fromSelection: 'true',
       }
     });
-  };
+  }, [router]);
 
   const getCurrentMuscleGroupLabel = () => {
     const muscleGroup = muscleGroups.find(mg => mg.value === selectedMuscleGroup);
@@ -803,118 +812,7 @@ export default function ExerciseSelection() {
     return equipmentItem ? equipmentItem.label : "All Equipment";
   };
 
-  const renderExerciseItem = ({ item }) => {
-    const isSelected = selectedExercises.has(item.id);
-    const animatedValue = getAnimatedValue(item.id);
-    
-    const slideInterpolation = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 4],
-    });
-
-    const ribbonOpacity = animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    });
-
-    const getMuscleGroupsText = (exercise) => {
-      if (exercise.is_custom && exercise.muscle_groups) {
-        return exercise.muscle_groups.join(', ');
-      } else {
-        return exercise.primary_muscle_group;
-      }
-    };
-
-    return (
-      <Pressable
-        style={styles.exerciseItemWrapper} onPress={() => handleSelectExercise(item)}>
-        <Animated.View 
-          style={[
-            styles.selectionRibbon,
-            { 
-              opacity: ribbonOpacity,
-              width: animatedValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 4],
-              })
-            }
-          ]} 
-        />
-        
-        <Animated.View 
-          style={[
-            styles.exerciseItemContent,
-            { 
-              transform: [{ translateX: slideInterpolation }],
-            },
-            isSelected ? styles.selectedExerciseBackground : styles.unselectedExerciseBackground
-          ]}
-        >
-          <View style={styles.exerciseSelectableArea}>
-            {item.image_url && !failedImages.has(item.id) ? (
-              <Image 
-                source={{ uri: item.image_url }}
-                style={styles.exerciseImage}
-                resizeMode="cover"
-                onError={() => {
-                  setFailedImages(prev => new Set(prev).add(item.id));
-                }}
-              />
-            ) : (
-              <View style={styles.exerciseImagePlaceholder}>
-                <Ionicons 
-                  name={
-                    item.is_custom ? "construct-outline" : "barbell-outline"
-                  } 
-                  size={20} 
-                  color={colors.secondaryText} 
-                />
-              </View>
-            )}
-            
-            <View style={styles.exerciseInfo}>
-              <View style={styles.exerciseNameRow}>
-                <Text style={styles.exerciseItemName}>{item.name}</Text>
-                {item.is_custom && (
-                  <View style={styles.customBadge}>
-                    <Text style={styles.customBadgeText}>Custom</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.exerciseItemDetails}>
-                <Text style={styles.exerciseItemGroup}>
-                  {getMuscleGroupsText(item)}
-                </Text>
-              </View>
-            </View>
-          </View>
-          
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.infoButton}
-            onPress={() => handleViewExerciseDetails(item)}
-          >
-            <Ionicons 
-              name="information-circle-outline" 
-              size={24} 
-              color={colors.secondaryText} 
-            />
-          </TouchableOpacity>
-        </Animated.View>
-      </Pressable>
-    );
-  };
-
-  const renderSectionHeader = ({ section }) => {
-    return (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionHeaderText}>{section.title}</Text>
-      </View>
-    );
-  };
-
-  // New render function for FlashList
-  const renderFlashListItem = ({ item }) => {
+  const renderFlashListItem = useCallback(({ item }) => {
     if (item.type === 'sectionHeader') {
       return (
         <View style={styles.sectionHeader}>
@@ -922,10 +820,21 @@ export default function ExerciseSelection() {
         </View>
       );
     } else if (item.type === 'exercise') {
-      return renderExerciseItem({ item: item.data });
+      const exercise = item.data;
+      const isSelected = selectedExercises.has(exercise.id);
+      return (
+        <ExerciseItem
+          item={exercise}
+          isSelected={isSelected}
+          onSelect={handleSelectExercise}
+          onViewDetails={handleViewExerciseDetails}
+          failedImages={failedImages}
+          onImageError={handleImageError}
+        />
+      );
     }
     return null;
-  };
+  }, [selectedExercises, failedImages, handleSelectExercise, handleViewExerciseDetails, handleImageError]);
 
 
 
@@ -1066,9 +975,9 @@ export default function ExerciseSelection() {
             data={flattenedData}
             keyExtractor={(item) => item.key}
             renderItem={renderFlashListItem}
+            extraData={selectedExercises}
             drawDistance={500}
             removeClippedSubviews={true}
-            key={`${searchQuery}-${selectedMuscleGroup}-${selectedEquipment}-${flattenedData.length}`}
             contentContainerStyle={contentContainerStyle}
             keyboardShouldPersistTaps="handled"
             onScrollBeginDrag={() => {
