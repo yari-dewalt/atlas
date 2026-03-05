@@ -3,7 +3,7 @@ import { FlashList } from '@shopify/flash-list';
 import { colors } from "../../../constants/colors";
 import Post from "../../../components/Post/Post";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from "../../../lib/supabase";
@@ -589,11 +589,6 @@ export default function Explore() {
     // Optimistic update
     setFollowButtonStates(prev => ({ ...prev, [userId]: newState }));
     
-    // Update local state to show user as followed/unfollowed
-    setSuggestedUsers(prev => 
-      prev.map(user => user.id === userId ? { ...user, isFollowing: newState === 'following' } : user)
-    );
-    
     try {
       if (newState === 'following') {
         // Follow the user
@@ -606,9 +601,6 @@ export default function Explore() {
       console.error("Error toggling follow:", error);
       // Revert on error
       setFollowButtonStates(prev => ({ ...prev, [userId]: currentState }));
-      setSuggestedUsers(prev => 
-        prev.map(user => user.id === userId ? { ...user, isFollowing: currentState === 'following' } : user)
-      );
     }
   };
   
@@ -805,7 +797,7 @@ export default function Explore() {
   );
   
   // Render suggested user item
-  const renderSuggestedUser = (user) => {
+  const renderSuggestedUser = useCallback((user) => {
     const buttonState = followButtonStates[user.id] || 'follow';
     
     return (
@@ -845,8 +837,8 @@ export default function Explore() {
         </TouchableOpacity>
       </View>
     );
-  };
-  
+  }, [followButtonStates, followingBackUsers, handleFollowUser, router]);
+
   // Render suggested club item
   const renderSuggestedClub = (club) => (
     <TouchableOpacity
@@ -892,17 +884,19 @@ export default function Explore() {
     </View>
   ), []);
 
-  // Suggested Users Header Component
-  const SuggestedUsersHeader = useCallback(() => (
+  // Suggested Users Header element — useMemo returns a pre-rendered element so FlashList
+  // reconciles it in-place (same type = update, not remount), preserving the ScrollView's
+  // scroll position when follow state changes.
+  const SuggestedUsersHeader = useMemo(() => (
     <View style={styles.sectionContainer}>
       {loadingUsers ? (
         <SuggestedUsersSkeleton count={4} />
       ) : (
         <>
           <Text style={styles.suggestedUsersHeader}>Suggested Users</Text>
-          
-          <ScrollView 
-            horizontal 
+
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.suggestedUsersContainer}
           >
