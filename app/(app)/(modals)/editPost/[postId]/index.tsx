@@ -881,9 +881,10 @@ export default function EditPost() {
         {/* Header - matches exercise selection modal */}
         <View style={styles.header}>
           <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.headerButton}
+                activeOpacity={0.5}
+            style={[styles.headerButton, isSubmitting && styles.disabledButton]}
             onPress={handleCancel}
+            disabled={isSubmitting}
           >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -936,6 +937,7 @@ export default function EditPost() {
               onChangeText={setPostTitle}
               placeholder="Add a Title (Optional)"
               placeholderTextColor={`${colors.secondaryText}80`}
+              editable={!isSubmitting}
             />
           </View>
 
@@ -949,6 +951,7 @@ export default function EditPost() {
               placeholderTextColor={`${colors.secondaryText}80`}
               multiline
               textAlignVertical="top"
+              editable={!isSubmitting}
             />
           </View>
 
@@ -969,9 +972,10 @@ export default function EditPost() {
                 )}
                 
                 <TouchableOpacity
-                activeOpacity={0.5} 
-                  style={styles.workoutOptionsButton}
+                activeOpacity={0.5}
+                  style={[styles.workoutOptionsButton, isSubmitting && styles.disabledButton]}
                   onPress={removeSelectedWorkout}
+                  disabled={isSubmitting}
                 >
                   <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
                 </TouchableOpacity>
@@ -1018,9 +1022,10 @@ export default function EditPost() {
                     </TouchableOpacity>
                     
                     <TouchableOpacity
-                activeOpacity={0.5} 
-                      style={styles.fullWidthRemoveButton}
+                activeOpacity={0.5}
+                      style={[styles.fullWidthRemoveButton, isSubmitting && styles.disabledButton]}
                       onPress={() => removeMedia(index, false)}
+                      disabled={isSubmitting}
                     >
                       <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
                     </TouchableOpacity>
@@ -1060,9 +1065,10 @@ export default function EditPost() {
                     </TouchableOpacity>
                     
                     <TouchableOpacity
-                activeOpacity={0.5} 
-                      style={styles.fullWidthRemoveButton}
+                activeOpacity={0.5}
+                      style={[styles.fullWidthRemoveButton, isSubmitting && styles.disabledButton]}
                       onPress={() => removeMedia(index, true)}
+                      disabled={isSubmitting}
                     >
                       <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
                     </TouchableOpacity>
@@ -1079,23 +1085,26 @@ export default function EditPost() {
           { paddingBottom: toolbarPaddingAnim }
         ]}>
                     <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.toolbarButton}
+                activeOpacity={0.5}
+            style={[styles.toolbarButton, isSubmitting && styles.disabledButton]}
             onPress={handleWorkoutButtonPress}
+            disabled={isSubmitting}
           >
             <IonIcon name="barbell-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.toolbarButton}
+                activeOpacity={0.5}
+            style={[styles.toolbarButton, isSubmitting && styles.disabledButton]}
             onPress={addNewMedia}
+            disabled={isSubmitting}
           >
             <IonIcon name="images-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.toolbarButton}
+                activeOpacity={0.5}
+            style={[styles.toolbarButton, isSubmitting && styles.disabledButton]}
             onPress={openCamera}
+            disabled={isSubmitting}
           >
             <IonIcon name="camera-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
