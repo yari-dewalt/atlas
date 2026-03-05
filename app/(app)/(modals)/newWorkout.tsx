@@ -43,6 +43,37 @@ import SetItem from "../../../components/SetItem";
 import { useAnimationManager } from "../../../hooks/useAnimationManager";
 import RpeSelector from "../../../components/RpeSelector";
 
+const ExerciseNotesInput = React.memo(({ exerciseId, initialValue, onNotesChange }: {
+  exerciseId: string;
+  initialValue: string;
+  onNotesChange: (id: string, text: string) => void;
+}) => {
+  const [value, setValue] = useState(initialValue);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleChange = (text: string) => {
+    setValue(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => onNotesChange(exerciseId, text), 300);
+  };
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
+  return (
+    <TextInput
+      style={styles.notesInput}
+      value={value}
+      onChangeText={handleChange}
+      placeholder="Add notes..."
+      placeholderTextColor={'rgba(255,255,255,0.6)'}
+      maxLength={200}
+      scrollEnabled={false}
+    />
+  );
+});
+
 export default function NewWorkout() {
   const { routineId } = useLocalSearchParams();
   const router = useRouter();
@@ -970,6 +1001,10 @@ const handleRemoveExercise = () => {
   }, [activeWorkout?.exercises]); // Only watch exercises, not the entire activeWorkout
 
   // Memoize the rendered exercises to prevent re-renders on timer updates
+  const handleNotesChange = useCallback((exerciseId: string, text: string) => {
+    updateExercise(exerciseId, { notes: text });
+  }, [updateExercise]);
+
   const renderedExercises = useMemo(() => {
     if (!activeWorkout?.exercises) return null;
     
@@ -1027,15 +1062,10 @@ const handleRemoveExercise = () => {
                           {/* Exercise Name */}
                           <Text style={[styles.exerciseName, { fontSize: Platform.OS === 'android' ? 16 : 16}]}>{exercise.name}</Text>
                           {/* Show notes input only when not minimized */}
-                          <TextInput
-                            style={styles.notesInput}
-                            value={exercise.notes || ''}
-                            onChangeText={(text) => updateExercise(exercise.id, { notes: text })}
-                            placeholder="Add notes..."
-                            placeholderTextColor={'rgba(255,255,255,0.6)'}
-                            maxLength={200}
-                            scrollEnabled={false}
-                            onFocus={closeAllSwipeables}
+                          <ExerciseNotesInput
+                            exerciseId={exercise.id}
+                            initialValue={exercise.notes || ''}
+                            onNotesChange={handleNotesChange}
                           />
                         </View>
                         
@@ -1173,16 +1203,13 @@ const handleRemoveExercise = () => {
       );
     });
   }, [
-    activeWorkout?.exercises, // Only exercises array, not entire activeWorkout
+    activeWorkout?.exercises,
     minimizedExercises,
     failedImages,
     exerciseToSuperset,
     workoutSettings.rpeEnabled,
     userWeightUnit,
-    workoutSettings,
-    colors,
-    // Remove function dependencies that don't change
-    // swipeableRefs, animationManager, closeAllSwipeables, etc. are stable
+    handleNotesChange,
   ]);
 
   useEffect(() => {
@@ -1841,25 +1868,25 @@ const handleTimerCompletion = async () => {
               scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             }}
           >
-            <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between' }}>
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Duration</Text>
-                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{displayTimerText}</Text>
+            <View style={styles.ribbonRow}>
+              <View style={styles.ribbonItem}>
+                <Text style={styles.ribbonLabel}>Duration</Text>
+                <Text style={styles.ribbonValue}>{displayTimerText}</Text>
               </View>
-              
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Exercises</Text>
-                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{workoutStats.exercises}</Text>
+
+              <View style={styles.ribbonItem}>
+                <Text style={styles.ribbonLabel}>Exercises</Text>
+                <Text style={styles.ribbonValue}>{workoutStats.exercises}</Text>
               </View>
-              
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Volume</Text>
-                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{formatVolume(workoutStats.volume)} {userWeightUnit}</Text>
+
+              <View style={styles.ribbonItem}>
+                <Text style={styles.ribbonLabel}>Volume</Text>
+                <Text style={styles.ribbonValue}>{formatVolume(workoutStats.volume)} {userWeightUnit}</Text>
               </View>
-              
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '500' }}>Sets</Text>
-                <Text style={{ fontSize: 13, color: colors.primaryText, marginTop: 2 }}>{workoutStats.sets}</Text>
+
+              <View style={styles.ribbonItem}>
+                <Text style={styles.ribbonLabel}>Sets</Text>
+                <Text style={styles.ribbonValue}>{workoutStats.sets}</Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -1874,7 +1901,7 @@ const handleTimerCompletion = async () => {
         contentContainerStyle={{ paddingBottom: 100 }} // Add extra padding at bottom
         onScrollBeginDrag={closeAllSwipeables} // Close swipeables when scrolling
         onScroll={handleScroll}
-        scrollEventThrottle={16} // Improve scroll performance
+        scrollEventThrottle={100}
         nestedScrollEnabled={false} // Prevent nested scroll conflicts
       >
         
@@ -2156,14 +2183,14 @@ const handleTimerCompletion = async () => {
                     <View style={styles.timeAdjustmentRow}>
                       <TouchableOpacity
                 activeOpacity={0.5} 
-                        style={[styles.timeAdjustButton, { backgroundColor: 'transparent' }]}
+                        style={[styles.timeAdjustButton, styles.timerAdjustTransparent]}
                         onPress={() => adjustRestTimeAndInitial(-15)}
-                        disabled={restTimerActive || initialRestTime <= 15} // Disable adjustment when timer is running
+                        disabled={restTimerActive || initialRestTime <= 15}
                       >
                         <Text style={[
                           styles.timeAdjustButtonText,
-                          { color: colors.brand },
-                          (restTimerActive || initialRestTime <= 15) && { opacity: 0.5 }
+                          styles.timerBrandText,
+                          (restTimerActive || initialRestTime <= 15) && styles.disabledOpacity,
                         ]}>-15s</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -2174,19 +2201,19 @@ const handleTimerCompletion = async () => {
                       >
                         <Text style={[
                           styles.timeAdjustButtonText,
-                          restTimerActive && { opacity: 0.5 }
+                          restTimerActive && styles.disabledOpacity,
                         ]}>Default</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                 activeOpacity={0.5} 
-                        style={[styles.timeAdjustButton, { backgroundColor: 'transparent' }]}
+                        style={[styles.timeAdjustButton, styles.timerAdjustTransparent]}
                         onPress={() => adjustRestTimeAndInitial(15)}
-                        disabled={restTimerActive} // Disable adjustment when timer is running
+                        disabled={restTimerActive}
                       >
                         <Text style={[
                           styles.timeAdjustButtonText,
-                          { color: colors.brand },
-                          restTimerActive && { opacity: 0.5 }
+                          styles.timerBrandText,
+                          restTimerActive && styles.disabledOpacity,
                         ]}>+15s</Text>
                       </TouchableOpacity>
                     </View>
@@ -2220,7 +2247,7 @@ const handleTimerCompletion = async () => {
                     <View style={styles.primaryControlsRow}>
                       {!stopwatchActive && stopwatchTime > 0 ? (
                         // Show both Reset and Start buttons when stopwatch is stopped and has time
-                        <View style={{ marginTop: 62 , flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 10 }}>
+                        <View style={styles.stopwatchButtonsRow}>
                           <TouchableOpacity
                 activeOpacity={0.5} 
                             style={[styles.primaryControlButton, styles.resetButton, styles.halfWidthButton, { minWidth: '0%'}]}
@@ -2241,7 +2268,7 @@ const handleTimerCompletion = async () => {
                         // Show only Start/Stop button when stopwatch is running or at zero
                         <TouchableOpacity
                 activeOpacity={0.5} 
-                          style={[styles.primaryControlButton, styles.startButton, styles.fullWidthButton, { marginTop: 63 }]}
+                          style={[styles.primaryControlButton, styles.startButton, styles.fullWidthButton, styles.stopwatchSingleButton]}
                           onPress={() => {
                             stopwatchActive ? pauseStopwatch() : startStopwatch();
                           }}
@@ -4887,5 +4914,47 @@ deleteButtonAndroid: {
 deleteButtonContent: {
   alignItems: 'center',
   justifyContent: 'center',
+},
+
+// Floating stats ribbon
+ribbonRow: {
+  flexDirection: 'row',
+  flex: 1,
+  justifyContent: 'space-between',
+},
+ribbonItem: {
+  flex: 1,
+  alignItems: 'center',
+},
+ribbonLabel: {
+  fontSize: 11,
+  color: colors.secondaryText,
+  fontWeight: '500',
+},
+ribbonValue: {
+  fontSize: 13,
+  color: colors.primaryText,
+  marginTop: 2,
+},
+
+// Timer controls
+timerAdjustTransparent: {
+  backgroundColor: 'transparent',
+},
+timerBrandText: {
+  color: colors.brand,
+},
+disabledOpacity: {
+  opacity: 0.5,
+},
+stopwatchButtonsRow: {
+  marginTop: 62,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  width: '100%',
+  gap: 10,
+},
+stopwatchSingleButton: {
+  marginTop: 63,
 },
 });
