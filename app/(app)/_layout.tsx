@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.notification,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
