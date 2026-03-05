@@ -434,11 +434,8 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
           horizontal
           showsHorizontalScrollIndicator={false}
           pagingEnabled={true}
-          snapToInterval={galleryWidth}
-          decelerationRate="fast"
           contentContainerStyle={styles.listContent}
           onScroll={handleScroll}
-          snapToAlignment="start"
           initialScrollIndex={0}
           initialNumToRender={1}
           maxToRenderPerBatch={2}
