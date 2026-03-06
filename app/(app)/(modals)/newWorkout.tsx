@@ -202,6 +202,8 @@ export default function NewWorkout() {
   const exerciseOptionsBottomSheetRef = useRef(null);
   const setEditBottomSheetRef = useRef(null);
   const setEditModalClosingRef = useRef(false); // Track if modal is being intentionally closed
+  const setEditCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce Android keyboard false-close
+  const [setEditSheetSettled, setSetEditSheetSettled] = useState(false); // True once sheet has reached its snap point
   
   // Animation refs for pulse effect
   const stopwatchPulseAnimation = useRef(new Animated.Value(1)).current;
@@ -255,36 +257,56 @@ export default function NewWorkout() {
   }, [cameFromSetEdit, isConfirmingRpe]);
 
   const handleSetEditSheetChanges = useCallback((index) => {
-    // On Android, the BottomSheet can trigger onChange when keyboard appears/disappears
-    // We need to be more careful about when to actually close and reset state
-    if (index === -1) {
-      // Only proceed if the modal was actually visible and we're not in the middle of an RPE flow
-      if (setEditModalVisible && !cameFromSetEdit && !isConfirmingRpe && !setEditModalClosingRef.current) {
-        setSetEditModalVisible(false);
-        
-        // Add a small delay to ensure this isn't just a keyboard-related change
-        setTimeout(() => {
-          // Only clear state if we're really closing (not switching to RPE modal)
-          if (!setEditModalVisible && !cameFromSetEdit && !isConfirmingRpe) {
-            setEditingSet(null);
-            setEditingExerciseIndex(null);
-            setEditingSetIndex(null);
-            setTempWeight('');
-            setTempReps('');
-            setTempRpe('');
-          }
-          setEditModalClosingRef.current = false; // Reset the flag
-        }, 100);
-        
-        // Dismiss keyboard when BottomSheet closes
-        Keyboard.dismiss();
-      } else if (setEditModalClosingRef.current) {
-        // If we're intentionally closing, just update the modal state
-        setSetEditModalVisible(false);
-        setEditModalClosingRef.current = false;
+    // On Android, the BottomSheet fires onChange(-1) when the keyboard appears/disappears
+    // (due to adjustResize). We debounce to distinguish a real pan-down close from a
+    // transient keyboard event — a real close stays at -1, keyboard events recover quickly.
+    if (index !== -1) {
+      // Sheet has settled at its snap point — cancel any pending debounced close and unlock inputs
+      if (setEditCloseTimeoutRef.current) {
+        clearTimeout(setEditCloseTimeoutRef.current);
+        setEditCloseTimeoutRef.current = null;
       }
+      setSetEditSheetSettled(true);
+      return;
     }
-  }, [cameFromSetEdit, isConfirmingRpe, setEditModalVisible]);
+
+    setSetEditSheetSettled(false);
+
+    if (setEditModalClosingRef.current) {
+      // Explicit programmatic close (close button / save)
+      setSetEditModalVisible(false);
+      setEditingSet(null);
+      setEditingExerciseIndex(null);
+      setEditingSetIndex(null);
+      setTempWeight('');
+      setTempReps('');
+      setTempRpe('');
+      setEditModalClosingRef.current = false;
+      Keyboard.dismiss();
+      return;
+    }
+
+    if (cameFromSetEdit || isConfirmingRpe) {
+      // In the middle of RPE flow — don't close
+      return;
+    }
+
+    // Pan-down close or potential keyboard false-close: debounce to verify
+    if (setEditCloseTimeoutRef.current) {
+      clearTimeout(setEditCloseTimeoutRef.current);
+    }
+    setEditCloseTimeoutRef.current = setTimeout(() => {
+      setEditCloseTimeoutRef.current = null;
+      setSetEditModalVisible(false);
+      setEditingSet(null);
+      setEditingExerciseIndex(null);
+      setEditingSetIndex(null);
+      setTempWeight('');
+      setTempReps('');
+      setTempRpe('');
+      Keyboard.dismiss();
+    }, 300);
+  }, [cameFromSetEdit, isConfirmingRpe]);
 
   // Functions to open/close bottom sheets
   const toggleRestTimerModal = () => {
@@ -573,6 +595,10 @@ const handleRemoveExercise = () => {
     // Cleanup when component unmounts
     return () => {
       deactivateKeepAwake();
+      // Clean up debounce timeout for set edit sheet
+      if (setEditCloseTimeoutRef.current) {
+        clearTimeout(setEditCloseTimeoutRef.current);
+      }
       // Clean up all animations
       if (activeWorkout?.exercises) {
         activeWorkout.exercises.forEach(exercise => {
@@ -904,9 +930,15 @@ const handleRemoveExercise = () => {
     if (exerciseIndex === null || setIndex === null) return;
     const exercise = activeWorkout?.exercises[exerciseIndex];
     const set = exercise?.sets[setIndex];
-    
+
     if (!exercise || !set || set.isCompleted) return;
-    
+
+    // Cancel any pending debounced close so stale cleanup doesn't wipe state we're about to set
+    if (setEditCloseTimeoutRef.current) {
+      clearTimeout(setEditCloseTimeoutRef.current);
+      setEditCloseTimeoutRef.current = null;
+    }
+
     setEditingExerciseIndex(exerciseIndex);
     setEditingSetIndex(setIndex);
     setEditingSet(set);
@@ -914,6 +946,7 @@ const handleRemoveExercise = () => {
     setTempReps(set.reps !== null ? String(set.reps) : '');
     setTempRpe(selectedRpe ? selectedRpe : set.rpe ? String(set.rpe) : '');
     setSetEditModalVisible(true);
+    setSetEditSheetSettled(false); // Block inputs until sheet animation completes
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditBottomSheetRef.current?.expand();
   };
@@ -2740,7 +2773,9 @@ const handleTimerCompletion = async () => {
           keyboardBlurBehavior="none"
           containerStyle={{ zIndex: 4 }}
         >
-          <BottomSheetView style={[styles.setEditBottomSheetContent, Platform.OS === 'android' && { height: 300 }]}>
+          <BottomSheetView style={[styles.setEditBottomSheetContent, Platform.OS === 'android' && { height: 300 }]}
+            pointerEvents={setEditSheetSettled ? 'auto' : 'box-none'}
+          >
             <View style={styles.setEditHeader}>
               <Text style={styles.setEditTitle}>
                 {editingExerciseIndex !== null && activeWorkout?.exercises[editingExerciseIndex] 

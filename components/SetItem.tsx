@@ -793,6 +793,11 @@ const SetItem = memo<SetItemProps>(({
     return false; // Re-render if set data changed
   }
   
+  // Check if exercise index changed (e.g. after reorder)
+  if (prevProps.exerciseIndex !== nextProps.exerciseIndex) {
+    return false;
+  }
+
   // Check if exercise sets length changed (affects swipeable enable/disable)
   if (prevProps.exercise.sets.length !== nextProps.exercise.sets.length) {
     return false;
