@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
@@ -157,15 +158,19 @@ export default function OfficialRoutines() {
       {loading ? (
         <RoutineListSkeleton />
       ) : routines.length > 0 ? (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {routines.map((routine) => (
-            <RoutineCard 
-              key={routine.id}
-              routine={routine}
+        <FlashList
+          data={routines}
+          renderItem={({ item }) => (
+            <RoutineCard
+              routine={item}
               showTrendingBadge={false}
             />
-          ))}
-        </ScrollView>
+          )}
+          estimatedItemSize={160}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        />
       ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="shield-checkmark" size={80} color={colors.secondaryText} />

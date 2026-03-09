@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
@@ -158,16 +159,19 @@ export default function MostUsed() {
       {loading ? (
         <RoutineListSkeleton />
       ) : routines.length > 0 ? (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {routines.map((routine, index) => (
-            <View key={routine.id} style={styles.routineContainer}>
-              <RoutineCard 
-                routine={routine}
-                showTrendingBadge={index < 5} // Show trending badge for top 5 most used
-              />
-            </View>
-          ))}
-        </ScrollView>
+        <FlashList
+          data={routines}
+          renderItem={({ item, index }) => (
+            <RoutineCard
+              routine={item}
+              showTrendingBadge={index < 5}
+            />
+          )}
+          estimatedItemSize={160}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        />
       ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="trending-up" size={80} color={colors.secondaryText} />

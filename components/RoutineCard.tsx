@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AntDesign } from '@expo/vector-icons';
@@ -29,16 +29,16 @@ interface RoutineCardProps {
   onPress?: () => void;
 }
 
-export default function RoutineCard({ routine, showTrendingBadge = false, onPress }: RoutineCardProps) {
+function RoutineCard({ routine, showTrendingBadge = false, onPress }: RoutineCardProps) {
   const router = useRouter();
-  
-  const handlePress = () => {
+
+  const handlePress = useCallback(() => {
     if (onPress) {
       onPress();
     } else {
       router.push(`/routine/${routine.id}`);
     }
-  };
+  }, [onPress, routine.id]);
 
   return (
     <TouchableOpacity
@@ -126,6 +126,8 @@ export default function RoutineCard({ routine, showTrendingBadge = false, onPres
     </TouchableOpacity>
   );
 }
+
+export default React.memo(RoutineCard);
 
 const styles = StyleSheet.create({
   routineCard: {

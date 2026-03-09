@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, FlatList, Keyboard, TouchableWithoutFeedback, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert, FlatList, Keyboard, TouchableWithoutFeedback, TouchableOpacity, Platform } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { AntDesign } from '@expo/vector-icons';
@@ -380,22 +381,27 @@ export default function SearchCommunity() {
             <RoutineListSkeleton />
           ) : routines.length > 0 ? (
             // Results
-            <ScrollView showsVerticalScrollIndicator={true} style={styles.resultsScroll}>
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsCount}>
-                  {routines.length} routine{routines.length !== 1 ? 's' : ''} found
-                </Text>
-                <Text style={styles.resultsQuery}> for "{searchQuery}"</Text>
-              </View>
-              
-              {routines.map((routine) => (
-                <RoutineCard 
-                  key={routine.id}
-                  routine={routine}
+            <FlashList
+              data={routines}
+              renderItem={({ item }) => (
+                <RoutineCard
+                  routine={item}
                   showTrendingBadge={false}
                 />
-              ))}
-            </ScrollView>
+              )}
+              estimatedItemSize={160}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={styles.resultsScroll}
+              ListHeaderComponent={
+                <View style={styles.resultsHeader}>
+                  <Text style={styles.resultsCount}>
+                    {routines.length} routine{routines.length !== 1 ? 's' : ''} found
+                  </Text>
+                  <Text style={styles.resultsQuery}> for "{searchQuery}"</Text>
+                </View>
+              }
+            />
           ) : (
             // No results
             <View style={styles.noResultsContainer}>
