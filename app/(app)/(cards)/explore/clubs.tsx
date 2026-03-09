@@ -3,12 +3,12 @@ import {
   StyleSheet,
   View,
   Text,
-  FlatList,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '../../../../constants/colors';
 import { supabase } from '../../../../lib/supabase';
@@ -211,10 +211,11 @@ export default function RecommendedClubs() {
           <Text style={styles.loadingText}>Discovering clubs for you...</Text>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={suggestedClubs}
           keyExtractor={(item) => item.id}
           renderItem={renderClubItem}
+          estimatedItemSize={80}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={

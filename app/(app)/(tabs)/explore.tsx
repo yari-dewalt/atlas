@@ -83,7 +83,7 @@ export default function Explore() {
   
   // Follow button states for each user
   const [followButtonStates, setFollowButtonStates] = useState({});
-  const [followingUsers, setFollowingUsers] = useState(new Set());
+  const followingIdsRef = useRef<Set<string>>(new Set());
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
   
   // Search bar sliding animation
@@ -171,12 +171,7 @@ export default function Explore() {
       if (postsError) throw postsError;
       
       if (posts) {
-        // Pre-fetch following IDs once for likes attribution
-        const { data: followingData } = await supabase
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', session.user.id);
-        const followingIdSet = new Set((followingData ?? []).map(f => f.following_id));
+        const followingIdSet = followingIdsRef.current;
 
         // Transform the data to match Post component format
         const formattedPosts = posts.map(post => {
@@ -282,6 +277,13 @@ export default function Explore() {
     }
   }, [isSearchFocused]);
 
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(searchTimeout.current);
+    };
+  }, []);
+
   // Refresh recent searches when search overlay opens and reset state when leaving
   useFocusEffect(
     useCallback(() => {
@@ -302,33 +304,18 @@ export default function Explore() {
   // Load all data when component mounts
   useEffect(() => {
     if (session?.user?.id) {
-      loadRecentSearches();
       loadSuggestedUsers();
-      fetchFollowingRelationships();
+      fetchFollowersBack();
       setHasMorePosts(true); // Reset pagination state
       fetchTrendingPosts(false); // Start fresh
     }
   }, [session?.user?.id]);
 
-  // Fetch who we're following and who's following us
-  const fetchFollowingRelationships = async () => {
+  // Fetch who is following us back (to show "Follow Back" label)
+  const fetchFollowersBack = async () => {
     if (!session?.user?.id) return;
 
     try {
-      // Get users we're following
-      const { data: followingData, error: followingError } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', session.user.id);
-
-      if (followingError) {
-        console.error('Error fetching following:', followingError);
-      } else {
-        const followingSet = new Set(followingData.map(f => f.following_id));
-        setFollowingUsers(followingSet);
-      }
-
-      // Get users who are following us
       const { data: followersData, error: followersError } = await supabase
         .from('follows')
         .select('follower_id')
@@ -341,7 +328,7 @@ export default function Explore() {
         setFollowingBackUsers(followersSet);
       }
     } catch (error) {
-      console.error('Error fetching follow relationships:', error);
+      console.error('Error fetching followers back:', error);
     }
   };
   
@@ -360,7 +347,7 @@ export default function Explore() {
     setHasMorePosts(true); // Reset pagination state
     await Promise.all([
       loadSuggestedUsers(),
-      fetchFollowingRelationships(),
+      fetchFollowersBack(),
       fetchTrendingPosts(false) // Reset posts
     ]);
     setRefreshing(false);
@@ -488,6 +475,7 @@ export default function Explore() {
       
       // Extract the IDs into an array
       const followingIds = followingData.map(f => f.following_id);
+      followingIdsRef.current = new Set(followingIds);
       // Add the current user's ID to exclude them from suggestions
       followingIds.push(session.user.id);
       
@@ -988,7 +976,7 @@ export default function Explore() {
           renderItem={renderPost}
           keyExtractor={(item) => item.id}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
+          scrollEventThrottle={100}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

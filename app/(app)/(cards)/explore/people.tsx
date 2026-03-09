@@ -3,12 +3,12 @@ import {
   StyleSheet,
   View,
   Text,
-  FlatList,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '../../../../constants/colors';
 import { supabase } from '../../../../lib/supabase';
@@ -185,10 +185,11 @@ export default function PeopleToFollow() {
           <Text style={styles.loadingText}>Finding people for you...</Text>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={suggestedUsers}
           keyExtractor={(item) => item.id}
           renderItem={renderUserItem}
+          estimatedItemSize={80}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
