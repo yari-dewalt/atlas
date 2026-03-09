@@ -24,6 +24,7 @@ export const BANNER_MESSAGES = {
   ERROR_GENERIC: 'Something went wrong. Please try again.',
   ERROR_NETWORK: 'Network error. Check your connection.',
   ERROR_SAVE_FAILED: 'Failed to save. Please try again.',
+  ERROR_MEDIA_UPLOAD_FAILED: 'Media upload failed. Your post was not published.',
 } as const;
 
 type BannerType = typeof BANNER_TYPES[keyof typeof BANNER_TYPES];

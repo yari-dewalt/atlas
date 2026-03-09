@@ -7,16 +7,20 @@ import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../..
 import { useBannerStore, BANNER_MESSAGES } from "../../../../../stores/bannerStore";
 import { getUserWeightUnit, displayWeightForUser } from "../../../../../utils/weightUtils";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { fetchPostById, updatePost, uploadPostMedia } from "../../../../../utils/postUtils";
+import { fetchPostById, updatePost, uploadPostMedia, deletePost } from "../../../../../utils/postUtils";
 import { Ionicons as IonIcon } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from "expo-image-picker";
+import { getInfoAsync } from 'expo-file-system/legacy';
 import { format, formatDistanceToNow } from 'date-fns';
 import { supabase } from "../../../../../lib/supabase";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ExercisesList from '../../../../../components/Post/ExercisesList';
+
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_VIDEO_SIZE_LABEL = '50 MB';
 
 export default function EditPost() {
   const { postId } = useLocalSearchParams();
@@ -468,25 +472,16 @@ export default function EditPost() {
     try {
       // Start progress tracking
       if (isNewPost) {
-        loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.SAVING_POST);
+        progressUtils.stepProgress(0, newMedia.length + 2, PROGRESS_LABELS.SAVING_POST);
       } else {
         loadingInterval = progressUtils.startLoading(PROGRESS_LABELS.EDITING_POST);
       }
 
-      // Step 1: Preparing data
-      progressUtils.stepProgress(1, 3, 'Preparing post data...');
-
-      // Step 2: Saving/Updating
-      progressUtils.stepProgress(2, 3, isNewPost ? 'Publishing post...' : 'Updating post...');
-      
       if (isNewPost) {
-        await createNewPost();
+        await createNewPost(newMedia.length);
       } else {
         await updateExistingPost();
       }
-
-      // Step 3: Finalizing
-      progressUtils.stepProgress(3, 3, 'Finalizing...');
       
       // Complete the progress
       progressUtils.completeLoading();
@@ -506,13 +501,17 @@ export default function EditPost() {
       
       // Show error banner
       const { showError } = useBannerStore.getState();
-      showError(BANNER_MESSAGES.ERROR_SAVE_FAILED);
+      if ((err as any)?.message === BANNER_MESSAGES.ERROR_MEDIA_UPLOAD_FAILED) {
+        showError(BANNER_MESSAGES.ERROR_MEDIA_UPLOAD_FAILED);
+      } else {
+        showError(BANNER_MESSAGES.ERROR_SAVE_FAILED);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const createNewPost = async () => {
+  const createNewPost = async (totalMediaCount: number) => {
     // 1. First create the post record
     const { data: newPost, error: postError } = await supabase
       .from('posts')
@@ -529,7 +528,9 @@ export default function EditPost() {
       
     const newPostId = newPost.id;
     console.log(`Created post with ID: ${newPostId}`);
-    
+
+    progressUtils.stepProgress(1, totalMediaCount + 2, 'Uploading media...');
+
     // 2. Upload any media files to Supabase storage
     for (let i = 0; i < newMedia.length; i++) {
       const mediaItem = newMedia[i];
@@ -577,10 +578,20 @@ export default function EditPost() {
           console.error('Media record insert error:', mediaError);
           throw mediaError;
         }
-        
+
+        const label = newMedia.length > 1
+          ? `Uploading media ${i + 1} of ${newMedia.length}...`
+          : 'Uploading media...';
+        progressUtils.stepProgress(i + 2, totalMediaCount + 2, label);
+
       } catch (error) {
-        console.error(`Error processing media item ${i+1}:`, error);
-        throw new Error(`Failed to process media item ${i+1}: ${error.message}`);
+        console.error(`Error processing media item ${i + 1}:`, error);
+        try {
+          await deletePost(newPostId, profile.id);
+        } catch (rollbackErr) {
+          console.error('Failed to rollback post after media upload failure:', rollbackErr);
+        }
+        throw new Error('Media upload failed. Your post was not published.');
       }
     }
     
@@ -660,6 +671,25 @@ export default function EditPost() {
     router.dismiss();
   };
   
+  const validateMediaSize = async (assets: any[]) => {
+    const valid: any[] = [];
+    const rejected: number[] = [];
+    for (const asset of assets) {
+      if (asset.type !== 'video') { valid.push(asset); continue; }
+      try {
+        const info = await getInfoAsync(asset.uri);
+        if (info.exists && (info as any).size > MAX_VIDEO_SIZE_BYTES) {
+          rejected.push(1);
+        } else {
+          valid.push(asset);
+        }
+      } catch {
+        valid.push(asset); // can't check → let upload fail gracefully
+      }
+    }
+    return { valid, rejected };
+  };
+
   const addNewMedia = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -675,14 +705,22 @@ export default function EditPost() {
         return;
       }
 
-      const selectedMedia = result.assets.map(item => ({
+      const { valid, rejected } = await validateMediaSize(result.assets);
+      if (rejected.length > 0) {
+        Alert.alert(
+          'Video Too Large',
+          `${rejected.length === 1 ? 'One video was' : `${rejected.length} videos were`} removed because ${rejected.length === 1 ? 'it exceeds' : 'they exceed'} the ${MAX_VIDEO_SIZE_LABEL} size limit. Try trimming or recording a shorter clip.`
+        );
+      }
+      if (valid.length === 0) return;
+      const selectedMedia = valid.map(item => ({
         uri: item.uri,
         type: item.type || (item.uri.endsWith('.mp4') ? 'video' : 'image'),
         width: item.width,
         height: item.height,
-        duration: item.duration
+        duration: item.duration,
       }));
-      
+
       setNewMedia([...newMedia, ...selectedMedia]);
     } catch (error) {
       if (error instanceof Error) {
@@ -718,14 +756,19 @@ export default function EditPost() {
         return;
       }
 
-      const capturedMedia = result.assets.map(item => ({
+      const { valid, rejected } = await validateMediaSize(result.assets);
+      if (rejected.length > 0) {
+        Alert.alert('Video Too Large', `The recorded video exceeds the ${MAX_VIDEO_SIZE_LABEL} size limit. Try recording a shorter clip.`);
+      }
+      if (valid.length === 0) return;
+      const capturedMedia = valid.map(item => ({
         uri: item.uri,
         type: item.type || (item.uri.endsWith('.mp4') ? 'video' : 'image'),
         width: item.width,
         height: item.height,
-        duration: item.duration
+        duration: item.duration,
       }));
-      
+
       setNewMedia([...newMedia, ...capturedMedia]);
     } catch (error) {
       if (error instanceof Error) {
