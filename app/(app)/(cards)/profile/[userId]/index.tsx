@@ -17,6 +17,7 @@ import CustomLineChart from '../../../../../components/CustomLineChart';
 
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 export default function ProfileScreen() {
   const scrollViewRef = useRef(null);
@@ -608,10 +609,10 @@ export default function ProfileScreen() {
       
       // Flatten and process media from all posts
       const allMedia: any[] = [];
-      data?.forEach(post => {
-        post.post_media?.forEach((media: any) => {
+      for (const post of (data || [])) {
+        for (const media of (post.post_media || [])) {
           let processedUri = media.storage_path;
-          
+
           // Process URL if it's not already a full URL
           if (!media.storage_path.startsWith('http')) {
             try {
@@ -625,7 +626,17 @@ export default function ProfileScreen() {
               console.error('Error processing media URL:', error);
             }
           }
-          
+
+          let thumbnail_uri: string | null = null;
+          if (media.media_type === 'video') {
+            try {
+              const { uri } = await VideoThumbnails.getThumbnailAsync(processedUri, { time: 0 });
+              thumbnail_uri = uri;
+            } catch {
+              // no thumbnail available
+            }
+          }
+
           allMedia.push({
             id: media.id,
             type: media.media_type,
@@ -636,10 +647,11 @@ export default function ProfileScreen() {
             order_index: media.order_index,
             post_id: post.id,
             post_description: post.description,
-            created_at: post.created_at
+            created_at: post.created_at,
+            thumbnail_uri,
           });
-        });
-      });
+        }
+      }
       
       // Sort by creation date and take the most recent
       const sortedMedia = allMedia.sort((a, b) => 
@@ -1267,9 +1279,11 @@ export default function ProfileScreen() {
                       {index === 3 && recentMedia.length > 4 ? (
                         <View style={styles.allMediaOverlay}>
                           {media.type === 'video' ? (
-                            <View style={styles.videoPreviewPlaceholder}>
-                              <IonIcon name="play-circle" size={24} color="rgba(255, 255, 255, 0.85)" />
-                            </View>
+                            media.thumbnail_uri ? (
+                              <Image source={{ uri: media.thumbnail_uri }} style={styles.mediaImage as any} resizeMode="cover" />
+                            ) : (
+                              <View style={styles.videoPreviewPlaceholder} />
+                            )
                           ) : (
                             <CachedImage
                               path={media.uri}
@@ -1283,9 +1297,11 @@ export default function ProfileScreen() {
                       ) : (
                         <>
                           {media.type === 'video' ? (
-                            <View style={styles.videoPreviewPlaceholder}>
-                              <IonIcon name="play-circle" size={24} color="rgba(255, 255, 255, 0.85)" />
-                            </View>
+                            media.thumbnail_uri ? (
+                              <Image source={{ uri: media.thumbnail_uri }} style={styles.mediaImage as any} resizeMode="cover" />
+                            ) : (
+                              <View style={styles.videoPreviewPlaceholder} />
+                            )
                           ) : (
                             <CachedImage
                               path={media.uri}
