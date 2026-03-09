@@ -282,6 +282,7 @@ const Posts = () => {
         }
         contentContainerStyle={styles.contentContainer}
         ListEmptyComponent={!loading ? EmptyComponent : null}
+        estimatedItemSize={400}
         removeClippedSubviews={true}
         getItemType={() => 'post'}
       />

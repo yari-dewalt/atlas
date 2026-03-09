@@ -17,10 +17,6 @@ export default function ProfileRoutines() {
   const { session } = useAuthStore();
 
   useEffect(() => {
-    fetchRoutines();
-  }, [profileId]);
-
-  useEffect(() => {
     if (session) {
       setIsCurrentUser(profileId === session.user.id);
     }
@@ -187,7 +183,7 @@ export default function ProfileRoutines() {
     }
   };
 
-  const renderRoutineCard = ({ item }: { item: any }) => (
+  const renderRoutineCard = useCallback(({ item }: { item: any }) => (
     <TouchableOpacity
       activeOpacity={0.5}
       style={styles.routineCard}
@@ -236,7 +232,7 @@ export default function ProfileRoutines() {
         </View>
       </View>
     </TouchableOpacity>
-  );
+  ), [router]);
 
   return (
     <View style={styles.container}>
@@ -250,6 +246,9 @@ export default function ProfileRoutines() {
               renderItem={renderRoutineCard}
               keyExtractor={item => item.id}
               contentContainerStyle={styles.listContent}
+              removeClippedSubviews={true}
+              initialNumToRender={10}
+              maxToRenderPerBatch={5}
             />
           ) : (
             <View style={styles.emptyContainer}>

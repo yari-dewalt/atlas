@@ -149,7 +149,7 @@ export default function UserWorkoutsScreen() {
     }
   };
 
-  const renderWorkoutCard = ({ item: workout }: { item: any }) => {
+  const renderWorkoutCard = useCallback(({ item: workout }: { item: any }) => {
     const startDate = new Date(workout.start_time);
     const formattedDate = format(startDate, 'MMM d, yyyy');
     const formattedTime = format(startDate, 'h:mm a');
@@ -196,7 +196,7 @@ export default function UserWorkoutsScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [router, userWeightUnit]);
 
   return (
     <>
@@ -217,6 +217,7 @@ export default function UserWorkoutsScreen() {
             keyExtractor={item => item.id.toString()}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            removeClippedSubviews={true}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
