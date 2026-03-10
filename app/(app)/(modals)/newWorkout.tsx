@@ -33,7 +33,11 @@ import { supabase } from "../../../lib/supabase";
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { GestureHandlerRootView, PanGestureHandler } from "react-native-gesture-handler";
-import DraggableFlatList from "react-native-draggable-flatlist";
+import DraggableFlatList, {
+  NestableScrollContainer,
+  NestableDraggableFlatList,
+  ScaleDecorator,
+} from "react-native-draggable-flatlist";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
@@ -1038,42 +1042,43 @@ const handleRemoveExercise = () => {
     updateExercise(exerciseId, { notes: text });
   }, [updateExercise]);
 
-  const renderedExercises = useMemo(() => {
-    if (!activeWorkout?.exercises) return null;
-    
-    return activeWorkout.exercises.map((exercise, exerciseIndex) => {
-      const isMinimized = minimizedExercises.has(exercise.id);
-      
-      return (
-        <View key={exercise.id} style={[
-          styles.exerciseCard,
-        ]}>
+  const renderExerciseItem = useCallback(({ item: exercise, drag, isActive }: { item: any; drag: () => void; isActive: boolean }) => {
+    const isMinimized = minimizedExercises.has(exercise.id);
+    const exerciseIndex = activeWorkout?.exercises.findIndex(e => e.id === exercise.id) ?? 0;
+
+    return (
+      <ScaleDecorator activeScale={1.02}>
+        <View style={[styles.exerciseCard, isActive && styles.exerciseCardDragging]}>
           {/* Exercise header with name, minimize button, and options */}
           <View style={styles.exerciseHeader}>
             <View style={styles.exerciseNameContainer}>
               <View style={styles.exerciseTitleRow}>
                 {/* Make the entire left side (name + minimize button) pressable */}
                 <TouchableOpacity
-                  activeOpacity={0.5} 
+                  activeOpacity={0.5}
                   style={styles.exerciseTitlePressable}
                   onPress={() => {
                     closeAllSwipeables();
                     toggleExerciseMinimized(exercise.id);
                   }}
+                  onLongPress={drag}
+                  delayLongPress={200}
                 >
                   <View style={styles.exerciseNameAndBadgeContainer}>
                     <TouchableOpacity
-                      activeOpacity={0.5} 
+                      activeOpacity={0.5}
                       onPress={() => {
                         closeAllSwipeables();
                         showExerciseDetails(exercise);
                       }}
+                      onLongPress={drag}
+                      delayLongPress={200}
                       style={styles.exerciseNamePressable}
                     >
                       <View style={styles.exerciseNameRow}>
                         {/* Exercise Image */}
                         {exercise.image_url && !failedImages.has(exercise.id) ? (
-                          <Image 
+                          <Image
                             source={{ uri: exercise.image_url }}
                             style={styles.exerciseImage}
                             resizeMode="cover"
@@ -1083,14 +1088,14 @@ const handleRemoveExercise = () => {
                           />
                         ) : (
                           <View style={styles.exerciseImagePlaceholder}>
-                            <IonIcon 
-                              name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"} 
-                              size={18} 
-                              color={colors.secondaryText} 
+                            <IonIcon
+                              name={(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) ? "construct-outline" : "barbell-outline"}
+                              size={18}
+                              color={colors.secondaryText}
                             />
                           </View>
                         )}
-                        
+
                         <View>
                           {/* Exercise Name */}
                           <Text style={[styles.exerciseName, { fontSize: Platform.OS === 'android' ? 16 : 16}]}>{exercise.name}</Text>
@@ -1101,7 +1106,7 @@ const handleRemoveExercise = () => {
                             onNotesChange={handleNotesChange}
                           />
                         </View>
-                        
+
                         {/* Custom Exercise Badge */}
                         {(!exercise.exercise_id || exercise.exercise_id.startsWith('custom-')) && (
                           <View style={styles.customBadge}>
@@ -1110,7 +1115,7 @@ const handleRemoveExercise = () => {
                         )}
                       </View>
                     </TouchableOpacity>
-                    
+
                     {/* Add superset badge */}
                     {exerciseToSuperset.has(exercise.id) && (
                       <View style={[
@@ -1121,42 +1126,44 @@ const handleRemoveExercise = () => {
                       </View>
                     )}
                   </View>
-                  <IonIcon 
-                    name={isMinimized ? "chevron-down" : "chevron-up"} 
-                    size={20} 
-                    color={colors.secondaryText} 
+                  <IonIcon
+                    name={isMinimized ? "chevron-down" : "chevron-up"}
+                    size={20}
+                    color={colors.secondaryText}
                     style={styles.minimizeIcon}
                   />
                 </TouchableOpacity>
-                
+
                 {/* Keep the options button separate */}
                 <TouchableOpacity
-                  activeOpacity={0.5} 
+                  activeOpacity={0.5}
                   style={styles.exerciseOptionsButton}
                   onPress={() => {
                     closeAllSwipeables();
                     showExerciseOptions(exercise);
                   }}
+                  onLongPress={drag}
+                  delayLongPress={200}
                 >
                   <IonIcon name="ellipsis-horizontal" size={20} color={colors.secondaryText} />
                 </TouchableOpacity>
               </View>
             </View>
           </View>
-          
+
           {/* Show exercise summary when minimized */}
           {isMinimized ? (
             <View style={styles.exerciseSummary}>
               {/* Progress bar */}
               <View style={styles.progressContainer}>
                 <View style={styles.progressBarBackground}>
-                  <View 
+                  <View
                     style={[
-                      styles.progressBarFill, 
-                      { 
-                        width: `${(exercise.sets.filter(set => set.isCompleted).length / exercise.sets.length) * 100}%` 
+                      styles.progressBarFill,
+                      {
+                        width: `${(exercise.sets.filter(set => set.isCompleted).length / exercise.sets.length) * 100}%`
                       }
-                    ]} 
+                    ]}
                   />
                 </View>
                 <Text style={styles.progressText}>
@@ -1177,7 +1184,7 @@ const handleRemoveExercise = () => {
                 {workoutSettings.rpeEnabled && (
                   <View style={[styles.setHeaderLabel, styles.setInputColumn]}>
                     <TouchableOpacity
-                      activeOpacity={0.5} 
+                      activeOpacity={0.5}
                       onPress={(event) => {
                         closeAllSwipeables();
                         event.target.measure((x, y, width, height, pageX, pageY) => {
@@ -1196,7 +1203,7 @@ const handleRemoveExercise = () => {
                   <IonIcon name="checkmark" size={16} color={colors.secondaryText} />
                 </View>
               </View>
-              
+
               {/* Sets - optimized with memoized components */}
               {exercise.sets.map((set, setIndex) => (
                 <SetItem
@@ -1217,10 +1224,10 @@ const handleRemoveExercise = () => {
                   animationManager={animationManager}
                 />
               ))}
-              
+
               {/* Add set button */}
               <TouchableOpacity
-                activeOpacity={0.5} 
+                activeOpacity={0.5}
                 style={styles.addSetButton}
                 onPress={() => {
                   closeAllSwipeables();
@@ -1233,8 +1240,8 @@ const handleRemoveExercise = () => {
             </>
           )}
         </View>
-      );
-    });
+      </ScaleDecorator>
+    );
   }, [
     activeWorkout?.exercises,
     minimizedExercises,
@@ -1926,16 +1933,15 @@ const handleTimerCompletion = async () => {
         </Animated.View>
       )}
 
-      <ScrollView 
+      <NestableScrollContainer
         ref={scrollViewRef}
         style={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }} // Add extra padding at bottom
-        onScrollBeginDrag={closeAllSwipeables} // Close swipeables when scrolling
+        contentContainerStyle={{ paddingBottom: 100 }}
+        onScrollBeginDrag={closeAllSwipeables}
         onScroll={handleScroll}
         scrollEventThrottle={100}
-        nestedScrollEnabled={false} // Prevent nested scroll conflicts
       >
         
 
@@ -1974,7 +1980,7 @@ const handleTimerCompletion = async () => {
         {loading ? (
           <View style={styles.loadingContainer}>
           </View>
-        ) : activeWorkout?.exercises.length === 0 ? (
+        ) : !activeWorkout || activeWorkout.exercises.length === 0 ? (
           <View style={styles.emptyStateContainer}>
             <IonIcon name="barbell-outline" size={50} color={colors.secondaryText} />
             <Text style={styles.emptyStateTitle}>Get started</Text>
@@ -1993,9 +1999,18 @@ const handleTimerCompletion = async () => {
           </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.exercisesContainer}>
-            {renderedExercises}
-          </View>
+          <NestableDraggableFlatList
+            data={activeWorkout.exercises}
+            keyExtractor={item => item.id}
+            renderItem={renderExerciseItem}
+            onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+            onDragEnd={({ data }) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              reorderExercises(data);
+            }}
+            scrollEnabled={false}
+            containerStyle={styles.exercisesContainer}
+          />
         )}
 
         {activeWorkout?.exercises.length > 0 && (
@@ -2011,7 +2026,7 @@ const handleTimerCompletion = async () => {
             <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </NestableScrollContainer>
 
 
 
@@ -3027,6 +3042,17 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomColor: 'rgba(255,255,255,0.1)',
     borderBottomWidth: 1,
+  },
+  exerciseCardDragging: {
+    opacity: 0.95,
+    borderColor: colors.primary,
+    borderWidth: 1,
+    borderRadius: 8,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   exerciseHeader: {
     flexDirection: 'row',
