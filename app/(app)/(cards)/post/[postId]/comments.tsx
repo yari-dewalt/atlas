@@ -166,17 +166,6 @@ export default function PostCommentsScreen() {
       }
 
       if (postData) {
-        // Fetch the profile data separately
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_url, full_name')
-          .eq('id', postData.user_id)
-          .single();
-        
-        if (profileError) {
-          console.log('Profile fetch error:', profileError);
-        }
-
         let hasLiked = false;
         if (session?.user?.id) {
           hasLiked = await checkIfUserLikedPost(postData.id, session.user.id);
@@ -186,10 +175,10 @@ export default function PostCommentsScreen() {
         const formattedPost = {
           id: postData.id,
           user: {
-            id: profileData?.id,
-            username: profileData?.username,
-            full_name: profileData?.full_name,
-            avatar_url: profileData?.avatar_url
+            id: postData.profiles?.id,
+            username: postData.profiles?.username,
+            full_name: postData.profiles?.full_name,
+            avatar_url: postData.profiles?.avatar_url
           },
           createdAt: postData.created_at,
           title: postData.title,
@@ -213,12 +202,7 @@ export default function PostCommentsScreen() {
         
         setPost(formattedPost);
         setLikesCount(formattedPost.likes);
-
-        // Check if user has liked this post
-        if (session?.user?.id) {
-          const hasLiked = await checkIfUserLikedPost(postData.id, session.user.id);
-          setLiked(hasLiked);
-        }
+        setLiked(hasLiked);
 
         // Fetch likes data for display
         if (postData.likes_count > 0) {
@@ -1259,6 +1243,11 @@ export default function PostCommentsScreen() {
         }}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        scrollEventThrottle={100}
+        removeClippedSubviews={Platform.OS === 'android'}
       />
 
       {/* Add Comment Input - Hide when editing */}

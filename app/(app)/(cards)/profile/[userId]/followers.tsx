@@ -1,8 +1,9 @@
-import { View, Text, FlatList, StyleSheet, Pressable, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { colors } from '../../../../../constants/colors';
 import { supabase } from '../../../../../lib/supabase';
 import { useAuthStore } from '../../../../../stores/authStore';
@@ -17,17 +18,22 @@ type Follower = {
   is_following: boolean;
 };
 
+const PAGE_SIZE = 30;
+
 export default function FollowersScreen() {
   const { userId } = useLocalSearchParams();
   const router = useRouter();
   const [followers, setFollowers] = useState<Follower[]>([]);
+  const [followingUsers, setFollowingUsers] = useState(new Set<string>());
+  const [followingBackUsers, setFollowingBackUsers] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const { session } = useAuthStore();
   const currentUserId = session?.user?.id;
-  
-  // Filter followers based on search query
+
   const filteredFollowers = followers.filter(follower => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -35,137 +41,138 @@ export default function FollowersScreen() {
     const name = follower.name?.toLowerCase() || '';
     return username.includes(query) || name.includes(query);
   });
-  
+
   useEffect(() => {
-    fetchFollowers();
-    fetchFollowingRelationships();
+    setPage(0);
+    setHasMore(true);
+    setFollowers([]);
+    fetchFollowers(0, true);
   }, [userId]);
 
-  // Fetch who's following us to show "Follow back" button
-  const fetchFollowingRelationships = async () => {
-    if (!currentUserId) return;
-
-    try {
-      // Get users who are following us
-      const { data: followersData, error: followersError } = await supabase
-        .from('follows')
-        .select('follower_id')
-        .eq('following_id', currentUserId);
-
-      if (followersError) {
-        console.error('Error fetching followers:', followersError);
-      } else {
-        const followersSet = new Set(followersData.map(f => f.follower_id));
-        setFollowingBackUsers(followersSet);
-      }
-    } catch (error) {
-      console.error('Error fetching follow relationships:', error);
+  useEffect(() => {
+    if (page > 0) {
+      fetchFollowers(page, false);
     }
-  };
-  
-  async function fetchFollowers() {
+  }, [page]);
+
+  async function fetchFollowers(pageNum: number, fetchSets: boolean) {
     try {
-      setLoading(true);
-      
+      if (pageNum === 0) setLoading(true);
+      else setLoadingMore(true);
+
       if (!userId) return;
-      
-      // Fetch users who follow the current profile
-      const { data, error } = await supabase
+
+      const followersQuery = supabase
         .from('follows')
-        .select(`
-          follower:profiles!follows_follower_id_fkey (
-            id, username, name, avatar_url
-          )
-        `)
-        .eq('following_id', userId);
-        
-      if (error) {
-        console.error('Error fetching followers:', error);
-        return;
+        .select('follower:profiles!follows_follower_id_fkey(id, username, name, avatar_url)')
+        .eq('following_id', userId)
+        .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+
+      if (fetchSets && currentUserId) {
+        const [followersResult, followingResult, followersBackResult] = await Promise.all([
+          followersQuery,
+          supabase.from('follows').select('following_id').eq('follower_id', currentUserId),
+          supabase.from('follows').select('follower_id').eq('following_id', currentUserId),
+        ]);
+
+        if (followersResult.error) {
+          console.error('Error fetching followers:', followersResult.error);
+          return;
+        }
+
+        const newFollowingSet = new Set<string>(followingResult.data?.map(f => f.following_id) ?? []);
+        const newFollowingBackSet = new Set<string>(followersBackResult.data?.map(f => f.follower_id) ?? []);
+        setFollowingUsers(newFollowingSet);
+        setFollowingBackUsers(newFollowingBackSet);
+
+        const newFollowers = buildFollowers(followersResult.data ?? [], newFollowingSet);
+        if (newFollowers.length < PAGE_SIZE) setHasMore(false);
+        setFollowers(newFollowers);
+      } else {
+        const followersResult = await followersQuery;
+        if (followersResult.error) {
+          console.error('Error fetching followers:', followersResult.error);
+          return;
+        }
+
+        const newFollowers = buildFollowers(followersResult.data ?? [], followingUsers);
+        if (newFollowers.length < PAGE_SIZE) setHasMore(false);
+        setFollowers(prev => [...prev, ...newFollowers]);
       }
-      
-      // Extract profiles from the nested structure
-      const followerProfiles = data.map(item => item.follower) as Omit<Follower, 'is_following'>[];
-      
-      // Check which followers the current user is following
-      const followersWithFollowStatus = await Promise.all(
-        followerProfiles.map(async (follower) => {
-          // Skip checking for the current user
-          if (follower.id === currentUserId) {
-            return {
-              ...follower,
-              is_following: false // Don't show follow button for self
-            };
-          }
-          
-          // Check if current user follows this follower
-          const { data: followCheck, error: followError } = await supabase
-            .from('follows')
-            .select('id')
-            .match({
-              follower_id: currentUserId,
-              following_id: follower.id
-            })
-            .maybeSingle();
-            
-          return {
-            ...follower,
-            is_following: !!followCheck
-          };
-        })
-      );
-      
-      setFollowers(followersWithFollowStatus);
     } catch (error) {
       console.error('Error in followers fetch:', error);
     } finally {
-      setLoading(false);
+      if (pageNum === 0) setLoading(false);
+      else setLoadingMore(false);
     }
   }
-  
-  async function toggleFollow(followerId: string, currentlyFollowing: boolean) {
+
+  function buildFollowers(data: any[], followingSet: Set<string>): Follower[] {
+    return data.map(item => {
+      const f = item.follower as any;
+      return {
+        id: f.id,
+        username: f.username,
+        name: f.name,
+        avatar_url: f.avatar_url,
+        is_following: f.id === currentUserId ? false : followingSet.has(f.id),
+      };
+    });
+  }
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMore) return;
+    setPage(p => p + 1);
+  }, [hasMore, loadingMore]);
+
+  const toggleFollow = useCallback(async (followerId: string, currentlyFollowing: boolean) => {
     if (!currentUserId || followerId === currentUserId) return;
-    
-    // Haptic feedback
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Optimistic update - update UI immediately
-    setFollowers(followers.map(follower => 
-      follower.id === followerId 
-        ? { ...follower, is_following: !currentlyFollowing }
-        : follower
+
+    setFollowers(prev => prev.map(f =>
+      f.id === followerId ? { ...f, is_following: !currentlyFollowing } : f
     ));
-    
+
     try {
       if (currentlyFollowing) {
-        // Unfollow
-        await supabase
-          .from('follows')
-          .delete()
-          .match({
-            follower_id: currentUserId,
-            following_id: followerId
-          });
+        await supabase.from('follows').delete().match({ follower_id: currentUserId, following_id: followerId });
       } else {
-        // Follow
-        await supabase
-          .from('follows')
-          .insert({
-            follower_id: currentUserId,
-            following_id: followerId
-          });
+        await supabase.from('follows').insert({ follower_id: currentUserId, following_id: followerId });
       }
     } catch (error) {
       console.error('Error toggling follow:', error);
-      // Revert on error
-      setFollowers(followers.map(follower => 
-        follower.id === followerId 
-          ? { ...follower, is_following: currentlyFollowing }
-          : follower
+      setFollowers(prev => prev.map(f =>
+        f.id === followerId ? { ...f, is_following: currentlyFollowing } : f
       ));
     }
-  }
-  
+  }, [currentUserId]);
+
+  const renderFollower = useCallback(({ item }: { item: Follower }) => (
+    <TouchableOpacity
+      activeOpacity={0.5}
+      style={styles.followerItem}
+      onPress={() => router.push(`/profile/${item.id}`)}
+    >
+      <CachedAvatar path={item.avatar_url} size={40} style={styles.profileImage} />
+      <View style={styles.userInfo}>
+        <Text style={styles.displayName}>{item.username}</Text>
+        {item.name && <Text style={styles.name}>{item.name}</Text>}
+      </View>
+      {item.id !== currentUserId && (
+        <TouchableOpacity
+          activeOpacity={0.5}
+          style={[styles.followButton, item.is_following && styles.followingButton]}
+          onPress={() => toggleFollow(item.id, item.is_following)}
+        >
+          <Text style={[styles.followButtonText, item.is_following && styles.followingButtonText]}>
+            {item.is_following ? 'Following' : (followingBackUsers.has(item.id) ? 'Follow Back' : 'Follow')}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  ), [currentUserId, followingBackUsers, toggleFollow]);
+
   if (loading && followers.length === 0) {
     return (
       <View style={styles.container}>
@@ -173,12 +180,17 @@ export default function FollowersScreen() {
       </View>
     );
   }
-  
+
   return (
     <View style={styles.container}>
-      <FlatList
+      <FlashList
         data={filteredFollowers}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={68}
+        renderItem={renderFollower}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footer} color={colors.brand} /> : null}
         ListHeaderComponent={
           <View style={styles.searchContainer}>
             <IonIcon name="search" size={20} color={colors.secondaryText} />
@@ -192,53 +204,12 @@ export default function FollowersScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                style={styles.clearButton}
-                onPress={() => setSearchQuery('')}
-              >
+              <TouchableOpacity activeOpacity={0.5} style={styles.clearButton} onPress={() => setSearchQuery('')}>
                 <IonIcon name="close-circle" size={20} color={colors.secondaryText} />
               </TouchableOpacity>
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-                activeOpacity={0.5} 
-            style={styles.followerItem}
-            onPress={() => router.push(`/profile/${item.id}`)}
-          >
-              <CachedAvatar
-                path={item.avatar_url}
-                size={40}
-                style={styles.profileImage}
-              />
-            <View style={styles.userInfo}>
-              <Text style={styles.displayName}>{item.username}</Text>
-              {item.name && <Text style={styles.name}>{item.name}</Text>}
-            </View>
-            
-            {/* Don't show follow button for current user */}
-            {item.id !== currentUserId && (
-              <TouchableOpacity
-                activeOpacity={0.5} 
-                style={[
-                  styles.followButton,
-                  item.is_following && styles.followingButton
-                ]}
-                onPress={() => toggleFollow(item.id, item.is_following)}
-              >
-                <Text style={[
-                  styles.followButtonText,
-                  item.is_following && styles.followingButtonText
-                ]}>
-                  {item.is_following ? 'Following' : 
-                   (followingBackUsers.has(item.id) ? 'Follow Back' : 'Follow')}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
             {searchQuery.trim() ? `No followers found for "${searchQuery}"` : 'No followers yet'}
@@ -290,11 +261,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconInitial: {
-    fontSize: 18,
-    color: colors.primaryText,
-    fontWeight: 'bold',
-  },
   userInfo: {
     flex: 1,
   },
@@ -332,5 +298,8 @@ const styles = StyleSheet.create({
     marginTop: 40,
     color: colors.secondaryText,
     fontSize: 16,
-  }
+  },
+  footer: {
+    padding: 16,
+  },
 });

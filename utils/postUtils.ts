@@ -536,9 +536,10 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
       replies: []
     }));
     
-    // Fetch replies for each comment
-    for (const comment of formattedComments) {
-      const { data: replies, error: repliesError } = await supabase
+    // Batch fetch all replies in a single query
+    const commentIds = formattedComments.map(c => c.id);
+    if (commentIds.length > 0) {
+      const { data: allReplies, error: repliesError } = await supabase
         .from('post_comments')
         .select(`
           id,
@@ -551,27 +552,36 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
           likes_count,
           profiles:user_id(id, username, name, avatar_url)
         `)
-        .eq('parent_id', comment.id)
+        .in('parent_id', commentIds)
         .order('created_at', { ascending: true });
-      
+
       if (repliesError) throw repliesError;
-      
-      comment.replies = replies.map(reply => ({
-        id: reply.id,
-        post_id: reply.post_id,
-        user_id: reply.user_id,
-        text: reply.text,
-        parent_id: reply.parent_id,
-        created_at: reply.created_at,
-        updated_at: reply.updated_at,
-        likes_count: reply.likes_count,
-        user: {
-          id: reply.profiles.id,
-          username: reply.profiles.username,
-          name: reply.profiles.name,
-          avatar_url: reply.profiles.avatar_url
-        }
-      }));
+
+      const repliesByParent = new Map<string, any[]>();
+      for (const reply of allReplies ?? []) {
+        const arr = repliesByParent.get(reply.parent_id) ?? [];
+        arr.push({
+          id: reply.id,
+          post_id: reply.post_id,
+          user_id: reply.user_id,
+          text: reply.text,
+          parent_id: reply.parent_id,
+          created_at: reply.created_at,
+          updated_at: reply.updated_at,
+          likes_count: reply.likes_count,
+          user: {
+            id: reply.profiles.id,
+            username: reply.profiles.username,
+            name: reply.profiles.name,
+            avatar_url: reply.profiles.avatar_url
+          }
+        });
+        repliesByParent.set(reply.parent_id, arr);
+      }
+
+      for (const comment of formattedComments) {
+        comment.replies = repliesByParent.get(comment.id) ?? [];
+      }
     }
     
     // Check if current user has liked any of these comments
