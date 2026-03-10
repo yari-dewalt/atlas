@@ -378,16 +378,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             // For updates, we can just update the existing notification
             const updatedNotification = payload.new as Notification;
             set(state => {
-              const updatedNotifications = state.notifications.map(n =>
-                n.id === updatedNotification.id ? { ...n, ...updatedNotification } : n
-              );
-              
-              // Recalculate unread count based on updated notifications
-              const newUnreadCount = updatedNotifications.filter(n => !n.read).length;
-              
+              const prev = state.notifications.find(n => n.id === updatedNotification.id);
+              const readChanged = prev?.read !== updatedNotification.read;
+              const unreadDelta = readChanged ? (updatedNotification.read ? -1 : 1) : 0;
               return {
-                notifications: updatedNotifications,
-                unreadCount: newUnreadCount
+                notifications: state.notifications.map(n =>
+                  n.id === updatedNotification.id ? { ...n, ...updatedNotification } : n
+                ),
+                unreadCount: Math.max(0, state.unreadCount + unreadDelta),
               };
             });
           } else if (payload.eventType === 'DELETE') {
@@ -414,7 +412,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   getUnreadCount: () => {
-    return get().notifications.filter(n => !n.read).length;
+    return get().unreadCount;
   },
 
   getNotificationsByType: (type: NotificationType) => {

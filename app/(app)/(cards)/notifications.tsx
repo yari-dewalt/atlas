@@ -1,17 +1,17 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  StyleSheet, 
-  Pressable, 
-  ActivityIndicator, 
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  Animated,
   Image,
-  Animated
 } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -32,6 +32,86 @@ interface NotificationItem extends Notification {
   formattedMessage?: string;
 }
 
+// Pure helpers — defined outside component to avoid recreation on every render
+
+const formatRelativeTime = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'just now';
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+
+  return date.toLocaleDateString();
+};
+
+const getTimePeriod = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+  if (diffInHours < 24) return 'Today';
+  if (diffInHours < 24 * 7) return 'Last 7 days';
+  if (diffInHours < 24 * 30) return 'Last 30 days';
+  return 'Older';
+};
+
+const getNotificationIcon = (type: NotificationType) => {
+  switch (type) {
+    case 'follow':
+      return 'person-add-outline';
+    case 'post_like':
+    case 'routine_like':
+    case 'comment_like':
+      return 'heart-outline';
+    case 'post_comment':
+    case 'comment_reply':
+      return 'chatbubble-outline';
+    case 'routine_save':
+      return 'bookmark-outline';
+    default:
+      return 'notifications-outline';
+  }
+};
+
+const formatNotificationMessage = (notification: any) => {
+  if (!notification.isGrouped) {
+    return notification.message;
+  }
+
+  const firstUser = notification.actor?.username || 'Someone';
+  const otherCount = notification.otherCount;
+
+  switch (notification.type) {
+    case 'follow':
+      return otherCount === 1
+        ? `${firstUser} and 1 other started following you`
+        : `${firstUser} and ${otherCount} others started following you`;
+    case 'post_like':
+      return otherCount === 1
+        ? `${firstUser} and 1 other liked your post`
+        : `${firstUser} and ${otherCount} others liked your post`;
+    case 'routine_like':
+      return otherCount === 1
+        ? `${firstUser} and 1 other liked your routine`
+        : `${firstUser} and ${otherCount} others liked your routine`;
+    case 'routine_save':
+      return otherCount === 1
+        ? `${firstUser} and 1 other saved your routine`
+        : `${firstUser} and ${otherCount} others saved your routine`;
+    default:
+      return notification.message;
+  }
+};
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { session } = useAuthStore();
@@ -51,10 +131,10 @@ export default function NotificationsScreen() {
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [lastDeletedNotification, setLastDeletedNotification] = useState(null);
   const undoToastAnim = useRef(new Animated.Value(0)).current;
+  const pendingDeletions = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const scrollViewRef = useRef(null);
   const [followingUsers, setFollowingUsers] = useState(new Set());
   const [followingBackUsers, setFollowingBackUsers] = useState(new Set()); // Users who are following us
-  const [loadingImages, setLoadingImages] = useState(new Set());
   
   // Fetch notifications and following relationships on mount
   useEffect(() => {
@@ -124,63 +204,20 @@ export default function NotificationsScreen() {
     setRefreshing(false);
   }, []);
   
-  // Format timestamp to relative time
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffInSeconds < 60) {
-      return 'just now';
-    }
-    
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}m ago`;
-    }
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) {
-      return `${diffInHours}h ago`;
-    }
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) {
-      return `${diffInDays}d ago`;
-    }
-    
-    // For older notifications, show the date
-    return date.toLocaleDateString();
-  };
-
-  // Get time period for notification grouping
-  const getTimePeriod = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 24) {
-      return 'Today';
-    } else if (diffInHours < 24 * 7) {
-      return 'Last 7 days';
-    } else if (diffInHours < 24 * 30) {
-      return 'Last 30 days';
-    } else {
-      return 'Older';
-    }
-  };
-
   // Group notifications by time period (excluding deleted ones)
-  const groupedNotifications = notifications
-    .filter(notification => !deletedNotifications.has(notification.id))
-    .reduce((groups, notification) => {
-      const period = getTimePeriod(notification.created_at);
-      if (!groups[period]) {
-        groups[period] = [];
-      }
-      groups[period].push(notification);
-      return groups;
-    }, {} as Record<string, Notification[]>);
+  const groupedNotifications = useMemo(() =>
+    notifications
+      .filter(notification => !deletedNotifications.has(notification.id))
+      .reduce((groups, notification) => {
+        const period = getTimePeriod(notification.created_at);
+        if (!groups[period]) {
+          groups[period] = [];
+        }
+        groups[period].push(notification);
+        return groups;
+      }, {} as Record<string, Notification[]>),
+    [notifications, deletedNotifications]
+  );
 
   // Group similar notifications within each time period
   const groupSimilarNotifications = (notifications: Notification[]) => {
@@ -244,74 +281,35 @@ export default function NotificationsScreen() {
     });
     
     // Sort by creation time (most recent first)
-    return result.sort((a, b) => {
-      const aTime = a.isGrouped ? a.created_at : new Date(a.created_at).getTime();
-      const bTime = b.isGrouped ? b.created_at : new Date(b.created_at).getTime();
-      return bTime - aTime;
-    });
+    return result.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   };
 
   // Apply grouping to each time period
-  const processedGroupedNotifications = {};
-  Object.entries(groupedNotifications).forEach(([period, notifications]) => {
-    processedGroupedNotifications[period] = groupSimilarNotifications(notifications);
-  });
+  const processedGroupedNotifications = useMemo(() => {
+    const result = {} as Record<string, any[]>;
+    Object.entries(groupedNotifications).forEach(([period, notifs]) => {
+      result[period] = groupSimilarNotifications(notifs as Notification[]);
+    });
+    return result;
+  }, [groupedNotifications]);
 
   // Create flat list data with headers
-  const flatListData = [];
-  const periods = ['Today', 'Last 7 days', 'Last 30 days', 'Older'];
-  
-  periods.forEach(period => {
-    if (processedGroupedNotifications[period] && processedGroupedNotifications[period].length > 0) {
-      // Add header
-      flatListData.push({ type: 'header', title: period, id: `header-${period}` });
-      // Add notifications
-      processedGroupedNotifications[period].forEach(notification => {
-        flatListData.push({ type: 'notification', ...notification });
-      });
-    }
-  });
+  const flatListData = useMemo(() => {
+    const data: any[] = [];
+    const periods = ['Today', 'Last 7 days', 'Last 30 days', 'Older'];
+    periods.forEach(period => {
+      if (processedGroupedNotifications[period]?.length > 0) {
+        data.push({ type: 'header', title: period, id: `header-${period}` });
+        processedGroupedNotifications[period].forEach(notification => {
+          data.push({ type: 'notification', ...notification });
+        });
+      }
+    });
+    return data;
+  }, [processedGroupedNotifications]);
 
-  // Format notification message for grouped notifications
-  const formatNotificationMessage = (notification: any) => {
-    if (!notification.isGrouped) {
-      // Regular notification - use existing message
-      return notification.message;
-    }
-    
-    // Grouped notification - create "and others" message
-    const firstUser = notification.actor?.username || 'Someone';
-    const otherCount = notification.otherCount;
-    
-    switch (notification.type) {
-      case 'follow':
-        if (otherCount === 1) {
-          return `${firstUser} and 1 other started following you`;
-        } else {
-          return `${firstUser} and ${otherCount} others started following you`;
-        }
-      case 'post_like':
-        if (otherCount === 1) {
-          return `${firstUser} and 1 other liked your post`;
-        } else {
-          return `${firstUser} and ${otherCount} others liked your post`;
-        }
-      case 'routine_like':
-        if (otherCount === 1) {
-          return `${firstUser} and 1 other liked your routine`;
-        } else {
-          return `${firstUser} and ${otherCount} others liked your routine`;
-        }
-      case 'routine_save':
-        if (otherCount === 1) {
-          return `${firstUser} and 1 other saved your routine`;
-        } else {
-          return `${firstUser} and ${otherCount} others saved your routine`;
-        }
-      default:
-        return notification.message;
-    }
-  };
   const handlePress = (notification: Notification, groupedNotifications?: Notification[]) => {
     // Mark all notifications in the group as read
     if (groupedNotifications && groupedNotifications.length > 0) {
@@ -410,7 +408,7 @@ export default function NotificationsScreen() {
   };
 
   // Get right side content based on notification type
-  const getRightContent = (notification: Notification) => {
+  const getRightContent = useCallback((notification: Notification) => {
     switch (notification.type) {
       case 'follow':
         const isOwnProfile = session?.user?.id === notification.actor_id;
@@ -451,51 +449,24 @@ export default function NotificationsScreen() {
       case 'post_comment':
       case 'comment_like':
       case 'comment_reply':
-        // Show post media thumbnail if available
-        const getMediaUri = (storagePath: string) => {
-          // Process URL if it's not already a full URL
-          if (!storagePath.startsWith('http')) {
-            try {
-              const { data: urlData } = supabase.storage
-                .from('user-content')
-                .getPublicUrl(storagePath);
-              return urlData?.publicUrl || storagePath;
-            } catch (error) {
-              console.error('Error processing media URL:', error);
-              return storagePath;
-            }
-          }
-          return storagePath;
-        };
+        const firstMedia = notification.post?.media?.slice().sort((a, b) => a.order_index - b.order_index)[0];
+        const thumbnailUri = firstMedia
+          ? (() => {
+              const sp = firstMedia.storage_path;
+              if (sp.startsWith('http')) return sp;
+              const { data } = supabase.storage.from('user-content').getPublicUrl(sp);
+              return data.publicUrl;
+            })()
+          : null;
 
         return (
           <View style={styles.mediaThumbnail}>
-            {notification.post?.media && notification.post.media.length > 0 ? (
+            {thumbnailUri ? (
               <View style={styles.thumbnailContainer}>
-                {loadingImages.has(notification.post.media[0].id) && (
-                  <View style={styles.thumbnailLoading} />
-                )}
-                <Image 
-                  source={{ uri: getMediaUri(notification.post.media.sort((a, b) => a.order_index - b.order_index)[0].storage_path) }}
+                <Image
+                  source={{ uri: thumbnailUri }}
                   style={styles.thumbnailImage}
                   resizeMode="cover"
-                  onLoadStart={() => {
-                    setLoadingImages(prev => new Set(prev).add(notification.post?.media?.[0]?.id));
-                  }}
-                  onLoadEnd={() => {
-                    setLoadingImages(prev => {
-                      const newSet = new Set(prev);
-                      newSet.delete(notification.post?.media?.[0]?.id);
-                      return newSet;
-                    });
-                  }}
-                  onError={() => {
-                    setLoadingImages(prev => {
-                      const newSet = new Set(prev);
-                      newSet.delete(notification.post?.media?.[0]?.id);
-                      return newSet;
-                    });
-                  }}
                 />
               </View>
             ) : (
@@ -515,41 +486,18 @@ export default function NotificationsScreen() {
       default:
         return null;
     }
-  };
+  }, [session, followingUsers, followingBackUsers]);
 
-  // Get notification icon based on type  
-  const getNotificationIcon = (type: NotificationType) => {
-    switch (type) {
-      case 'follow':
-        return 'person-add-outline';
-      case 'post_like':
-      case 'routine_like':
-      case 'comment_like':
-        return 'heart-outline';
-      case 'post_comment':
-      case 'comment_reply':
-        return 'chatbubble-outline';
-      case 'routine_save':
-        return 'bookmark-outline';
-      default:
-        return 'notifications-outline';
-    }
-  };
-  
   // Handle delete notification with undo functionality
-  const handleDelete = (notificationId: string) => {
-    // Find the notification to store for potential undo
+  const handleDelete = useCallback((notificationId: string) => {
     const notification = notifications.find(n => n.id === notificationId);
     if (!notification) return;
 
     // Start fade out animation
     const animationKey = `notification-${notificationId}`;
     const fadeAnim = new Animated.Value(1);
-    
-    setDeletionAnimations(prev => ({
-      ...prev,
-      [animationKey]: fadeAnim
-    }));
+
+    setDeletionAnimations(prev => ({ ...prev, [animationKey]: fadeAnim }));
 
     // Animate fade out
     Animated.timing(fadeAnim, {
@@ -557,73 +505,58 @@ export default function NotificationsScreen() {
       duration: 300,
       useNativeDriver: false,
     }).start(() => {
-      // Add to deleted notifications set
       setDeletedNotifications(prev => new Set(prev).add(notificationId));
-      
-      // Store for undo functionality
       setLastDeletedNotification(notification);
-      
-      // Show undo toast
       setShowUndoToast(true);
       Animated.timing(undoToastAnim, {
         toValue: 1,
         duration: 300,
         useNativeDriver: true,
       }).start();
-      
-      // Auto-hide toast after 4 seconds and permanently delete
+
+      // After 4 seconds, permanently delete unconditionally (undo cancels the timeout)
       const timeoutId = setTimeout(() => {
         hideUndoToast();
-        setTimeout(() => {
-          // Actually delete from database only if not undone
-          if (deletedNotifications.has(notificationId)) {
-            deleteNotification(notificationId);
-          }
-          
-          // Clean up animations
-          setDeletionAnimations(prev => {
-            const newAnims = { ...prev };
-            delete newAnims[animationKey];
-            return newAnims;
-          });
-        }, 300);
+        deleteNotification(notificationId);
+        delete pendingDeletions.current[notificationId];
+        delete swipeableRefs.current[animationKey];
+        setDeletionAnimations(prev => {
+          const newAnims = { ...prev };
+          delete newAnims[animationKey];
+          return newAnims;
+        });
       }, 4000);
-      
-      // Store timeout ID so we can cancel it on undo
-      setLastDeletedNotification({
-        ...notification,
-        _timeoutId: timeoutId
-      });
+
+      pendingDeletions.current[notificationId] = timeoutId;
     });
-  };
+  }, [notifications, deleteNotification, undoToastAnim]);
 
   // Handle undo deletion
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (lastDeletedNotification) {
-      // Clear the timeout to prevent permanent deletion
-      if (lastDeletedNotification._timeoutId) {
-        clearTimeout(lastDeletedNotification._timeoutId);
+      const tid = pendingDeletions.current[lastDeletedNotification.id];
+      if (tid) {
+        clearTimeout(tid);
+        delete pendingDeletions.current[lastDeletedNotification.id];
       }
-      
-      // Remove from deleted set (this will make it appear again)
+
       setDeletedNotifications(prev => {
         const newSet = new Set(prev);
         newSet.delete(lastDeletedNotification.id);
         return newSet;
       });
-      
-      // Clean up animation
+
       const animationKey = `notification-${lastDeletedNotification.id}`;
       setDeletionAnimations(prev => {
         const newAnims = { ...prev };
         delete newAnims[animationKey];
         return newAnims;
       });
-      
+
       setLastDeletedNotification(null);
     }
     hideUndoToast();
-  };
+  }, [lastDeletedNotification]);
 
   // Hide undo toast
   const hideUndoToast = () => {
@@ -637,7 +570,7 @@ export default function NotificationsScreen() {
   };
 
   // Render notification item
-  const renderNotification = ({ item }: { item: any }) => {
+  const renderNotification = useCallback(({ item }: { item: any }) => {
     // Render header
     if (item.type === 'header') {
       return (
@@ -731,7 +664,7 @@ export default function NotificationsScreen() {
                           style={[styles.avatar, styles.secondaryAvatar]}
                         />
                       )}
-                      {item.otherCount > 1 && (
+                      {item.otherCount >= 1 && (
                         <View style={styles.avatarCounter}>
                           <Text style={styles.avatarCounterText}>
                             +{item.otherCount}
@@ -794,8 +727,8 @@ export default function NotificationsScreen() {
         </SwipeRow>
       </Animated.View>
     );
-  };
-  
+  }, [deletionAnimations, swipeableRefs, handleDelete, handleProfilePress, closeAllSwipeables, handlePress, getRightContent]);
+
   return (
     <View style={styles.container}>
       <Stack.Screen 
@@ -812,6 +745,7 @@ export default function NotificationsScreen() {
         renderItem={renderNotification}
         keyExtractor={item => item.type === 'header' ? item.id : item.id.toString()}
         contentContainerStyle={styles.listContent}
+        scrollEventThrottle={100}
         onScrollBeginDrag={() => {
           // Close all swipeables when user starts scrolling
           closeAllSwipeables();
@@ -918,11 +852,13 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
     marginRight: 16,
+    overflow: 'visible',
   },
   stackedAvatars: {
     position: 'relative',
     width: 44,
     height: 44,
+    overflow: 'visible',
   },
   primaryAvatar: {
     position: 'absolute',
@@ -951,6 +887,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderWidth: 2,
     borderColor: colors.background,
+    zIndex: 3,
   },
   avatarCounterText: {
     color: colors.primaryText,
@@ -1016,16 +953,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 40,
     height: 40,
-  },
-  thumbnailLoading: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.secondaryAccent,
-    borderRadius: 8,
-    zIndex: 1,
   },
   thumbnailImage: {
     width: 40,

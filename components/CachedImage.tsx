@@ -2,7 +2,7 @@ import React, { useState, useEffect, ReactNode } from 'react';
 import { Image, View, StyleSheet, ImageStyle, ViewStyle, ActivityIndicator } from 'react-native';
 import { colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 
 interface CachedImageProps {
