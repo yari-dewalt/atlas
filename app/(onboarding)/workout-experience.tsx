@@ -84,30 +84,30 @@ export default function WorkoutExperience() {
       {/* Progress Bar */}
       <View style={styles.progressBar}>
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Username</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Username</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Personal Info</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Personal Info</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Weight Unit</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Weight Unit</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Experience</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Experience</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Source</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Source</Text>
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>What's your workout experience?</Text>
@@ -216,6 +216,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
+    paddingBottom: 24,
   },
   header: {
     alignItems: 'center',

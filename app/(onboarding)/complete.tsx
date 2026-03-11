@@ -6,6 +6,7 @@ import {
   Pressable,
   SafeAreaView,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,21 +42,21 @@ export default function Complete() {
       {/* Progress Bar */}
       <View style={styles.progressBar}>
         <TouchableOpacity onPress={() => router.dismissTo('/(onboarding)/username')} style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Username</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Username</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </TouchableOpacity>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <TouchableOpacity onPress={() => router.dismissTo('/(onboarding)/personal-info')} style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Personal Info</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Personal Info</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </TouchableOpacity>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Get Started</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Get Started</Text>
         </View>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Success Animation Container */}
         <View style={styles.successContainer}>
           <Text style={styles.title}>You're All Set!</Text>
@@ -67,7 +68,7 @@ export default function Complete() {
         {/* Next Steps */}
         <View style={styles.nextStepsContainer}>
           <Text style={styles.nextStepsTitle}>What's Next?</Text>
-          
+
           <View style={styles.stepsList}>
             <View style={styles.step}>
               <View style={styles.stepIcon}>
@@ -100,7 +101,7 @@ export default function Complete() {
             </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Bottom Section */}
       <View style={styles.bottomSection}>
@@ -146,14 +147,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     opacity: 0.5,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: 24,
     paddingTop: 40,
+    paddingBottom: 24,
   },
   successContainer: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 32,
   },
   title: {
     fontSize: 28,
@@ -170,7 +174,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   nextStepsContainer: {
-    marginBottom: 60,
+    marginBottom: 24,
   },
   nextStepsTitle: {
     fontSize: 20,

@@ -11,6 +11,9 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   Keyboard,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -151,94 +154,105 @@ export default function Username() {
   const isValidUsername = username.length >= 3 && isAvailable === true && !checking;
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <SafeAreaView style={styles.container}>
-        {/* Progress Bar */}
-        <View style={styles.progressBar}>
-          <View style={styles.progressSection}>
-            <Text style={[styles.progressLabel, styles.activeLabel]}>Username</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
-          <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>Personal Info</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
-          <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>Get Started</Text>
-          </View>
+    <SafeAreaView style={styles.container}>
+      {/* Progress Bar */}
+      <View style={styles.progressBar}>
+        <View style={styles.progressSection}>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Username</Text>
         </View>
-
-        <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Create your username</Text>
-          <Text style={styles.subtitle}>
-            This is how other users will find and identify you
-          </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
+        <View style={styles.progressSection}>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Personal Info</Text>
         </View>
-
-        {/* Username Input */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Username</Text>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.atSymbol}>@</Text>
-            <TextInput
-              style={styles.textInput}
-              value={username}
-              onChangeText={handleUsernameChange}
-              placeholder="your_username"
-              placeholderTextColor={colors.secondaryText}
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={30}
-            />
-            {checking && username.length >= 3 && (
-              <ActivityIndicator size="small" color={colors.brand} style={styles.statusIcon} />
-            )}
-            {!checking && isAvailable === true && (
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.statusIcon} />
-            )}
-            {!checking && isAvailable === false && username.length >= 3 && (
-              <Ionicons name="close-circle" size={20} color="#F44336" style={styles.statusIcon} />
-            )}
-          </View>
-          
-          {/* Status Messages */}
-          {username.length > 0 && username.length < 3 && (
-            <Text style={styles.errorText}>Username must be at least 3 characters</Text>
-          )}
-          {isAvailable === false && (
-            <Text style={styles.errorText}>Username is not available</Text>
-          )}
-          {isAvailable === true && (
-            <Text style={styles.successText}>Username is available!</Text>
-          )}
-          
-          <Text style={styles.helperText}>
-            Use only letters, numbers, and underscores
-          </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
+        <View style={styles.progressSection}>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Get Started</Text>
         </View>
       </View>
 
-      {/* Bottom Section */}
-      <View style={styles.bottomSection}>
-        <TouchableOpacity
-          activeOpacity={0.5} 
-          style={[styles.continueButton, !isValidUsername && styles.continueButtonDisabled]} 
-          onPress={handleContinue}
-          disabled={!isValidUsername || loading || checking}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.primaryText} />
-          ) : (
-            <Text style={[styles.continueButtonText, !isValidUsername && styles.continueButtonTextDisabled]}>
-              Continue
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Create your username</Text>
+              <Text style={styles.subtitle}>
+                This is how other users will find and identify you
+              </Text>
+            </View>
+
+            {/* Username Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Username</Text>
+              <View style={styles.inputWrapper}>
+                <Text style={styles.atSymbol}>@</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={username}
+                  onChangeText={handleUsernameChange}
+                  placeholder="your_username"
+                  placeholderTextColor={colors.secondaryText}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={30}
+                />
+                {checking && username.length >= 3 && (
+                  <ActivityIndicator size="small" color={colors.brand} style={styles.statusIcon} />
+                )}
+                {!checking && isAvailable === true && (
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.statusIcon} />
+                )}
+                {!checking && isAvailable === false && username.length >= 3 && (
+                  <Ionicons name="close-circle" size={20} color="#F44336" style={styles.statusIcon} />
+                )}
+              </View>
+
+              {/* Status Messages */}
+              {username.length > 0 && username.length < 3 && (
+                <Text style={styles.errorText}>Username must be at least 3 characters</Text>
+              )}
+              {isAvailable === false && (
+                <Text style={styles.errorText}>Username is not available</Text>
+              )}
+              {isAvailable === true && (
+                <Text style={styles.successText}>Username is available!</Text>
+              )}
+
+              <Text style={styles.helperText}>
+                Use only letters, numbers, and underscores
+              </Text>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+
+        {/* Bottom Section */}
+        <View style={styles.bottomSection}>
+          <TouchableOpacity
+            activeOpacity={0.5}
+            style={[styles.continueButton, !isValidUsername && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={!isValidUsername || loading || checking}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.primaryText} />
+            ) : (
+              <Text style={[styles.continueButtonText, !isValidUsername && styles.continueButtonTextDisabled]}>
+                Continue
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-    </TouchableWithoutFeedback>
   );
 }
 
@@ -246,6 +260,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
   },
   progressBar: {
     flexDirection: 'row',
@@ -272,13 +292,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 40,
+    paddingBottom: 24,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 32,
   },
   title: {
     fontSize: 24,
@@ -294,7 +315,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   inputContainer: {
-    marginBottom: 60,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,

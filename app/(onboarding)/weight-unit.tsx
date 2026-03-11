@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,29 +79,29 @@ export default function WeightUnit() {
       {/* Progress Bar */}
       <View style={styles.progressBar}>
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Username</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Username</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Personal Info</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Personal Info</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Weight Unit</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Weight Unit</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Experience</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Experience</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Source</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Source</Text>
         </View>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconContainer}>
@@ -130,10 +131,10 @@ export default function WeightUnit() {
                     styles.optionIcon,
                     selectedUnit === option.value && styles.optionIconSelected,
                   ]}>
-                    <Ionicons 
-                      name={option.icon} 
-                      size={24} 
-                      color={selectedUnit === option.value ? colors.primaryText : colors.brand} 
+                    <Ionicons
+                      name={option.icon}
+                      size={24}
+                      color={selectedUnit === option.value ? colors.primaryText : colors.brand}
                     />
                   </View>
                   <View style={styles.optionText}>
@@ -168,9 +169,7 @@ export default function WeightUnit() {
             You can change this preference later in your profile settings
           </Text>
         </View>
-
-        {/* Progress Indicator */}
-      </View>
+      </ScrollView>
 
       {/* Bottom Section */}
       <View style={styles.bottomSection}>
@@ -201,10 +200,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: 24,
     paddingTop: 40,
+    paddingBottom: 24,
   },
   header: {
     alignItems: 'center',

@@ -164,21 +164,24 @@ export default function PersonalInfo() {
       {/* Progress Bar */}
       <View style={styles.progressBar}>
         <TouchableOpacity onPress={() => router.dismissTo('/(onboarding)/username')} style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Username</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Username</Text>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.checkmark} />
         </TouchableOpacity>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={[styles.progressLabel, styles.activeLabel]}>Personal Info</Text>
+          <Text style={[styles.progressLabel, styles.activeLabel]} maxFontSizeMultiplier={1.3}>Personal Info</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} style={styles.chevron} />
         <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>Get Started</Text>
+          <Text style={styles.progressLabel} maxFontSizeMultiplier={1.3}>Get Started</Text>
         </View>
       </View>
 
-      <View 
-        style={styles.scrollContent} 
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View>
@@ -281,7 +284,7 @@ export default function PersonalInfo() {
             </View>
           </View>
         </TouchableWithoutFeedback>
-      </View>
+      </ScrollView>
 
         {/* Bottom Section */}
         <View style={styles.bottomSection}>
@@ -387,10 +390,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     opacity: 0.5,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 40,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   header: {
     alignItems: 'center',
