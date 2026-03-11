@@ -1,81 +1,70 @@
-import PushNotificationService from './pushNotificationService';
 import { supabase } from '../lib/supabase';
 
-/**
- * Helper functions to send push notifications for different actions
- * These integrate with your existing notification creation helpers
- */
+interface PushPayload {
+  type: string;
+  recipientId: string;
+  actorId: string;
+  actorUsername: string;
+  actorAvatarUrl?: string;
+  postId?: string;
+  routineId?: string;
+  commentId?: string;
+  conversationId?: string;
+  isTestToSelf?: boolean;
+}
 
-// Feature flag to enable/disable push notifications
-const PUSH_NOTIFICATIONS_ENABLED = false;
+async function sendPushNotification(payload: PushPayload): Promise<void> {
+  try {
+    await supabase.functions.invoke('send-push-notification', { body: payload });
+  } catch (error) {
+    console.warn('[Push] Non-critical push error:', error);
+  }
+}
+
+async function getActorInfo(actorId: string): Promise<{ username: string; avatar_url?: string }> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('username, avatar_url')
+    .eq('id', actorId)
+    .single();
+  return { username: data?.username ?? 'someone', avatar_url: data?.avatar_url };
+}
 
 export const sendPostLikePushNotification = async (
   recipientId: string,
   actorId: string,
   postId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping post like notification');
-    return;
-  }
-  
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get post info
-    const { data: post } = await supabase
-      .from('posts')
-      .select('title, description')
-      .eq('id', postId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'post_like',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       postId,
-      postTitle: post?.title || post?.description?.substring(0, 50),
     });
   } catch (error) {
-    console.error('Error sending post like push notification:', error);
+    console.warn('[Push] sendPostLikePushNotification error:', error);
   }
 };
 
 export const sendFollowPushNotification = async (
   recipientId: string,
   actorId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping follow notification');
-    return;
-  }
-  
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'follow',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
     });
   } catch (error) {
-    console.error('Error sending follow push notification:', error);
+    console.warn('[Push] sendFollowPushNotification error:', error);
   }
 };
 
@@ -83,39 +72,19 @@ export const sendRoutineLikePushNotification = async (
   recipientId: string,
   actorId: string,
   routineId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping routine like notification');
-    return;
-  }
-  
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get routine info
-    const { data: routine } = await supabase
-      .from('routines')
-      .select('name')
-      .eq('id', routineId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'routine_like',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       routineId,
-      routineName: routine?.name,
     });
   } catch (error) {
-    console.error('Error sending routine like push notification:', error);
+    console.warn('[Push] sendRoutineLikePushNotification error:', error);
   }
 };
 
@@ -123,119 +92,63 @@ export const sendRoutineSavePushNotification = async (
   recipientId: string,
   actorId: string,
   routineId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping routine save notification');
-    return;
-  }
-  
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get routine info
-    const { data: routine } = await supabase
-      .from('routines')
-      .select('name')
-      .eq('id', routineId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'routine_save',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       routineId,
-      routineName: routine?.name,
     });
   } catch (error) {
-    console.error('Error sending routine save push notification:', error);
+    console.warn('[Push] sendRoutineSavePushNotification error:', error);
   }
 };
 
 export const sendCommentLikePushNotification = async (
   recipientId: string,
   actorId: string,
-  commentId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping comment like notification');
-    return;
-  }
-  
+  commentId: string,
+  postId: string
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get comment info to find the associated post
-    const { data: comment } = await supabase
-      .from('comments')
-      .select('post_id')
-      .eq('id', commentId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'comment_like',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       commentId,
-      postId: comment?.post_id, // Include postId for navigation
+      postId,
     });
   } catch (error) {
-    console.error('Error sending comment like push notification:', error);
+    console.warn('[Push] sendCommentLikePushNotification error:', error);
   }
 };
 
 export const sendCommentReplyPushNotification = async (
   recipientId: string,
   actorId: string,
-  commentId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping comment reply notification');
-    return;
-  }
-  
+  commentId: string,
+  postId: string
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get comment info to find the associated post
-    const { data: comment } = await supabase
-      .from('comments')
-      .select('post_id')
-      .eq('id', commentId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'comment_reply',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       commentId,
-      postId: comment?.post_id, // Include postId for navigation
+      postId,
     });
   } catch (error) {
-    console.error('Error sending comment reply push notification:', error);
+    console.warn('[Push] sendCommentReplyPushNotification error:', error);
   }
 };
 
@@ -244,39 +157,39 @@ export const sendPostCommentPushNotification = async (
   actorId: string,
   postId: string,
   commentId: string
-) => {
-  if (!PUSH_NOTIFICATIONS_ENABLED) {
-    console.log('Push notifications are disabled - skipping post comment notification');
-    return;
-  }
-  
+): Promise<void> => {
   try {
-    // Get actor info
-    const { data: actor } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', actorId)
-      .single();
-
-    // Get post info
-    const { data: post } = await supabase
-      .from('posts')
-      .select('title, description')
-      .eq('id', postId)
-      .single();
-
-    const pushService = PushNotificationService.getInstance();
-    await pushService.queuePushNotification({
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
       type: 'post_comment',
       recipientId,
       actorId,
-      actorUsername: actor?.username,
-      actorAvatarUrl: actor?.avatar_url,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
       postId,
       commentId,
-      postTitle: post?.title || post?.description?.substring(0, 50),
     });
   } catch (error) {
-    console.error('Error sending post comment push notification:', error);
+    console.warn('[Push] sendPostCommentPushNotification error:', error);
+  }
+};
+
+export const sendDirectMessagePushNotification = async (
+  recipientId: string,
+  actorId: string,
+  conversationId: string
+): Promise<void> => {
+  try {
+    const actor = await getActorInfo(actorId);
+    await sendPushNotification({
+      type: 'direct_message',
+      recipientId,
+      actorId,
+      actorUsername: actor.username,
+      actorAvatarUrl: actor.avatar_url,
+      conversationId,
+    });
+  } catch (error) {
+    console.warn('[Push] sendDirectMessagePushNotification error:', error);
   }
 };

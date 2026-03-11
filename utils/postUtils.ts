@@ -680,7 +680,7 @@ export async function addComment(
         
       if (parentComment && parentComment.user_id !== userId) {
         try {
-          await createCommentReplyNotification(parentComment.user_id, userId, data.id);
+          await createCommentReplyNotification(parentComment.user_id, userId, data.id, postId);
         } catch (notifError) {
           console.error('Error creating comment reply notification:', notifError);
         }
@@ -768,7 +768,7 @@ export async function likeComment(commentId: string, userId: string): Promise<{ 
       // Send notification if not liking own comment
       if (comment.user_id !== userId) {
         try {
-          await createCommentLikeNotification(comment.user_id, userId, commentId);
+          await createCommentLikeNotification(comment.user_id, userId, commentId, comment.post_id);
         } catch (notifError) {
           console.error('Error creating comment like notification:', notifError);
         }

@@ -281,7 +281,21 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         messages: [...messages, newMessage],
         sending: false
       });
-      
+
+      // Send push notifications to other participants (non-blocking)
+      try {
+        const { conversations } = get();
+        const conversation = conversations.find(c => c.id === currentConversation);
+        if (conversation?.participants?.length) {
+          const { sendDirectMessagePushNotification } = await import('../utils/pushNotificationHelpers');
+          for (const participant of conversation.participants) {
+            await sendDirectMessagePushNotification(participant.id, session.user.id, currentConversation);
+          }
+        }
+      } catch (err) {
+        console.warn('[Push] DM push failed (non-critical):', err);
+      }
+
       return true;
     } catch (error) {
       console.error('Error sending message:', error);

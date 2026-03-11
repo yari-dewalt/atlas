@@ -1,15 +1,15 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import PushNotificationService from '../utils/pushNotificationService';
 
-export type NotificationType = 
+export type NotificationType =
   | 'post_like'
   | 'follow'
   | 'routine_like'
   | 'routine_save'
   | 'comment_like'
   | 'comment_reply'
-  | 'post_comment';
+  | 'post_comment'
+  | 'direct_message';
 
 export interface Notification {
   id: string;
@@ -421,50 +421,23 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   initializePushNotifications: async () => {
     try {
-      const pushService = PushNotificationService.getInstance();
-      
-      // Set up notification listeners
-      pushService.setupNotificationListeners();
-      
-      // Register for push notifications
-      const token = await pushService.registerForPushNotifications();
-      
-      if (token) {
-        set({ 
-          pushToken: token, 
-          pushNotificationsEnabled: true,
-          error: null 
-        });
-      } else {
-        set({ 
-          pushNotificationsEnabled: false,
-          error: 'Failed to register for push notifications' 
-        });
-      }
+      const { registerForPushNotifications } = await import('../utils/pushNotificationService');
+      const token = await registerForPushNotifications();
+      set({ pushToken: token ?? null, pushNotificationsEnabled: !!token, error: null });
     } catch (error) {
       console.error('Error initializing push notifications:', error);
-      set({ 
-        pushNotificationsEnabled: false,
-        error: error.message || 'Failed to initialize push notifications' 
-      });
+      set({ pushNotificationsEnabled: false, error: error.message || 'Failed to initialize push notifications' });
     }
   },
 
   disablePushNotifications: async () => {
     try {
-      const pushService = PushNotificationService.getInstance();
-      await pushService.removePushToken();
-      
-      set({ 
-        pushToken: null, 
-        pushNotificationsEnabled: false,
-        error: null 
-      });
+      const { removePushToken } = await import('../utils/pushNotificationService');
+      await removePushToken();
+      set({ pushToken: null, pushNotificationsEnabled: false, error: null });
     } catch (error) {
       console.error('Error disabling push notifications:', error);
-      set({ 
-        error: error.message || 'Failed to disable push notifications' 
-      });
+      set({ error: error.message || 'Failed to disable push notifications' });
     }
   },
 }));
@@ -557,7 +530,8 @@ export const createRoutineSaveNotification = async (
 export const createCommentLikeNotification = async (
   recipientId: string,
   actorId: string,
-  commentId: string
+  commentId: string,
+  postId: string
 ) => {
   const store = useNotificationStore.getState();
   await store.createNotification({
@@ -568,15 +542,16 @@ export const createCommentLikeNotification = async (
     title: '',
     message: ''
   });
-  
+
   // Send push notification
-  await sendCommentLikePushNotification(recipientId, actorId, commentId);
+  await sendCommentLikePushNotification(recipientId, actorId, commentId, postId);
 };
 
 export const createCommentReplyNotification = async (
   recipientId: string,
   actorId: string,
-  commentId: string
+  commentId: string,
+  postId: string
 ) => {
   const store = useNotificationStore.getState();
   await store.createNotification({
@@ -587,9 +562,9 @@ export const createCommentReplyNotification = async (
     title: '',
     message: ''
   });
-  
+
   // Send push notification
-  await sendCommentReplyPushNotification(recipientId, actorId, commentId);
+  await sendCommentReplyPushNotification(recipientId, actorId, commentId, postId);
 };
 
 export const createPostCommentNotification = async (

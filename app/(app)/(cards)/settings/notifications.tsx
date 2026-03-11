@@ -6,7 +6,7 @@ import { colors } from '../../../../constants/colors';
 import { useAuthStore } from '../../../../stores/authStore';
 import { useNotificationStore } from '../../../../stores/notificationStore';
 import { supabase } from '../../../../lib/supabase';
-import testPushNotifications from '../../../../utils/pushNotificationTesting';
+import { pushNotificationTesting } from '../../../../utils/pushNotificationTesting';
 
 interface NotificationSettings {
   // Profile notifications
@@ -24,10 +24,11 @@ interface NotificationSettings {
 export default function NotificationSettingsScreen() {
   const router = useRouter();
   const { session, profile } = useAuthStore();
-  const { 
-    pushNotificationsEnabled, 
-    initializePushNotifications, 
-    disablePushNotifications 
+  const {
+    pushNotificationsEnabled,
+    pushToken,
+    initializePushNotifications,
+    disablePushNotifications,
   } = useNotificationStore();
   
   const [loading, setLoading] = useState(true);
@@ -131,67 +132,6 @@ export default function NotificationSettingsScreen() {
       );
     }
   };
-
-  // Test notification functions
-  const runNotificationTest = async (testType: string, testFunction: () => Promise<void>) => {
-    if (!session?.user?.id) {
-      Alert.alert('Error', 'You must be logged in to test notifications');
-      return;
-    }
-
-    if (!pushNotificationsEnabled) {
-      Alert.alert('Enable Push Notifications', 'Please enable push notifications first to test them');
-      return;
-    }
-
-    setTestingNotifications(true);
-    try {
-      await testFunction();
-      
-      Alert.alert(
-        'Test Sent!',
-        `${testType} notification has been queued. It will be processed in the background within 30 seconds. Check your device for the notification.`,
-        [
-          { text: 'Process Now', onPress: () => testPushNotifications.processQueue() },
-          { text: 'OK' }
-        ]
-      );
-    } catch (error) {
-      console.error(`Error testing ${testType}:`, error);
-      Alert.alert('Test Failed', `Failed to send ${testType} test notification`);
-    } finally {
-      setTestingNotifications(false);
-    }
-  };
-
-  const testPostLike = () => runNotificationTest(
-    'Post Like',
-    () => testPushNotifications.testPostLike(session!.user!.id, session!.user!.id, 'test-post-id')
-  );
-
-  const testFollow = () => runNotificationTest(
-    'Follow',
-    () => testPushNotifications.testFollow(session!.user!.id, session!.user!.id)
-  );
-
-  const testRoutineLike = () => runNotificationTest(
-    'Routine Like',
-    () => testPushNotifications.testRoutineLike(session!.user!.id, session!.user!.id, 'test-routine-id')
-  );
-
-  const testCommentLike = () => runNotificationTest(
-    'Comment Like',
-    () => testPushNotifications.testCommentLike(session!.user!.id, session!.user!.id, 'test-comment-id')
-  );
-
-  const testBatching = () => runNotificationTest(
-    'Batched Notifications',
-    () => testPushNotifications.testBatching(
-      session!.user!.id, 
-      [session!.user!.id, 'fake-user-1', 'fake-user-2'], 
-      'test-post-id'
-    )
-  );
 
   return (
     <>
@@ -351,83 +291,56 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {/* Test Notifications Section - Only show in development or if push notifications are enabled */}
-        {/* {(__DEV__ || pushNotificationsEnabled) && (
+        {__DEV__ && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Test Push Notifications</Text>
+            <Text style={styles.sectionTitle}>Dev Tools</Text>
             <Text style={styles.testDescription}>
-              Test different types of push notifications to see how they work on your device.
+              Push token: {pushToken ? `${pushToken.slice(0, 24)}…` : 'none'}
             </Text>
-            
-            <View style={styles.testButtonRow}>
-              <TouchableOpacity 
-                style={[styles.testButton, testingNotifications && styles.testButtonDisabled]} 
-                onPress={testPostLike}
-                disabled={testingNotifications || !pushNotificationsEnabled}
-              >
-                <Ionicons name="heart-outline" size={18} color={colors.primaryText} />
-                <Text style={styles.testButtonText}>Post Like</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.testButton, testingNotifications && styles.testButtonDisabled]} 
-                onPress={testFollow}
-                disabled={testingNotifications || !pushNotificationsEnabled}
-              >
-                <Ionicons name="person-add-outline" size={18} color={colors.primaryText} />
-                <Text style={styles.testButtonText}>Follow</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.testButtonRow}>
-              <TouchableOpacity 
-                style={[styles.testButton, testingNotifications && styles.testButtonDisabled]} 
-                onPress={testRoutineLike}
-                disabled={testingNotifications || !pushNotificationsEnabled}
-              >
-                <Ionicons name="fitness-outline" size={18} color={colors.primaryText} />
-                <Text style={styles.testButtonText}>Routine Like</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.testButton, testingNotifications && styles.testButtonDisabled]} 
-                onPress={testCommentLike}
-                disabled={testingNotifications || !pushNotificationsEnabled}
-              >
-                <Ionicons name="chatbubble-outline" size={18} color={colors.primaryText} />
-                <Text style={styles.testButtonText}>Comment Like</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <TouchableOpacity 
-              style={[styles.testButtonFull, testingNotifications && styles.testButtonDisabled]} 
-              onPress={testBatching}
-              disabled={testingNotifications || !pushNotificationsEnabled}
-            >
-              <Ionicons name="layers-outline" size={18} color={colors.primaryText} />
-              <Text style={styles.testButtonText}>Test Batching (3 likes)</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.processButton, testingNotifications && styles.testButtonDisabled]} 
-              onPress={() => {
+
+            <TouchableOpacity
+              style={[styles.testButtonFull, testingNotifications && styles.testButtonDisabled]}
+              onPress={async () => {
                 setTestingNotifications(true);
-                testPushNotifications.processQueue().finally(() => setTestingNotifications(false));
+                try {
+                  await pushNotificationTesting.scheduleLocalNotification('Atlas', 'Test notification');
+                } finally {
+                  setTestingNotifications(false);
+                }
               }}
               disabled={testingNotifications}
             >
-              <Ionicons name="refresh-outline" size={18} color={colors.brand} />
-              <Text style={styles.processButtonText}>Process Queue Now</Text>
+              <Ionicons name="notifications-outline" size={18} color={colors.primaryText} />
+              <Text style={styles.testButtonText}>Send local notification</Text>
             </TouchableOpacity>
-            
+
+            <TouchableOpacity
+              style={[styles.testButtonFull, testingNotifications && styles.testButtonDisabled]}
+              onPress={async () => {
+                setTestingNotifications(true);
+                try {
+                  await pushNotificationTesting.sendTestPushToSelf();
+                  Alert.alert('Sent', 'Test push notification sent to this device.');
+                } catch (err) {
+                  Alert.alert('Error', String(err));
+                } finally {
+                  setTestingNotifications(false);
+                }
+              }}
+              disabled={testingNotifications}
+            >
+              <Ionicons name="paper-plane-outline" size={18} color={colors.primaryText} />
+              <Text style={styles.testButtonText}>Send test push to self</Text>
+            </TouchableOpacity>
+
             {testingNotifications && (
               <View style={styles.testingIndicator}>
                 <ActivityIndicator size="small" color={colors.brand} />
-                <Text style={styles.testingText}>Sending test notification...</Text>
+                <Text style={styles.testingText}>Sending…</Text>
               </View>
             )}
           </View>
-        )} */}
+        )}
 
         {/* Footer note */}
         <View style={styles.footerContainer}>
@@ -443,12 +356,6 @@ export default function NotificationSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: colors.background,
   },
   section: {
@@ -513,42 +420,11 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     lineHeight: 18,
   },
-  testButtonRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  testButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brand,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 8,
-  },
   testButtonFull: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brand,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    gap: 8,
-  },
-  processButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryAccent,
-    borderWidth: 1,
-    borderColor: colors.brand,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -563,11 +439,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.primaryText,
-  },
-  processButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.brand,
   },
   testingIndicator: {
     flexDirection: 'row',
