@@ -207,6 +207,7 @@ export default function NewWorkout() {
   const setEditBottomSheetRef = useRef(null);
   const setEditModalClosingRef = useRef(false); // Track if modal is being intentionally closed
   const setEditCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce Android keyboard false-close
+  const isOpeningRpeRef = useRef(false); // Synchronous guard: prevents false-close during editSet→RPE transition
   const [setEditSheetSettled, setSetEditSheetSettled] = useState(false); // True once sheet has reached its snap point
   
   // Animation refs for pulse effect
@@ -290,7 +291,7 @@ export default function NewWorkout() {
       return;
     }
 
-    if (cameFromSetEdit || isConfirmingRpe) {
+    if (cameFromSetEdit || isConfirmingRpe || isOpeningRpeRef.current) {
       // In the middle of RPE flow — don't close
       return;
     }
@@ -345,10 +346,9 @@ export default function NewWorkout() {
   };
 
   const openRpeModal = (exerciseId, setId, currentRpe) => {
-    Keyboard.dismiss();
     setSelectedExerciseForRpe(exerciseId);
     setSelectedSetForRpe(setId);
-    
+
     // Set the RPE index based on current value (default to index 5 for RPE 6 if no current value)
     let targetIndex = 5; // Default to RPE 6
     if (currentRpe !== null && currentRpe !== undefined) {
@@ -356,20 +356,27 @@ export default function NewWorkout() {
       targetIndex = rpeIndex >= 0 ? rpeIndex : 5;
     }
     setCurrentRpeIndex(targetIndex);
-    
+
     // Track if we're coming from set edit mode
     setCameFromSetEdit(setEditModalVisible);
-    
-    // If we're in set edit mode, close it temporarily
+
+    // If we're in set edit mode, close it first then open RPE
     if (setEditModalVisible) {
+      isOpeningRpeRef.current = true; // Synchronous guard: prevents onChange(-1) from false-closing
+      Keyboard.dismiss();
       setEditBottomSheetRef.current?.close();
+      // Delay RPE expansion to let editSet close animation complete
+      setTimeout(() => {
+        isOpeningRpeRef.current = false;
+        setRpeModalVisible(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        rpeBottomSheetRef.current?.expand();
+      }, 250);
+    } else {
+      setRpeModalVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      rpeBottomSheetRef.current?.expand();
     }
-    
-    setRpeModalVisible(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    rpeBottomSheetRef.current?.expand();
-    
-    // RPE selector will handle positioning internally
   };
 
   const showExerciseOptions = (exercise) => {
@@ -1751,25 +1758,27 @@ const handleTimerCompletion = async () => {
         appearsOnIndex={0}
         enableTouchThrough={false} // Prevents touches from passing through
         onPress={() => {
-          // Dismiss keyboard when backdrop is pressed
-          Keyboard.dismiss();
-          
-          // Close the bottom sheet when backdrop is pressed
-          // You'll need to determine which sheet is open and close it
           if (restTimerModalVisible) {
             restTimerBottomSheetRef.current?.close();
+            Keyboard.dismiss();
           }
           if (supersetModalVisible) {
             supersetBottomSheetRef.current?.close();
+            Keyboard.dismiss();
           }
           if (reorderModalVisible) {
             reorderBottomSheetRef.current?.close();
+            Keyboard.dismiss();
           }
           if (rpeModalVisible) {
             rpeBottomSheetRef.current?.close();
+            Keyboard.dismiss();
           }
           if (setEditModalVisible) {
+            setEditModalClosingRef.current = true; // Mark as explicit close before keyboard dismiss
             setEditBottomSheetRef.current?.close();
+            // Dismiss keyboard slightly after starting close to avoid adjustResize conflict
+            setTimeout(() => Keyboard.dismiss(), 50);
           }
         }}
       />
@@ -2730,7 +2739,7 @@ const handleTimerCompletion = async () => {
           handleIndicatorStyle={styles.bottomSheetIndicator}
           backdropComponent={renderBackdrop}
           enableContentPanningGesture={false}
-          containerStyle={{ zIndex: 4 }}
+          containerStyle={{ zIndex: 5 }}
         >
           <BottomSheetView style={styles.rpeModalContent}>
             <Text style={styles.rpeModalTitle}>RPE</Text>
