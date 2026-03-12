@@ -5,7 +5,7 @@ export default {
     name: "Atlas",
     slug: "atlas",
     scheme: "atlas",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
