@@ -73,6 +73,25 @@ export default function SettingsScreen() {
         {isCurrentUser && (
           // Current user settings
           <>
+            {/* Atlas Pro banner */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.proBanner}
+              onPress={() => router.push('/settings/pro')}
+            >
+              <View style={styles.proBannerLeft}>
+                <Ionicons name="star" size={20} color={colors.background} />
+                <Text style={styles.proBannerTitle}>Atlas Pro</Text>
+              </View>
+              {authProfile?.subscription_tier === 'pro' ? (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeText}>Active</Text>
+                </View>
+              ) : (
+                <Text style={styles.proBannerUpgrade}>Upgrade →</Text>
+              )}
+            </TouchableOpacity>
+
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Account</Text>
               
@@ -265,6 +284,44 @@ const styles = StyleSheet.create({
   },
   normalText: {
     color: colors.primaryText,
+  },
+  proBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+  },
+  proBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  proBannerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.background,
+  },
+  proBannerUpgrade: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  proBadge: {
+    backgroundColor: colors.background,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  proBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.brand,
   },
   backButton: {
     marginLeft: 16,

@@ -12,6 +12,8 @@ type UserProfile = {
   date_of_birth?: string | null;
   onboarding_completed?: boolean | null;
   email_verified?: boolean | null;
+  subscription_tier?: 'free' | 'pro' | null;
+  subscription_expires_at?: string | null;
 };
 
 type AuthState = {
@@ -53,7 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, name, bio, avatar_url, weight_unit, date_of_birth, onboarding_completed, email_verified")
+        .select("id, username, name, bio, avatar_url, weight_unit, date_of_birth, onboarding_completed, email_verified, subscription_tier, subscription_expires_at")
         .eq("id", session.user.id)
         .single();
       
