@@ -408,15 +408,19 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
     );
   };
 
-  const handleScroll = (event) => {
+  const isMomentumScrolling = useRef(false);
+
+  const handleScrollEnd = (event) => {
     const contentOffset = event.nativeEvent.contentOffset.x;
     const index = Math.round(contentOffset / galleryWidth);
     setActiveIndex(index);
-    // Wait for scroll to settle before calling the callback
-    if (Platform.OS === 'ios') {
-      setTimeout(() => {
-        onActiveIndexChange?.(index);
-      }, 250);
+    onActiveIndexChange?.(index);
+    isMomentumScrolling.current = false;
+  };
+
+  const handleScrollEndDrag = (event) => {
+    if (!isMomentumScrolling.current) {
+      handleScrollEnd(event);
     }
   };
 
@@ -435,7 +439,10 @@ const MediaGallery: React.FC<MediaGalleryProps> = ({
           showsHorizontalScrollIndicator={false}
           pagingEnabled={true}
           contentContainerStyle={styles.listContent}
-          onScroll={handleScroll}
+          onMomentumScrollBegin={() => { isMomentumScrolling.current = true; }}
+          onMomentumScrollEnd={handleScrollEnd}
+          onScrollEndDrag={handleScrollEndDrag}
+          scrollEventThrottle={16}
           initialScrollIndex={0}
           initialNumToRender={1}
           maxToRenderPerBatch={2}
