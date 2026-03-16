@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator, Alert, TouchableOpacity, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../../constants/colors';
@@ -74,23 +74,29 @@ export default function SettingsScreen() {
           // Current user settings
           <>
             {/* Atlas Pro banner */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.proBanner}
-              onPress={() => router.push('/settings/pro')}
-            >
-              <View style={styles.proBannerLeft}>
-                <Ionicons name="star" size={20} color={colors.background} />
-                <Text style={styles.proBannerTitle}>Atlas Pro</Text>
+            <View style={styles.proBanner}>
+              <View style={styles.proBannerWordmark}>
+                <Image
+                  source={require('../../../../../assets/logo/word.png')}
+                  style={styles.proBannerWordImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.proBannerProText}>PRO</Text>
               </View>
               {authProfile?.subscription_tier === 'pro' ? (
                 <View style={styles.proBadge}>
                   <Text style={styles.proBadgeText}>Active</Text>
                 </View>
               ) : (
-                <Text style={styles.proBannerUpgrade}>Upgrade →</Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.upgradeButton}
+                  onPress={() => router.push('/(app)/(modals)/pro')}
+                >
+                  <Text style={styles.upgradeButtonText}>Upgrade</Text>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Account</Text>
@@ -292,28 +298,37 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 14,
-    backgroundColor: colors.brand,
     borderRadius: 12,
   },
-  proBannerLeft: {
+  proBannerWordmark: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
-  proBannerTitle: {
-    fontSize: 16,
+  proBannerWordImage: {
+    height: 60,
+    width: 100,
+  },
+  proBannerProText: {
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.background,
+    color: colors.brand,
+    marginLeft: 5,
   },
-  proBannerUpgrade: {
+  upgradeButton: {
+    backgroundColor: colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  upgradeButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.background,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   proBadge: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.brand,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -321,7 +336,7 @@ const styles = StyleSheet.create({
   proBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.brand,
+    color: colors.background,
   },
   backButton: {
     marginLeft: 16,

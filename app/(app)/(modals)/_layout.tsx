@@ -9,12 +9,20 @@ export default function ModalsLayout() {
         contentStyle: { backgroundColor: colors.background }
       }}
     >
-      <Stack.Screen 
-        name="newPost" 
-        options={{ 
+      <Stack.Screen
+        name="pro"
+        options={{
           presentation: 'fullScreenModal',
           animation: 'slide_from_bottom',
-        }} 
+        }}
+      />
+
+      <Stack.Screen
+        name="newPost"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
       />
 
       <Stack.Screen 

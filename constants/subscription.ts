@@ -48,22 +48,22 @@ export const PRO_FEATURES: {
   {
     icon: 'list-outline',
     title: 'Unlimited Routines',
-    description: 'Create as many routines as you need (free: max 4)',
+    description: 'Create as many routines as you need',
   },
   {
     icon: 'barbell-outline',
     title: 'Unlimited Custom Exercises',
-    description: 'Add any exercise to your library (free: max 7)',
+    description: 'Add any exercise to your library',
   },
   {
     icon: 'time-outline',
     title: 'Full Activity History',
-    description: 'Access your complete workout history (free: last 3 months)',
+    description: 'Access your complete workout history',
   },
   {
     icon: 'at-outline',
     title: 'Change Username Anytime',
-    description: 'Update your username whenever you want (free: every 90 days)',
+    description: 'Update your username whenever you want',
   },
 ];
 
