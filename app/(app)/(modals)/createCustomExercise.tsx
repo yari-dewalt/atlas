@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   TextInput,
+  Alert,
   ActivityIndicator,
   TouchableOpacity,
   Platform,
@@ -389,11 +390,14 @@ export default function CreateCustomExercise() {
       const stored = await AsyncStorage.getItem(CUSTOM_EXERCISES_KEY);
       const existing = stored ? JSON.parse(stored) : [];
       if (existing.length >= FREE_TIER_LIMITS.maxCustomExercises) {
-        const { showWarning } = useBannerStore.getState();
-        showWarning('Unlock unlimited custom exercises with Atlas Pro', 0, {
-          text: 'Upgrade',
-          onPress: () => router.push('/(app)/(modals)/pro'),
-        });
+        Alert.alert(
+          'Upgrade to Pro',
+          'Unlock unlimited custom exercises with Atlas Pro',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => router.push('/(app)/(modals)/pro') },
+          ]
+        );
         return;
       }
     }

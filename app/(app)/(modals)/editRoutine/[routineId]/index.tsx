@@ -710,11 +710,14 @@ export default function EditRoutine() {
             setLoading(false);
             progressUtils.cancelLoading();
             if (loadingInterval) clearInterval(loadingInterval);
-            const { showWarning } = useBannerStore.getState();
-            showWarning('Unlock unlimited routines with Atlas Pro', 0, {
-              text: 'Upgrade',
-              onPress: () => router.push('/(app)/(modals)/pro'),
-            });
+            Alert.alert(
+              'Upgrade to Pro',
+              'Unlock unlimited routines with Atlas Pro',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Upgrade', onPress: () => router.push('/(app)/(modals)/pro') },
+              ]
+            );
             return;
           }
         }
