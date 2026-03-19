@@ -157,6 +157,8 @@ export default function Auth() {
   
   // Handle scroll events to update the active index
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Only update during user-initiated scrolls; auto-rotation sets activeIndex directly
+    if (!userScrolling) return;
     const scrollPosition = event.nativeEvent.contentOffset.x;
     let index = Math.round(scrollPosition / width);
     
@@ -221,7 +223,6 @@ export default function Auth() {
             resizeMode="cover"
           />
         </View>
-        <Text style={styles.rotatedText}>{item.text}</Text>
       </View>
     );
   };
@@ -250,33 +251,39 @@ export default function Auth() {
           initialScrollIndex={1}
         />
         
+      </View>
+
+      <View style={styles.captionArea}>
+        <Text style={styles.captionText} allowFontScaling={false}>
+          {previewData[activeIndex].text}
+        </Text>
         <View style={styles.indexContainer}>
           {previewData.map((_, index) => (
-            <View 
+            <View
               key={index}
               style={[
                 styles.indexMarker,
                 activeIndex === index && styles.indexMarkerActive
-              ]} 
+              ]}
             />
           ))}
         </View>
       </View>
-      
+
       <View style={styles.bottomSection}>
         <TouchableOpacity
                 activeOpacity={0.5} 
           style={styles.joinButton}
           onPress={() => router.push("/(auth)/signup")}
         >
-          <Text style={styles.joinButtonText}>Join for free</Text>
+          <Text style={styles.joinButtonText} allowFontScaling={false}>Join for free</Text>
         </TouchableOpacity>
         <TouchableOpacity
                 activeOpacity={0.5} 
           style={styles.loginButton}
           onPress={() => router.push("/(auth)/login")}
         >
-          <Text style={styles.loginButtonText}>Log in</Text>
+          <Text style={styles.loginButtonText} allowFontScaling={false}>Log in</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -304,7 +311,7 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     position: 'absolute',
-    top: 60,
+    top: 80,
     alignSelf: 'center',
     height: 60,
     width: '60%',
@@ -313,7 +320,7 @@ const styles = StyleSheet.create({
   },
   previewSwiper: {
     flexGrow: 3,
-    height: '75%',
+    height: '68%',
     width: '100%',
     display: "flex",
     flexDirection: "column",
@@ -325,7 +332,7 @@ const styles = StyleSheet.create({
   },
   backgroundImage: {
     width: '100%',
-    height: '85%',
+    height: '90%',
     position: 'absolute',
     top: 0,
     left: 0,
@@ -335,17 +342,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: '100%',
-    height: '85%',
+    height: '68%',
     backgroundColor: 'rgba(0, 0, 0, 0.3)', // Dark overlay for better text readability
   },
   foregroundImageContainer: {
     borderWidth: 3,
     borderColor: colors.secondaryText,
     width: '55%',
-    height: '70%',
+    height: '72%',
     position: 'absolute',
     alignSelf: 'center',
-    top: '22%',
+    top: '28%',
     zIndex: 1,
     borderRadius: 16,
     overflow: 'hidden',
@@ -355,15 +362,19 @@ const styles = StyleSheet.create({
     height: '108%',
     top: '-6%',
   },
-  rotatedText: {
-    position: 'absolute',
-    top: '95%',
+  captionArea: {
+    width: '100%',
+    height: '10%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
+  },
+  captionText: {
     fontSize: 22,
     fontWeight: '500',
     color: colors.primaryText,
     textAlign: 'center',
-    zIndex: 1,
-    width: '100%',
   },
   bottomSection: {
     flexGrow: 1,
@@ -379,7 +390,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
     color: colors.primaryText,
     width: '92%',
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: 8,
     marginBottom: 16,
     display: 'flex',
@@ -395,7 +407,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     color: colors.primaryText,
     width: '92%',
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: 8,
     display: 'flex',
     justifyContent: 'center',
@@ -412,8 +425,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
-    marginTop: 20,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 0,
   },
   indexMarker: {
     borderRadius: 50, 
