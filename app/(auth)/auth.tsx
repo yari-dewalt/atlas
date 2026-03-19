@@ -62,9 +62,16 @@ AppState.addEventListener("change", (state) => {
 export default function Auth() {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
   const flatListRef = useRef<FlatList>(null);
   const autoScrollIntervalRef = useRef<number | null>(null);
+  const isAutoScrollingRef = useRef(false);
   const [userScrolling, setUserScrolling] = useState(false);
+
+  const updateActiveIndex = (index: number) => {
+    activeIndexRef.current = index;
+    setActiveIndex(index);
+  };
   
   // Create wrapped data for infinite scrolling
   const wrappedData = [
@@ -98,46 +105,37 @@ export default function Auth() {
   
   // Function to start auto-rotation
   const startAutoRotation = () => {
-    // Clear any existing interval
     if (autoScrollIntervalRef.current) {
       clearInterval(autoScrollIntervalRef.current);
     }
-    
-    // Set new interval - rotate every 3 seconds
+
     autoScrollIntervalRef.current = setInterval(() => {
-      // Only auto-rotate if user isn't currently scrolling
-      if (!userScrolling && flatListRef.current) {
-        // Calculate next index (accounting for wrapping)
-        const nextIndex = (activeIndex + 1) % previewData.length;
-        
-        // Handle wrap-around for auto-scrolling
-        if (nextIndex === 0 && activeIndex === previewData.length - 1) {
-          // If moving from last to first item, first move to the duplicated first item
+      if (flatListRef.current) {
+        const current = activeIndexRef.current;
+        const nextIndex = (current + 1) % previewData.length;
+        isAutoScrollingRef.current = true;
+
+        if (nextIndex === 0 && current === previewData.length - 1) {
+          // Wrap: scroll to duplicate-first at the end, then jump back
           flatListRef.current.scrollToIndex({
-            index: wrappedData.length - 1, // The last item (duplicate of first)
+            index: wrappedData.length - 1,
             animated: true
           });
-          
-          // Then after animation completes, jump to the real first item
+          updateActiveIndex(0);
           setTimeout(() => {
-            flatListRef.current.scrollToIndex({
-              index: 1, // The real first item
-              animated: false
-            });
-            setActiveIndex(0);
-          }, 400); // Slightly shorter than the animation duration
+            flatListRef.current?.scrollToIndex({ index: 1, animated: false });
+            isAutoScrollingRef.current = false;
+          }, 400);
         } else {
-          // Normal scrolling for non-wrapping cases
           flatListRef.current.scrollToIndex({
-            index: nextIndex + 1, // +1 for the duplicated first item
+            index: nextIndex + 1,
             animated: true
           });
-          
-          // Update active index
-          setActiveIndex(nextIndex);
+          updateActiveIndex(nextIndex);
+          setTimeout(() => { isAutoScrollingRef.current = false; }, 350);
         }
       }
-    }, 3000); // Change rotation interval here (3 seconds)
+    }, 3000);
   };
   
   // Handle when user begins scrolling
@@ -155,50 +153,38 @@ export default function Auth() {
     handleMomentumScrollEnd(event);
   };
   
-  // Handle scroll events to update the active index
+  // Handle scroll events — only track position during user-initiated drags
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    // Only update during user-initiated scrolls; auto-rotation sets activeIndex directly
-    if (!userScrolling) return;
+    if (isAutoScrollingRef.current) return;
     const scrollPosition = event.nativeEvent.contentOffset.x;
     let index = Math.round(scrollPosition / width);
-    
-    // Convert wrapped index to actual index
     if (index === 0) {
-      // If at the duplicated last item (at beginning)
       index = previewData.length;
     } else if (index === wrappedData.length - 1) {
-      // If at the duplicated first item (at end)
       index = 0;
     } else {
-      // Adjust index to account for the extra item at the beginning
       index = index - 1;
     }
-    
-    // Set active index based on actual data
-    setActiveIndex(index % previewData.length);
+    updateActiveIndex(index % previewData.length);
   };
 
-  // Handle end of scroll to implement the wrap-around effect
+  // Handle end of scroll — settle index and restart auto-rotation
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setUserScrolling(false);
+    isAutoScrollingRef.current = false;
     const scrollPosition = event.nativeEvent.contentOffset.x;
     const index = Math.round(scrollPosition / width);
-    
+
     if (index === 0) {
-      // If we're at the duplicate last item (beginning), jump to the real last item
-      flatListRef.current?.scrollToIndex({
-        index: wrappedData.length - 2,
-        animated: false
-      });
+      flatListRef.current?.scrollToIndex({ index: wrappedData.length - 2, animated: false });
+      updateActiveIndex(previewData.length - 1);
     } else if (index === wrappedData.length - 1) {
-      // If we're at the duplicate first item (end), jump to the real first item
-      flatListRef.current?.scrollToIndex({
-        index: 1,
-        animated: false
-      });
+      flatListRef.current?.scrollToIndex({ index: 1, animated: false });
+      updateActiveIndex(0);
+    } else {
+      updateActiveIndex(index - 1);
     }
 
-    // Always restart auto-rotation when user stops scrolling
     startAutoRotation();
   };
   
