@@ -5,6 +5,7 @@ import { ActivityIndicator, View, Text, Animated, StyleSheet, Image, Platform } 
 import { useAuthStore } from '../stores/authStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { colors } from '../constants/colors';
@@ -16,6 +17,7 @@ export default function RootLayout() {
   // Get state and actions from auth store
   const { session, loading, setSession, setLoading, fetchProfile, profile, updateProfile } = useAuthStore();
   const { fetchNotifications, subscribeToNotifications } = useNotificationStore();
+  const { fetchSubscription } = useSubscriptionStore();
   
   // Initialize push notifications
   usePushNotifications();
@@ -76,16 +78,17 @@ export default function RootLayout() {
   // Setup notification subscription when user is authenticated
   useEffect(() => {
     if (session?.user?.id) {
-      // Fetch initial notifications
+      // Fetch initial notifications and subscription
       fetchNotifications();
-      
+      fetchSubscription(session.user.id);
+
       // Subscribe to real-time notifications
       const unsubscribe = subscribeToNotifications(session.user.id);
-      
+
       // Clean up subscription
       return () => unsubscribe();
     }
-  }, [session?.user?.id, fetchNotifications, subscribeToNotifications]);
+  }, [session?.user?.id, fetchNotifications, subscribeToNotifications, fetchSubscription]);
 
   // Handle routing based on auth state and onboarding status
   useEffect(() => {

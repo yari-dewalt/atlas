@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   ActivityIndicator,
   TouchableOpacity,
   Platform,
@@ -22,6 +21,8 @@ import { colors } from '../../../constants/colors';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useBannerStore, BANNER_MESSAGES } from '../../../stores/bannerStore';
+import { useSubscriptionStore } from '../../../stores/subscriptionStore';
+import { FREE_TIER_LIMITS } from '../../../constants/subscription';
 
 const CUSTOM_EXERCISES_KEY = 'custom_exercises';
 const RECENT_EXERCISES_KEY = 'recent_exercises';
@@ -41,6 +42,7 @@ export default function CreateCustomExercise() {
   const [secondaryMuscleGroup, setSecondaryMuscleGroup] = useState('None');
   const [equipment, setEquipment] = useState('None');
   const [saving, setSaving] = useState(false);
+  const { isPro } = useSubscriptionStore();
   const [primaryMuscleModalVisible, setPrimaryMuscleModalVisible] = useState(false);
   const [secondaryMuscleModalVisible, setSecondaryMuscleModalVisible] = useState(false);
   const [equipmentModalVisible, setEquipmentModalVisible] = useState(false);
@@ -381,6 +383,20 @@ export default function CreateCustomExercise() {
     }
 
     // No muscle group validation needed since both are optional now
+
+    // Check free tier custom exercise limit
+    if (!isPro()) {
+      const stored = await AsyncStorage.getItem(CUSTOM_EXERCISES_KEY);
+      const existing = stored ? JSON.parse(stored) : [];
+      if (existing.length >= FREE_TIER_LIMITS.maxCustomExercises) {
+        const { showWarning } = useBannerStore.getState();
+        showWarning('Unlock unlimited custom exercises with Atlas Pro', 0, {
+          text: 'Upgrade',
+          onPress: () => router.push('/(app)/(modals)/pro'),
+        });
+        return;
+      }
+    }
 
     setSaving(true);
 

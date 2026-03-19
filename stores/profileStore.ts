@@ -16,6 +16,8 @@ type ProfileData = {
   posts_count?: number;
   created_at?: string;
   is_following?: boolean; // Whether the current user is following this profile
+  subscription_tier?: 'free' | 'pro' | null;
+  subscription_started_at?: string | null;
 };
 
 type ProfileState = {
@@ -69,7 +71,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       // Fetch profile data from Supabase
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, name, bio, avatar_url, weight_unit, date_of_birth, followers_count, following_count, posts_count, created_at')
+        .select('id, username, name, bio, avatar_url, weight_unit, date_of_birth, followers_count, following_count, posts_count, created_at, subscription_tier')
         .eq('id', targetUserId)
         .single();
         
@@ -83,11 +85,26 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           isFollowing = await get().checkIfFollowing(targetUserId, currentUserId);
         }
         
+        // Fetch subscription start date if the profile is pro
+        let subscriptionStartedAt: string | null = null;
+        if (data.subscription_tier === 'pro') {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('created_at')
+            .eq('user_id', targetUserId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          subscriptionStartedAt = subData?.created_at ?? null;
+        }
+
         // Set the profile with the following status
-        set({ 
+        set({
           currentProfile: {
             ...data,
-            is_following: isFollowing
+            is_following: isFollowing,
+            subscription_started_at: subscriptionStartedAt,
           }
         });
       }

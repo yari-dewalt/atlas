@@ -24,6 +24,8 @@ import { progressUtils, PROGRESS_LABELS, useProgressStore } from "../../../../..
 import { useBannerStore, BANNER_MESSAGES } from "../../../../../stores/bannerStore";
 import { useWorkoutStore } from "../../../../../stores/workoutStore";
 import { useRoutineStore } from "../../../../../stores/routineStore";
+import { useSubscriptionStore } from "../../../../../stores/subscriptionStore";
+import { FREE_TIER_LIMITS } from "../../../../../constants/subscription";
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
@@ -79,6 +81,7 @@ export default function EditRoutine() {
   const params = useLocalSearchParams();
   const { routineId } = params;
   const { session, profile } = useAuthStore();
+  const { isPro } = useSubscriptionStore();
   const { activeWorkout } = useWorkoutStore();
   
   // Progress bar state
@@ -697,6 +700,24 @@ export default function EditRoutine() {
       progressUtils.stepProgress(2, 3, routineId === 'new' ? 'Creating routine...' : 'Updating routine...');
       
       if (routineId === 'new') {
+        // Check free tier routine limit
+        if (!isPro()) {
+          const { count, error: countError } = await supabase
+            .from('routines')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', profile!.id);
+          if (!countError && count !== null && count >= FREE_TIER_LIMITS.maxRoutines) {
+            setLoading(false);
+            progressUtils.cancelLoading();
+            if (loadingInterval) clearInterval(loadingInterval);
+            const { showWarning } = useBannerStore.getState();
+            showWarning('Unlock unlimited routines with Atlas Pro', 0, {
+              text: 'Upgrade',
+              onPress: () => router.push('/(app)/(modals)/pro'),
+            });
+            return;
+          }
+        }
         // Create new routine
         await createNewRoutine();
       } else {

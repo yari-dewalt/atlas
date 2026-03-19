@@ -1228,10 +1228,19 @@ export default function ProfileScreen() {
             </View>
           </View>
           
+          {currentProfile.subscription_tier === 'pro' && (
+            <View style={styles.proBanner}>
+              <View style={styles.proBannerIconBox}>
+                <IonIcon name="ribbon" size={14} color={colors.primaryText} />
+              </View>
+              <Text style={styles.proBannerText}>Pro Member</Text>
+            </View>
+          )}
+
           {!isCurrentUser && (
             <View style={styles.headerButtons}>
               <TouchableOpacity
-                activeOpacity={0.5} 
+                activeOpacity={0.5}
                 style={[styles.followButton, currentProfile?.is_following && styles.followingButton]}
                 onPress={handleFollowAction}
               >
@@ -1239,16 +1248,16 @@ export default function ProfileScreen() {
                   {currentProfile?.is_following ? 'Following' : 'Follow'}
                 </Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
-                activeOpacity={0.5} 
+                activeOpacity={0.5}
                 style={[styles.blockButton, isBlocked && styles.blockedButton]}
                 onPress={handleBlockAction}
               >
-                <IonIcon 
-                  name={isBlocked ? "person-remove" : "person-remove-outline"} 
-                  size={16} 
-                  color={isBlocked ? colors.notification : colors.primaryText} 
+                <IonIcon
+                  name={isBlocked ? "person-remove" : "person-remove-outline"}
+                  size={16}
+                  color={isBlocked ? colors.notification : colors.primaryText}
                 />
                 <Text style={[styles.buttonText, isBlocked && styles.blockedButtonText]}>
                   {isBlocked ? 'Blocked' : 'Block'}
@@ -1619,6 +1628,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 20,
+  },
+  proBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.brand + '99',
+    paddingVertical: 7,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    gap: 10,
+  },
+  proBannerIconBox: {
+    backgroundColor: colors.brand,
+    borderRadius: 5,
+    padding: 6,
+  },
+  proBannerText: {
+    color: colors.primaryText,
+    fontSize: 12,
+    fontWeight: '700',
   },
   profileInfoContainer: {
     flex: 1,

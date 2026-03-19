@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useProfileStore } from '../../../../../stores/profileStore';
 import { useAuthStore } from '../../../../../stores/authStore';
+import { useSubscriptionStore } from '../../../../../stores/subscriptionStore';
+import { FREE_TIER_LIMITS } from '../../../../../constants/subscription';
 import { getUserWeightUnit, displayWeightForUser } from '../../../../../utils/weightUtils';
 import WorkoutListSkeleton from '../../../../../components/WorkoutCardSkeleton';
 
@@ -24,6 +26,7 @@ export default function UserWorkoutsScreen() {
   const router = useRouter();
   const { currentProfile, isCurrentUser } = useProfileStore();
   const { profile } = useAuthStore();
+  const { isPro } = useSubscriptionStore();
   
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +53,7 @@ export default function UserWorkoutsScreen() {
       const from = pageIndex * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('workouts')
         .select(`
           id,
@@ -76,6 +79,14 @@ export default function UserWorkoutsScreen() {
         .eq('user_id', userId)
         .order('start_time', { ascending: false })
         .range(from, to);
+
+      if (!isPro()) {
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - FREE_TIER_LIMITS.activityHistoryMonths);
+        query = query.gte('start_time', threeMonthsAgo.toISOString());
+      }
+
+      const { data, error } = await query;
         
       if (error) throw error;
       
@@ -208,7 +219,7 @@ export default function UserWorkoutsScreen() {
       />
       
       <View style={styles.container}>
-        {loading && !refreshing ? (
+        {loading && !refreshing && workouts.length === 0 ? (
           <WorkoutListSkeleton />
         ) : (
           <FlatList
@@ -257,6 +268,18 @@ export default function UserWorkoutsScreen() {
                     <Text style={styles.buttonText}>Retry</Text>
                   </TouchableOpacity>
                 </View>
+              ) : !isPro() && workouts.length > 0 ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.upsellRow}
+                  onPress={() => router.push('/(app)/(modals)/pro')}
+                >
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.brand} />
+                  <Text style={styles.upsellText}>
+                    {isCurrentUser ? 'Upgrade to Pro to access your full history' : 'Upgrade to Pro to see their full history'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+                </TouchableOpacity>
               ) : null
             }
           />
@@ -371,5 +394,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+  },
+  upsellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  upsellText: {
+    color: colors.brand,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../../constants/colors';
@@ -7,6 +7,8 @@ import { useAuthStore } from '../../../../stores/authStore';
 import { useProfileStore } from '../../../../stores/profileStore';
 import { supabase } from '../../../../lib/supabase';
 import { useBannerStore, BANNER_MESSAGES } from '../../../../stores/bannerStore';
+import { useSubscriptionStore } from '../../../../stores/subscriptionStore';
+import { FREE_TIER_LIMITS } from '../../../../constants/subscription';
 
 export default function UsernameSettingsScreen() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function UsernameSettingsScreen() {
   const [usernameError, setUsernameError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
+  const { isPro } = useSubscriptionStore();
 
   useEffect(() => {
     if (authProfile?.username) {
@@ -93,24 +96,40 @@ export default function UsernameSettingsScreen() {
       return;
     }
 
+    if (!isPro() && authProfile?.username_last_changed_at) {
+      const lastChanged = new Date(authProfile.username_last_changed_at);
+      const daysSince = Math.floor((Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince < FREE_TIER_LIMITS.usernameChangeDays) {
+        const { showWarning } = useBannerStore.getState();
+        showWarning('Upgrade to Atlas Pro to change your username anytime', 0, {
+          text: 'Upgrade',
+          onPress: () => router.push('/(app)/(modals)/pro'),
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       // Update profile in database
+      const nowIso = new Date().toISOString();
       const { error } = await supabase
         .from('profiles')
         .update({
           username: username.toLowerCase(),
-          updated_at: new Date().toISOString()
+          username_last_changed_at: nowIso,
+          updated_at: nowIso,
         })
         .eq('id', authProfile?.id);
-        
+
       if (error) throw error;
-      
+
       // Update local state
       if (updateProfile) {
         updateProfile({
           ...authProfile!,
           username: username.toLowerCase(),
+          username_last_changed_at: nowIso,
         });
       }
 
@@ -135,6 +154,13 @@ export default function UsernameSettingsScreen() {
 
   const hasChanges = username !== originalUsername;
 
+  const daysUntilNextChange = (() => {
+    if (isPro() || !authProfile?.username_last_changed_at) return 0;
+    const lastChanged = new Date(authProfile.username_last_changed_at);
+    const daysSince = Math.floor((Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, FREE_TIER_LIMITS.usernameChangeDays - daysSince);
+  })();
+
   return (
     <>
       <Stack.Screen 
@@ -154,7 +180,18 @@ export default function UsernameSettingsScreen() {
               <Text style={styles.sectionDescription}>
                 Your username is how others can find and mention you on the platform.
               </Text>
-              
+
+              {!isPro() && (
+                <View style={styles.cooldownNote}>
+                  <Ionicons name="time-outline" size={13} color={colors.secondaryText} />
+                  <Text style={styles.cooldownNoteText}>
+                    {daysUntilNextChange > 0
+                      ? `Next change available in ${daysUntilNextChange} day${daysUntilNextChange === 1 ? '' : 's'}`
+                      : 'Usernames can only be changed once every 90 days'}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.inputContainer}>
                 <TextInput
                   style={[
@@ -236,6 +273,17 @@ const styles = StyleSheet.create({
     color: colors.secondaryText,
     marginBottom: 20,
     lineHeight: 20,
+  },
+  cooldownNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  cooldownNoteText: {
+    fontSize: 12,
+    color: colors.secondaryText,
+    flex: 1,
   },
   inputContainer: {
     flexDirection: 'row',
