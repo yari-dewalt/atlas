@@ -17,6 +17,7 @@ import { progressUtils, PROGRESS_LABELS } from "../../stores/progressStore";
 import { useBannerStore, BANNER_MESSAGES } from "../../stores/bannerStore";
 import { useMediaGalleryStore } from "../../stores/mediaGalleryStore";
 import { ReportModal } from "../ReportModal";
+import ProBadge from "../ProBadge";
 
 const Post = ({ data, onDelete, isDetailView = false }) => {
   const [liked, setLiked] = useState(data.is_liked || false);
@@ -551,10 +552,13 @@ const Post = ({ data, onDelete, isDetailView = false }) => {
             />
           </TouchableOpacity>
           <View style={styles.postHeaderInfo}>
-            <TouchableOpacity
-                activeOpacity={0.5} onPress={() => router.push(`/profile/${data.user.id}`)}>
-              <Text style={styles.username}>{data.user.username || 'Unknown User'}</Text>
-            </TouchableOpacity>
+            <View style={styles.usernameRow}>
+              <TouchableOpacity
+                  activeOpacity={0.5} onPress={() => router.push(`/profile/${data.user.id}`)}>
+                <Text style={styles.username}>{data.user.username || 'Unknown User'}</Text>
+              </TouchableOpacity>
+              {data.user.subscription_tier === 'pro' && <ProBadge />}
+            </View>
             <Text style={styles.postDate}>{formatTimeAgo(data.createdAt) || ''}</Text>
           </View>
 
@@ -927,6 +931,11 @@ const styles = StyleSheet.create({
   },
   postHeaderInfo: {
     flexDirection: 'column',
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   username: {
     fontSize: 16,

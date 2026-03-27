@@ -18,7 +18,8 @@ import CustomLineChart from '../../../../components/CustomLineChart';
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { setTabScrollRef } from '../_layout'; 
+import { setTabScrollRef } from '../_layout';
+import ProBadge from '../../../../components/ProBadge'; 
 
 export default function ProfileScreen() {
   const scrollViewRef = useRef(null);
@@ -1167,9 +1168,12 @@ export default function ProfileScreen() {
             
             <View style={styles.profileInfoContainer}>
               {currentProfile.name && (
-                <Text style={styles.displayName}>
-                  {currentProfile.name}
-                </Text>
+                <View style={styles.profileNameRow}>
+                  <Text style={styles.displayName}>
+                    {currentProfile.name}
+                  </Text>
+                  {currentProfile.subscription_tier === 'pro' && <ProBadge />}
+                </View>
               )}
               
               <View style={styles.followersRow}>
@@ -1192,7 +1196,7 @@ export default function ProfileScreen() {
               <View style={styles.proBannerIconBox}>
                 <IonIcon name="ribbon" size={15} color={colors.brandLight} />
               </View>
-              <Text style={styles.proBannerText}>Pro Member</Text>
+              <Text style={styles.proBannerText}>PRO Member</Text>
             </View>
           )}
 
@@ -1589,7 +1593,7 @@ const styles = StyleSheet.create({
   },
   proBannerText: {
     color: colors.primaryText,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   profileInfoContainer: {
@@ -1606,6 +1610,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 50,
+  },
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   displayName: {
     fontSize: 16,

@@ -15,6 +15,7 @@ export const colors = {
     whiteOverlayHeavy: 'rgba(255, 255, 255, 0.4)',
     brandMuted: '#DAA520CC',
     brandLight: '#eee9bb',
+    proBadgeBg: 'rgba(218, 165, 32, 0.15)',
     customBadgeBg: 'rgba(155, 89, 182, 0.2)',
     customBadgeBorder: 'rgba(155, 89, 182, 0.5)',
     customBadgeText: '#9B59B6',

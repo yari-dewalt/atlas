@@ -479,6 +479,7 @@ export interface Comment {
     username: string;
     name?: string;
     avatar_url?: string;
+    subscription_tier?: 'free' | 'pro' | null;
   };
   replies?: Comment[];
   hotness?: number; // For internal sorting use
@@ -499,7 +500,7 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
       updated_at,
       likes_count,
       pinned,
-      profiles:user_id(id, username, name, avatar_url)
+      profiles:user_id(id, username, name, avatar_url, subscription_tier)
     `)
     .eq('post_id', postId)
     .is('parent_id', null)
@@ -531,7 +532,8 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
         id: comment.profiles.id,
         username: comment.profiles.username,
         name: comment.profiles.name,
-        avatar_url: comment.profiles.avatar_url
+        avatar_url: comment.profiles.avatar_url,
+        subscription_tier: comment.profiles.subscription_tier
       },
       replies: []
     }));
@@ -550,7 +552,7 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
           created_at,
           updated_at,
           likes_count,
-          profiles:user_id(id, username, name, avatar_url)
+          profiles:user_id(id, username, name, avatar_url, subscription_tier)
         `)
         .in('parent_id', commentIds)
         .order('created_at', { ascending: true });
@@ -573,7 +575,8 @@ export async function fetchComments(postId: string, userId?: string): Promise<Co
             id: reply.profiles.id,
             username: reply.profiles.username,
             name: reply.profiles.name,
-            avatar_url: reply.profiles.avatar_url
+            avatar_url: reply.profiles.avatar_url,
+            subscription_tier: reply.profiles.subscription_tier
           }
         });
         repliesByParent.set(reply.parent_id, arr);

@@ -121,7 +121,7 @@ export default function Home() {
           likes_count,
           user_id,
           workout_id,
-          profiles:user_id(id, username, avatar_url, full_name),
+          profiles:user_id(id, username, avatar_url, full_name, subscription_tier),
           post_likes(count),
           post_comments(
             id,
@@ -194,7 +194,8 @@ export default function Home() {
             id: profileData?.id,
             username: profileData?.username,
             full_name: profileData?.full_name,
-            avatar_url: profileData?.avatar_url
+            avatar_url: profileData?.avatar_url,
+            subscription_tier: profileData?.subscription_tier
           },
           createdAt: post.created_at,
           title: post.title,

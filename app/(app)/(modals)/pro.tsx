@@ -10,9 +10,10 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
-import { SUBSCRIPTION_PLANS, PRO_FEATURES, PlanId } from '../../../constants/subscription';
+import { SUBSCRIPTION_PLANS, PlanId } from '../../../constants/subscription';
 import { createCheckoutSession, openCheckout } from '../../../utils/stripeService';
 import { useAuthStore } from '../../../stores/authStore';
 
@@ -25,11 +26,20 @@ const COMPARISON_ROWS: { feature: string; free: string }[] = [
 
 export default function ProScreen() {
   const router = useRouter();
-  const { session } = useAuthStore();
+  const { session, profile } = useAuthStore();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('yearly');
   const [isLoading, setIsLoading] = useState(false);
 
+  const isPro = profile?.subscription_tier === 'pro';
   const activePlan = SUBSCRIPTION_PLANS.find((p) => p.id === selectedPlan)!;
+
+  const renewalDate = profile?.subscription_expires_at
+    ? new Date(profile.subscription_expires_at).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
 
   const handleSubscribe = async () => {
     if (!session?.user) {
@@ -48,6 +58,105 @@ export default function ProScreen() {
       setIsLoading(false);
     }
   };
+
+  const handleCancelSubscription = () => {
+    Alert.alert(
+      'Cancel Subscription',
+      `Are you sure you want to cancel your Pro subscription? You'll keep access until the end of your billing period.`,
+      [
+        { text: 'Keep Pro', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: () => {
+            // TODO: implement cancellation
+          },
+        },
+      ]
+    );
+  };
+
+  if (isPro) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.root}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <TouchableOpacity
+              activeOpacity={0.6}
+              style={styles.closeButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="close" size={30} color={colors.primaryText} />
+            </TouchableOpacity>
+
+            {/* Hero */}
+            <View style={styles.hero}>
+              <View style={styles.heroWordmarkRow}>
+                <Image
+                  source={require('../../../assets/logo/word.png')}
+                  style={styles.wordImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.proText}>PRO</Text>
+              </View>
+              <View style={styles.activeChip}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.primaryText} />
+                <Text style={styles.activeChipText}>Active</Text>
+              </View>
+              {renewalDate && (
+                <Text style={styles.renewalText}>Renews {renewalDate}</Text>
+              )}
+            </View>
+
+            {/* Benefits comparison */}
+            <View style={styles.manageComparisonTable}>
+              {/* Header */}
+              <View style={styles.comparisonRow}>
+                <View style={styles.comparisonFeatureCol} />
+                <Text style={styles.comparisonColHeader}>Free</Text>
+                <View style={styles.manageProColHeader}>
+                  <Text style={styles.comparisonProColHeader}>Pro</Text>
+                </View>
+              </View>
+
+              {COMPARISON_ROWS.map((row, i) => (
+                <View
+                  key={row.feature}
+                  style={[
+                    styles.comparisonRow,
+                    i < COMPARISON_ROWS.length - 1 && styles.comparisonRowBorder,
+                  ]}
+                >
+                  <Text style={styles.comparisonFeature}>{row.feature}</Text>
+                  <Text style={styles.manageFreVal}>{row.free}</Text>
+                  <View style={styles.comparisonProCell}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.brand} />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Cancel */}
+            <TouchableOpacity
+              activeOpacity={0.6}
+              style={styles.notNowButton}
+              onPress={handleCancelSubscription}
+            >
+              <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
+            </TouchableOpacity>
+            <Text style={styles.cancelNote}>
+              You'll keep PRO access until the end of your billing period.
+            </Text>
+          </ScrollView>
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
@@ -79,22 +188,9 @@ export default function ProScreen() {
               <Text style={styles.proText}>PRO</Text>
             </View>
             <Text style={styles.heroSubtitle}>Unlock your full potential</Text>
-          </View>
-
-          {/* Features */}
-          <View style={styles.featuresList}>
-            {PRO_FEATURES.map((feature) => (
-              <View key={feature.title} style={styles.featureRow}>
-                <View style={styles.featureIcon}>
-                  <Ionicons name={feature.icon as any} size={22} color={colors.brand} />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureDescription}>{feature.description}</Text>
-                </View>
-                <Ionicons name="checkmark-circle" size={20} color={colors.brand} />
-              </View>
-            ))}
+            <Text style={styles.heroDescription}>
+              Get access to all PRO features and take your training to the next level.
+            </Text>
           </View>
 
           {/* Plan selector */}
@@ -108,30 +204,33 @@ export default function ProScreen() {
                     ? 'Billed yearly'
                     : 'Pay once';
               return (
-                <TouchableOpacity
-                  key={plan.id}
-                  activeOpacity={0.7}
-                  style={[styles.planCard, isSelected && styles.planCardSelected]}
-                  onPress={() => setSelectedPlan(plan.id)}
-                >
-                  {/* Corner savings ribbon */}
+                <View key={plan.id} style={styles.planCardWrapper}>
+                  {/* Ribbon sits behind the card */}
                   {plan.savingsLabel && (
                     <View style={styles.savingsRibbon}>
                       <Text style={styles.savingsRibbonText}>{plan.savingsLabel}</Text>
                     </View>
                   )}
-
-                  <Text style={[styles.planProLabel, isSelected && styles.planProLabelSelected]}>
-                    PRO
-                  </Text>
-                  <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>
-                    {plan.label.toUpperCase()}
-                  </Text>
-                  <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>
-                    ${plan.price.toFixed(2)}
-                  </Text>
-                  <Text style={styles.planBillingLabel}>{billingLabel}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.planCard, isSelected && styles.planCardSelected]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedPlan(plan.id);
+                    }}
+                  >
+                    <Text style={[styles.planProLabel, isSelected && styles.planProLabelSelected]}>
+                      PRO
+                    </Text>
+                    <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>
+                      {plan.label.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>
+                      ${plan.price.toFixed(2)}
+                    </Text>
+                    <Text style={styles.planBillingLabel}>{billingLabel}</Text>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>
@@ -161,6 +260,7 @@ export default function ProScreen() {
           <Text style={styles.cancelNote}>Cancel your subscription at any time.</Text>
 
           {/* Comparison table */}
+          <Text style={styles.comparisonHeading}>PRO Features</Text>
           <View style={styles.comparisonTable}>
             {/* Header */}
             <View style={[styles.comparisonRow]}>
@@ -227,49 +327,22 @@ const styles = StyleSheet.create({
     width: 150,
   },
   proText: {
-    fontSize: 24,
+    fontSize: 36,
     fontWeight: '700',
     color: colors.brand,
-    marginLeft: 6,
+    marginTop: 4,
   },
   heroSubtitle: {
-    fontSize: 16,
-    color: colors.secondaryText,
-  },
-  // Features
-  featuresList: {
-    width: '100%',
-    marginBottom: 28,
-    backgroundColor: colors.primaryAccent,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.whiteOverlay,
-  },
-  featureIcon: {
-    width: 36,
-    alignItems: 'center',
-  },
-  featureText: {
-    flex: 1,
-    marginLeft: 10,
-    marginRight: 8,
-  },
-  featureTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.primaryText,
-    marginBottom: 2,
+    marginBottom: 8,
   },
-  featureDescription: {
-    fontSize: 12,
+  heroDescription: {
+    fontSize: 14,
     color: colors.secondaryText,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   // Plan selector
   planRow: {
@@ -278,19 +351,20 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 24,
   },
-  planCard: {
+  planCardWrapper: {
     flex: 1,
+    paddingTop: 14,
+  },
+  planCard: {
     backgroundColor: colors.primaryAccent,
     borderRadius: 12,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 14,
     paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.whiteOverlay,
-    minHeight: 140,
-    justifyContent: 'center',
-    overflow: 'hidden',
+    minHeight: 160,
   },
   planCardSelected: {
     borderColor: colors.brand,
@@ -298,45 +372,45 @@ const styles = StyleSheet.create({
   },
   savingsRibbon: {
     position: 'absolute',
-    top: 14,
-    right: -22,
-    width: 80,
-    backgroundColor: colors.brand,
-    paddingVertical: 4,
+    top: -6,
+    left: 0,
+    right: 0,
+    height: 30,
+    justifyContent: 'center',
     alignItems: 'center',
-    transform: [{ rotate: '45deg' }],
+    backgroundColor: colors.brand,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    paddingBottom: 6,
   },
   savingsRibbonText: {
-    fontSize: 8,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.background,
-    letterSpacing: 0.3,
+    color: colors.primaryText,
+    textTransform: 'uppercase',
   },
   planProLabel: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.brand,
-    letterSpacing: 1,
-    marginBottom: 2,
   },
   planProLabelSelected: {
     color: colors.brand,
   },
   planLabel: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primaryText,
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    marginTop: 8,
   },
   planLabelSelected: {
     color: colors.primaryText,
   },
   planPrice: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
     color: colors.primaryText,
-    marginBottom: 6,
+    marginTop: 16,
   },
   planPriceSelected: {
     color: colors.primaryText,
@@ -345,6 +419,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.secondaryText,
     textAlign: 'center',
+    marginTop: 'auto',
   },
   // CTA
   ctaButton: {
@@ -369,12 +444,63 @@ const styles = StyleSheet.create({
   },
   cancelNote: {
     fontSize: 12,
+    marginTop: 8,
     color: colors.secondaryText,
   },
+  // Pro member view
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.brand,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginBottom: 10,
+  },
+  activeChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primaryText,
+  },
+  renewalText: {
+    fontSize: 13,
+    color: colors.secondaryText,
+  },
+  manageComparisonTable: {
+    width: '100%',
+    marginBottom: 32,
+  },
+  manageProColHeader: {
+    width: 72,
+    alignItems: 'center',
+    backgroundColor: colors.brand,
+    borderRadius: 6,
+    paddingVertical: 3,
+  },
+  manageFreVal: {
+    width: 72,
+    fontSize: 12,
+    color: colors.secondaryText,
+    textAlign: 'center',
+    textDecorationLine: 'line-through',
+    textDecorationColor: colors.secondaryText,
+  },
+
+  cancelButtonText: {
+    fontSize: 16,
+    color: colors.notification,
+  },
   // Comparison table
+  comparisonHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.primaryText,
+    marginTop: 36,
+    marginBottom: 4,
+  },
   comparisonTable: {
     width: '100%',
-    marginTop: 36,
   },
   comparisonRow: {
     flexDirection: 'row',
@@ -401,7 +527,7 @@ const styles = StyleSheet.create({
     width: 72,
     fontSize: 11,
     fontWeight: '700',
-    color: colors.brand,
+    color: colors.primaryText,
     letterSpacing: 0.4,
     textAlign: 'center',
     textTransform: 'uppercase',

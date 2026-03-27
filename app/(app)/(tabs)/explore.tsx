@@ -18,6 +18,7 @@ import { useProfileStore } from "../../../stores/profileStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { updateGlobalScrollPosition } from "../../../hooks/usePostVisibility";
 import { setTabScrollRef } from "./_layout";
+import ProBadge from "../../../components/ProBadge";
 
 // Helper function to process workout data for posts
 const processWorkoutData = (workout) => {
@@ -117,7 +118,7 @@ export default function Explore() {
           likes_count,
           user_id,
           workout_id,
-          profiles:user_id(id, username, avatar_url, full_name),
+          profiles:user_id(id, username, avatar_url, full_name, subscription_tier),
           post_likes(count),
           post_comments(
             id,
@@ -184,7 +185,8 @@ export default function Explore() {
               id: profileData?.id,
               username: profileData?.username,
               full_name: profileData?.full_name,
-              avatar_url: profileData?.avatar_url
+              avatar_url: profileData?.avatar_url,
+              subscription_tier: profileData?.subscription_tier
             },
             createdAt: post.created_at,
             title: post.title,
@@ -487,6 +489,7 @@ export default function Explore() {
           username,
           name,
           avatar_url,
+          subscription_tier,
           onboarding_completed,
           followers:follows!follows_following_id_fkey(count)
         `)
@@ -650,7 +653,7 @@ export default function Explore() {
       // Search users only (exclude users who haven't completed onboarding)
       const { data: users, error: usersError } = await supabase
         .from('profiles')
-        .select('id, username, name, avatar_url, onboarding_completed, followers:follows!follows_following_id_fkey(count)')
+        .select('id, username, name, avatar_url, subscription_tier, onboarding_completed, followers:follows!follows_following_id_fkey(count)')
         .or(`username.ilike.%${query}%,name.ilike.%${query}%`)
         .eq('onboarding_completed', true)
         .limit(20);
@@ -741,11 +744,14 @@ export default function Explore() {
             style={styles.profileImage}
           />
         <View style={styles.searchResultInfo}>
-          <Text style={styles.searchResultName}>
-            {item.username}
-          </Text>
+          <View style={styles.usernameRow}>
+            <Text style={styles.searchResultName}>
+              {item.username}
+            </Text>
+            {item.subscription_tier === 'pro' && <ProBadge />}
+          </View>
           <Text style={styles.searchResultMeta}>
-            {item.name || ''} · {item.follower_count} followers
+            {item.name ? `${item.name} · ` : ''}{item.follower_count || 0} followers
           </Text>
         </View>
       </TouchableOpacity>
@@ -766,9 +772,12 @@ export default function Explore() {
           style={styles.suggestedProfilePic}
         />
       <View style={styles.searchResultInfo}>
-        <Text style={styles.recentSearchUsername}>{item.username || item.name}</Text>
+        <View style={styles.usernameRow}>
+          <Text style={styles.recentSearchUsername}>{item.username || item.name}</Text>
+          {item.subscription_tier === 'pro' && <ProBadge />}
+        </View>
         <Text style={styles.recentSearchName}>
-          {item.name} · {item.follower_count || 0} followers
+          {item.name ? `${item.name} · ` : ''}{item.follower_count || 0} followers
         </Text>
       </View>
       <TouchableOpacity
@@ -800,9 +809,12 @@ export default function Explore() {
             size={80}
             style={styles.userCardAvatar}
           />
-          <Text style={styles.userCardUsername} numberOfLines={1}>
-            {user.username}
-          </Text>
+          <View style={styles.userCardUsernameRow}>
+            <Text style={styles.userCardUsername} numberOfLines={1}>
+              {user.username}
+            </Text>
+            {user.subscription_tier === 'pro' && <ProBadge />}
+          </View>
           <Text style={styles.userCardFollowers} numberOfLines={1}>
             Featured
           </Text>
@@ -1194,6 +1206,12 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     backgroundColor: colors.secondaryText,
   },
+  userCardUsernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    justifyContent: 'center',
+  },
   userCardUsername: {
     fontSize: 14,
     fontWeight: '600',
@@ -1365,6 +1383,11 @@ const styles = StyleSheet.create({
   },
   searchResultInfo: {
     flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   searchResultName: {
     fontSize: 16,

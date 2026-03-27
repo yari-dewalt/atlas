@@ -24,6 +24,7 @@ import { useAuthStore } from '../../stores/authStore';
 import CachedAvatar from '../CachedAvatar';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import ProBadge from '../ProBadge';
 
 interface CommentsModalProps {
   visible: boolean;
@@ -689,12 +690,15 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
           <View style={styles.commentContent}>
             {/* Comment header and content */}
             <View style={styles.commentHeader}>
-              <TouchableOpacity
-                activeOpacity={0.5} onPress={() => handleProfilePress(item.user?.id)}>
-                <Text style={styles.commentUsername}>
-                  {item.user?.name || item.user?.username || 'User'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.commentUsernameRow}>
+                <TouchableOpacity
+                  activeOpacity={0.5} onPress={() => handleProfilePress(item.user?.id)}>
+                  <Text style={styles.commentUsername}>
+                    {item.user?.name || item.user?.username || 'User'}
+                  </Text>
+                </TouchableOpacity>
+                {item.user?.subscription_tier === 'pro' && <ProBadge />}
+              </View>
               <Text style={styles.commentDate}>{formatCommentDate(item.created_at)}</Text>
 
               {(session?.user?.id === item.user_id || isPostOwner) && (
@@ -813,9 +817,12 @@ const CommentsModal: React.FC<CommentsModalProps> = ({
                         />
                         <View style={styles.replyContent}>
                           <View style={styles.commentHeader}>
-                            <Text style={styles.commentUsername}>
-                              {reply.user?.name || reply.user?.username || 'User'}
-                            </Text>
+                            <View style={styles.commentUsernameRow}>
+                              <Text style={styles.commentUsername}>
+                                {reply.user?.name || reply.user?.username || 'User'}
+                              </Text>
+                              {reply.user?.subscription_tier === 'pro' && <ProBadge />}
+                            </View>
                             <Text style={styles.commentDate}>{formatCommentDate(reply.created_at)}</Text>
 
                             {(session?.user?.id === item.user_id || isPostOwner) && (
@@ -1154,6 +1161,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     alignItems: 'center',
+  },
+  commentUsernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   commentUsername: {
     fontSize: 14,

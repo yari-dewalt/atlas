@@ -114,7 +114,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
             id,
             username,
             avatar_url,
-            name
+            name,
+            subscription_tier
           ),
           post:post_id (
             id,

@@ -24,6 +24,7 @@ import NotificationSkeleton from '../../../components/NotificationSkeleton';
 import IonIcon from '@expo/vector-icons/Ionicons';
 import { SwipeRow } from 'react-native-swipe-list-view';
 import { supabase } from '../../../lib/supabase';
+import ProBadge from '../../../components/ProBadge';
 
 interface NotificationItem extends Notification {
   isGrouped?: boolean;
@@ -685,32 +686,23 @@ export default function NotificationsScreen() {
                 {/* Notification Content */}
                 <View style={styles.content}>
                   <View style={styles.messageContainer}>
-                    <Text style={styles.message} numberOfLines={2}>
-                      {item.isGrouped ? (
-                        // Grouped notification - show custom message
-                        <Text style={styles.message}>
-                          <Text style={[styles.message, styles.username]}>
-                            {item.actor?.username || 'Someone'}
-                          </Text>
-                          <Text style={styles.message}>
-                            {' ' + formatNotificationMessage(item).replace(item.actor?.username || '', '').trim()}
-                          </Text>
+                    <View style={styles.notificationTextContainer}>
+                      <View style={styles.actorRow}>
+                        <Text
+                          style={[styles.message, styles.username]}
+                          onPress={() => !item.isGrouped ? handleProfilePress(item.actor_id) : undefined}
+                          numberOfLines={1}
+                        >
+                          {item.actor?.username || 'Someone'}
                         </Text>
-                      ) : (
-                        // Regular notification - show username + message
-                        <Text style={styles.message}>
-                          <Text 
-                            style={[styles.message, styles.username]}
-                            onPress={() => handleProfilePress(item.actor_id)}
-                          >
-                            {item.actor?.username || 'Someone'}
-                          </Text>
-                          <Text style={styles.message}>
-                            {' ' + item.message.replace(item.actor?.username || '', '').trim()}
-                          </Text>
-                        </Text>
-                      )}
-                    </Text>
+                        {item.actor?.subscription_tier === 'pro' && <ProBadge />}
+                      </View>
+                      <Text style={styles.message} numberOfLines={1}>
+                        {item.isGrouped
+                          ? formatNotificationMessage(item).replace(item.actor?.username || '', '').trim()
+                          : item.message.replace(item.actor?.username || '', '').trim()}
+                      </Text>
+                    </View>
                   </View>
                   <Text style={styles.time}>
                     {formatRelativeTime(item.created_at)}
@@ -901,9 +893,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messageContainer: {
+    flex: 1,
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  actorRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
+    gap: 5,
+    flexWrap: 'wrap',
   },
   message: {
     color: colors.primaryText,

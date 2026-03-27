@@ -16,6 +16,7 @@ import { useAuthStore } from '../../../../stores/authStore';
 import CachedAvatar from '../../../../components/CachedAvatar';
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { useProfileStore } from '../../../../stores/profileStore';
+import ProBadge from '../../../../components/ProBadge';
 
 export default function PeopleToFollow() {
   const router = useRouter();
@@ -71,6 +72,7 @@ export default function PeopleToFollow() {
           username,
           name,
           avatar_url,
+          subscription_tier,
           followers:follows!follows_following_id_fkey(count)
         `)
         .not('id', 'in', `(${followingIds.length > 0 ? followingIds.join(',') : '0'})`)
@@ -133,7 +135,10 @@ export default function PeopleToFollow() {
         initial={(item.name || item.username || "?").charAt(0)}
       />
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name || item.username}</Text>
+        <View style={styles.usernameRow}>
+          <Text style={styles.userName}>{item.name || item.username}</Text>
+          {item.subscription_tier === 'pro' && <ProBadge />}
+        </View>
         <Text style={styles.username}>@{item.username || 'user'}</Text>
         <Text style={styles.followersCount}>{item.follower_count} followers</Text>
       </View>
@@ -242,6 +247,11 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   userName: {
     fontSize: 16,

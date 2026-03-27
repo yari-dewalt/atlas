@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useBannerStore, BANNER_MESSAGES } from '../../../../../stores/bannerStore';
+import ProBadge from '../../../../../components/ProBadge';
 
 export default function PostCommentsScreen() {
   const { postId, focus } = useLocalSearchParams();
@@ -153,7 +154,7 @@ export default function PostCommentsScreen() {
           likes_count,
           user_id,
           workout_id,
-          profiles:user_id(id, username, avatar_url, full_name),
+          profiles:user_id(id, username, avatar_url, full_name, subscription_tier),
           post_likes(count),
           post_comments(count),
           post_media(id, storage_path, media_type, width, height, duration, order_index)
@@ -178,7 +179,8 @@ export default function PostCommentsScreen() {
             id: postData.profiles?.id,
             username: postData.profiles?.username,
             full_name: postData.profiles?.full_name,
-            avatar_url: postData.profiles?.avatar_url
+            avatar_url: postData.profiles?.avatar_url,
+            subscription_tier: postData.profiles?.subscription_tier
           },
           createdAt: postData.created_at,
           title: postData.title,
@@ -888,10 +890,13 @@ export default function PostCommentsScreen() {
           editingCommentId === reply.id && styles.replyContentEditing
         ]}>
           <View style={styles.replyHeader}>
-            <TouchableOpacity
-                activeOpacity={0.5} onPress={() => router.push(`/profile/${reply.user.id}`)}>
-              <Text style={styles.replyUsername}>{reply.user.username}</Text>
-            </TouchableOpacity>
+            <View style={styles.usernameRow}>
+              <TouchableOpacity
+                  activeOpacity={0.5} onPress={() => router.push(`/profile/${reply.user.id}`)}>
+                <Text style={styles.replyUsername}>{reply.user.username}</Text>
+              </TouchableOpacity>
+              {reply.user.subscription_tier === 'pro' && <ProBadge />}
+            </View>
             <Text style={styles.replyTime}>
               {formatTimeAgo(reply.created_at)}
               {isCommentEdited(reply) && <Text style={styles.editedText}> (edited)</Text>}
@@ -988,10 +993,13 @@ export default function PostCommentsScreen() {
         </TouchableOpacity>
         <View style={styles.commentContent}>
           <View style={styles.commentHeader}>
-            <TouchableOpacity
-                activeOpacity={0.5} onPress={() => router.push(`/profile/${comment.user.id}`)}>
-              <Text style={styles.commentUsername}>{comment.user.username}</Text>
-            </TouchableOpacity>
+            <View style={styles.usernameRow}>
+              <TouchableOpacity
+                  activeOpacity={0.5} onPress={() => router.push(`/profile/${comment.user.id}`)}>
+                <Text style={styles.commentUsername}>{comment.user.username}</Text>
+              </TouchableOpacity>
+              {comment.user.subscription_tier === 'pro' && <ProBadge />}
+            </View>
             <Text style={styles.commentTime}>
               {formatTimeAgo(comment.created_at)}
               {isCommentEdited(comment) && <Text style={styles.editedText}> (edited)</Text>}
@@ -1145,10 +1153,13 @@ export default function PostCommentsScreen() {
                     />
                   </TouchableOpacity>
                   <View style={styles.postHeaderInfo}>
-                    <TouchableOpacity
-                activeOpacity={0.5} onPress={() => router.push(`/profile/${post.user.id}`)}>
-                      <Text style={styles.postUsername}>{post.user.username}</Text>
-                    </TouchableOpacity>
+                    <View style={styles.usernameRow}>
+                      <TouchableOpacity
+                  activeOpacity={0.5} onPress={() => router.push(`/profile/${post.user.id}`)}>
+                        <Text style={styles.postUsername}>{post.user.username}</Text>
+                      </TouchableOpacity>
+                      {post.user.subscription_tier === 'pro' && <ProBadge />}
+                    </View>
                     <Text style={styles.postDate}>{formatTimeAgo(post.createdAt)}</Text>
                   </View>
                 </View>
@@ -1462,6 +1473,11 @@ export default function PostCommentsScreen() {
   },
   postHeaderInfo: {
     flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   postUsername: {
     fontSize: 16,

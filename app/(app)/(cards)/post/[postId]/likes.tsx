@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { FlashList } from '@shopify/flash-list';
 import { supabase } from '../../../../../lib/supabase';
 import CachedAvatar from '../../../../../components/CachedAvatar';
+import ProBadge from '../../../../../components/ProBadge';
 import UserListSkeleton from '../../../../../components/UserListSkeleton';
 import { colors } from '../../../../../constants/colors';
 import { useAuthStore } from '../../../../../stores/authStore';
@@ -60,7 +61,8 @@ export default function PostLikesScreen() {
             id,
             username,
             name,
-            avatar_url
+            avatar_url,
+            subscription_tier
           )
         `)
         .eq('post_id', postId)
@@ -172,7 +174,10 @@ export default function PostLikesScreen() {
       >
         <CachedAvatar path={item.profiles.avatar_url} size={44} />
         <View style={styles.userInfo}>
-          <Text style={styles.username}>{item.profiles.username}</Text>
+          <View style={styles.usernameRow}>
+            <Text style={styles.username}>{item.profiles.username}</Text>
+            {item.profiles.subscription_tier === 'pro' && <ProBadge />}
+          </View>
           {hasFullName && <Text style={styles.fullName}>{item.profiles.name}</Text>}
         </View>
         {!isOwnProfile && (
@@ -330,6 +335,11 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   username: {
     fontSize: 16,

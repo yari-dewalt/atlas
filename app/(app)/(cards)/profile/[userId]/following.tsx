@@ -9,12 +9,14 @@ import { supabase } from '../../../../../lib/supabase';
 import { useAuthStore } from '../../../../../stores/authStore';
 import CachedAvatar from '../../../../../components/CachedAvatar';
 import UserListSkeleton from '../../../../../components/UserListSkeleton';
+import ProBadge from '../../../../../components/ProBadge';
 
 type Following = {
   id: string;
   username: string | null;
   name: string | null;
   avatar_url: string | null;
+  subscription_tier?: 'free' | 'pro' | null;
   is_following: boolean;
 };
 
@@ -64,7 +66,7 @@ export default function FollowingScreen() {
 
       const followingQuery = supabase
         .from('follows')
-        .select('following:profiles!follows_following_id_fkey(id, username, name, avatar_url)')
+        .select('following:profiles!follows_following_id_fkey(id, username, name, avatar_url, subscription_tier)')
         .eq('follower_id', userId)
         .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
 
@@ -169,7 +171,10 @@ export default function FollowingScreen() {
     >
       <CachedAvatar path={item.avatar_url} size={40} style={styles.profileImage} />
       <View style={styles.userInfo}>
-        <Text style={styles.displayName}>{item.username}</Text>
+        <View style={styles.usernameRow}>
+          <Text style={styles.displayName}>{item.username}</Text>
+          {item.subscription_tier === 'pro' && <ProBadge />}
+        </View>
         {item.name && <Text style={styles.name}>{item.name}</Text>}
       </View>
       {item.id !== currentUserId && (
@@ -276,6 +281,11 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   displayName: {
     fontSize: 16,

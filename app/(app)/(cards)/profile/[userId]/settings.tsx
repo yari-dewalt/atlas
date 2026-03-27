@@ -83,19 +83,15 @@ export default function SettingsScreen() {
                 />
                 <Text style={styles.proBannerProText}>PRO</Text>
               </View>
-              {authProfile?.subscription_tier === 'pro' ? (
-                <View style={styles.proBadge}>
-                  <Text style={styles.proBadgeText}>Active</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.upgradeButton}
-                  onPress={() => router.push('/(app)/(modals)/pro')}
-                >
-                  <Text style={styles.upgradeButtonText}>Upgrade</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={authProfile?.subscription_tier === 'pro' ? styles.manageButton : styles.upgradeButton}
+                onPress={() => router.push('/(app)/(modals)/pro')}
+              >
+                <Text style={authProfile?.subscription_tier === 'pro' ? styles.manageButtonText : styles.upgradeButtonText}>
+                  {authProfile?.subscription_tier === 'pro' ? 'Manage' : 'Upgrade'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -295,12 +291,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 0,
-    paddingVertical: 14,
-    borderRadius: 12,
+    marginRight: 24,
+    marginLeft: 12,
   },
   proBannerWordmark: {
     flexDirection: 'row',
@@ -311,10 +303,10 @@ const styles = StyleSheet.create({
     width: 100,
   },
   proBannerProText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.brand,
-    marginLeft: 5,
+    marginTop: 2,
   },
   upgradeButton: {
     backgroundColor: colors.brand,
@@ -327,16 +319,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  proBadge: {
+  manageButton: {
     backgroundColor: colors.brand,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
-  proBadgeText: {
-    fontSize: 12,
+  manageButtonText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.background,
+    color: colors.primaryText,
   },
   backButton: {
     marginLeft: 16,
