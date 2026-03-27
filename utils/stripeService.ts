@@ -35,6 +35,15 @@ export async function openCheckout(url: string): Promise<WebBrowser.WebBrowserAu
 }
 
 /**
+ * Schedules cancellation of the user's active subscription at the end of the billing period.
+ * Access remains until the period ends; no refund is issued.
+ */
+export async function cancelSubscription(): Promise<void> {
+  const { error } = await supabase.functions.invoke('cancel-subscription', {});
+  if (error) throw new Error(`Failed to cancel subscription: ${error.message}`);
+}
+
+/**
  * Stub for restoring purchases (e.g. after reinstall).
  * TODO: Implement by calling a restore-purchases Edge Function that
  *       re-checks active Stripe subscriptions for the user and syncs

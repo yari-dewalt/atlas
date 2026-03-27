@@ -8,6 +8,7 @@ type SubscriptionState = {
   tier: SubscriptionTier;
   expiresAt: string | null;
   planType: PlanType;
+  cancelAtPeriodEnd: boolean;
   isLoading: boolean;
 
   fetchSubscription: (userId: string) => Promise<void>;
@@ -18,6 +19,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   tier: 'free',
   expiresAt: null,
   planType: null,
+  cancelAtPeriodEnd: false,
   isLoading: false,
 
   fetchSubscription: async (userId: string) => {
@@ -31,10 +33,10 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
       if (error) throw error;
 
-      // Also fetch the latest subscription record for plan type
+      // Also fetch the latest subscription record for plan type and cancellation state
       const { data: subData } = await supabase
         .from('subscriptions')
-        .select('plan_type')
+        .select('plan_type, cancel_at_period_end')
         .eq('user_id', userId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -45,6 +47,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         tier: (data?.subscription_tier as SubscriptionTier) ?? 'free',
         expiresAt: data?.subscription_expires_at ?? null,
         planType: (subData?.plan_type as PlanType) ?? null,
+        cancelAtPeriodEnd: subData?.cancel_at_period_end ?? false,
         isLoading: false,
       });
     } catch {

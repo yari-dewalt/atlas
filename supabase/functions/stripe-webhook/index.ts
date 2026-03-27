@@ -97,6 +97,7 @@ Deno.serve(async (req) => {
               status: subscription.status as string,
               current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
               current_period_end: periodEnd,
+              cancel_at_period_end: subscription.cancel_at_period_end,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'stripe_subscription_id' },

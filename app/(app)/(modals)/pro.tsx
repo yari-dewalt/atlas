@@ -14,8 +14,9 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
 import { SUBSCRIPTION_PLANS, PlanId } from '../../../constants/subscription';
-import { createCheckoutSession, openCheckout } from '../../../utils/stripeService';
+import { createCheckoutSession, openCheckout, cancelSubscription } from '../../../utils/stripeService';
 import { useAuthStore } from '../../../stores/authStore';
+import { useSubscriptionStore } from '../../../stores/subscriptionStore';
 
 const COMPARISON_ROWS: { feature: string; free: string }[] = [
   { feature: 'Unlimited Routines', free: '4 max' },
@@ -27,8 +28,10 @@ const COMPARISON_ROWS: { feature: string; free: string }[] = [
 export default function ProScreen() {
   const router = useRouter();
   const { session, profile } = useAuthStore();
+  const { cancelAtPeriodEnd, fetchSubscription } = useSubscriptionStore();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>('yearly');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const isPro = profile?.subscription_tier === 'pro';
   const activePlan = SUBSCRIPTION_PLANS.find((p) => p.id === selectedPlan)!;
@@ -62,14 +65,25 @@ export default function ProScreen() {
   const handleCancelSubscription = () => {
     Alert.alert(
       'Cancel Subscription',
-      `Are you sure you want to cancel your Pro subscription? You'll keep access until the end of your billing period.`,
+      `Are you sure you want to cancel your PRO subscription? You'll keep access until the end of your billing period.`,
       [
         { text: 'Keep Pro', style: 'cancel' },
         {
           text: 'Cancel Subscription',
           style: 'destructive',
-          onPress: () => {
-            // TODO: implement cancellation
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              await cancelSubscription();
+              if (session?.user) {
+                await fetchSubscription(session.user.id);
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Unable to cancel subscription. Please try again later.');
+              console.error('[ProScreen] cancel error:', err);
+            } finally {
+              setIsCancelling(false);
+            }
           },
         },
       ]
@@ -104,12 +118,20 @@ export default function ProScreen() {
                 />
                 <Text style={styles.proText}>PRO</Text>
               </View>
-              <View style={styles.activeChip}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.primaryText} />
-                <Text style={styles.activeChipText}>Active</Text>
+              <View style={[styles.activeChip, cancelAtPeriodEnd && styles.activeChipCanceling]}>
+                <Ionicons
+                  name={cancelAtPeriodEnd ? 'time-outline' : 'checkmark-circle'}
+                  size={14}
+                  color={colors.primaryText}
+                />
+                <Text style={styles.activeChipText}>
+                  {cancelAtPeriodEnd ? 'Canceling' : 'Active'}
+                </Text>
               </View>
               {renewalDate && (
-                <Text style={styles.renewalText}>Renews {renewalDate}</Text>
+                <Text style={styles.renewalText}>
+                  {cancelAtPeriodEnd ? `Access ends ${renewalDate}` : `Renews ${renewalDate}`}
+                </Text>
               )}
             </View>
 
@@ -142,16 +164,29 @@ export default function ProScreen() {
             </View>
 
             {/* Cancel */}
-            <TouchableOpacity
-              activeOpacity={0.6}
-              style={styles.notNowButton}
-              onPress={handleCancelSubscription}
-            >
-              <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
-            </TouchableOpacity>
-            <Text style={styles.cancelNote}>
-              You'll keep PRO access until the end of your billing period.
-            </Text>
+            {cancelAtPeriodEnd ? (
+              <Text style={styles.cancelNote}>
+                Your subscription will not renew. You'll keep PRO access until the end of your billing period.
+              </Text>
+            ) : (
+              <>
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  style={styles.notNowButton}
+                  onPress={handleCancelSubscription}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? (
+                    <ActivityIndicator color={colors.notification} />
+                  ) : (
+                    <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.cancelNote}>
+                  You'll keep PRO access until the end of your billing period.
+                </Text>
+              </>
+            )}
           </ScrollView>
         </View>
       </>
@@ -457,6 +492,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     marginBottom: 10,
+  },
+  activeChipCanceling: {
+    backgroundColor: colors.secondaryAccent,
   },
   activeChipText: {
     fontSize: 13,
