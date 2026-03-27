@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { ActivityIndicator, View, Text, Animated, StyleSheet, Image, Platform } from 'react-native';
+
+// Disable font scaling globally to prevent layout issues on devices with large font sizes
+// @ts-ignore
+Text.defaultProps = { ...(Text.defaultProps ?? {}), allowFontScaling: false };
 import { useAuthStore } from '../stores/authStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useNotificationStore } from '../stores/notificationStore';
