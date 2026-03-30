@@ -29,6 +29,7 @@ export default {
     },
     android: {
       package: "com.atlasfitness.atlas",
+      googleServicesFile: "./google-services.json",
       icon: "./assets/android-icon.png",
       adaptiveIcon: {
         foregroundImage: "./assets/android-icon.png",
@@ -62,6 +63,12 @@ export default {
     },
     plugins: [
       "expo-router",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme: "com.googleusercontent.apps.972975181815-1v7uutkc2hp2v2672riic8ndi792p1jo"
+        }
+      ],
       [
         "expo-screen-orientation",
         {

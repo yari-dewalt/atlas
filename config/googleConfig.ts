@@ -7,13 +7,9 @@
 // 5. Create OAuth 2.0 Client IDs for both Web and Android/iOS
 
 export const GOOGLE_CONFIG = {
-  // Web Client ID (required for Supabase)
-  webClientId: 'YOUR_WEB_CLIENT_ID_HERE.apps.googleusercontent.com',
-  
-  // iOS Client ID (optional, only if building for iOS)
-  iosClientId: 'YOUR_IOS_CLIENT_ID_HERE.apps.googleusercontent.com',
-  
-  // Android Client ID is automatically handled by the package
+  webClientId: '972975181815-je9h8bvgeorr1kkos3ukopf2bhqol166.apps.googleusercontent.com',
+  iosClientId: '972975181815-1v7uutkc2hp2v2672riic8ndi792p1jo.apps.googleusercontent.com',
+  androidClientId: '972975181815-2qv2oag713ntps02op7fq5amaun3bbnt.apps.googleusercontent.com',
 };
 
 // Instructions:

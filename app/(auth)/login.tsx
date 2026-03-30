@@ -4,8 +4,9 @@ import IonIcon from 'react-native-vector-icons/Ionicons';
 import { colors } from '../../constants/colors';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { signInWithGoogle } from '../../utils/googleAuth';
+import { signInWithGoogle, isExpoGo } from '../../utils/googleAuth';
 import { createProfileWithGoogleAvatar } from '../../utils/profileUtils';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function Login() {
   const params = useLocalSearchParams();
@@ -13,6 +14,7 @@ export default function Login() {
   const [password, onChangePassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { fetchProfile } = useAuthStore();
 
   async function signInWithEmail() {
     Keyboard.dismiss();
@@ -68,19 +70,14 @@ export default function Login() {
   async function handleGoogleSignIn() {
     setLoading(true);
     try {
-      const { data, error, googleUserInfo } = await signInWithGoogle();
-      
-      if (error) {
-        Alert.alert('Google Sign In Failed', error.message || 'Failed to sign in with Google');
-        return;
-      }
+      const { data, googleUserInfo } = await signInWithGoogle();
 
       if (data?.user) {
-        // Create or update profile with Google avatar if it's a new user
         await createProfileWithGoogleAvatar(data.user, googleUserInfo);
+        await fetchProfile();
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      Alert.alert('Google Sign In Failed', error.message || 'Failed to sign in with Google');
     } finally {
       setLoading(false);
     }
@@ -265,12 +262,14 @@ export default function Login() {
       </View>
       <TouchableOpacity
                 activeOpacity={0.5}
-        style={[styles.socialButton, styles.buttonDisabled]}
+        style={[styles.socialButton, (loading || isExpoGo) && styles.buttonDisabled]}
         onPress={handleGoogleSignIn}
-        disabled={true}
+        disabled={loading || isExpoGo}
       >
-        <IonIcon name="logo-google" size={24} color={colors.secondaryText} />
-        <Text style={[styles.socialButtonText, styles.textDisabled]}>Continue With Google (Disabled)</Text>
+        <IonIcon name="logo-google" size={24} color={isExpoGo ? colors.secondaryText : colors.primaryText} />
+        <Text style={[styles.socialButtonText, isExpoGo && styles.textDisabled]}>
+          {isExpoGo ? 'Google (Dev Build Only)' : 'Continue With Google'}
+        </Text>
       </TouchableOpacity>
     </View>
     </TouchableWithoutFeedback>

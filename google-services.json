@@ -1,0 +1,10 @@
+{
+  "android": {
+    "keystore": {
+      "keystorePath": "credentials/android/keystore.jks",
+      "keystorePassword": "4f87f0dc243b7220984901eaa7b80b6a",
+      "keyAlias": "f65c6ebde6d5542d03877c3d5d3bcbee",
+      "keyPassword": "98badd3aafa0329ccf2a90ba9067fc0c"
+    }
+  }
+}
