@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator, Modal, TouchableOpacity, Image, Alert } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { colors } from '../../../../../constants/colors';
 import { Ionicons as IonIcon } from '@expo/vector-icons';
@@ -61,11 +61,12 @@ export default function ProfileScreen() {
   const [selectedMetric, setSelectedMetric] = useState<'duration' | 'volume' | 'reps'>('duration');
   const [isBlocked, setIsBlocked] = useState(false);
 
+  const { userId: routeUserId } = useLocalSearchParams<{ userId: string }>();
   const { profile: authProfile, session } = useAuthStore();
-  const { 
-    currentProfile, 
-    loading, 
-    isCurrentUser, 
+  const {
+    currentProfile,
+    loading,
+    isCurrentUser,
     followLoading,
     followUser,
     unfollowUser,
@@ -120,11 +121,21 @@ export default function ProfileScreen() {
     return volume.toString();
   };
 
+  // Ensure the store has the correct profile for this route. If it doesn't (e.g.
+  // the own-profile tab last set currentProfile to the logged-in user), kick off
+  // the fetch immediately so we don't wait on the layout's effect.
   useEffect(() => {
-    if (currentProfile?.id) {
+    if (routeUserId && currentProfile?.id !== routeUserId) {
+      const currentUserId = authProfile?.id || session?.user?.id;
+      fetchProfile(routeUserId, currentUserId);
+    }
+  }, [routeUserId]);
+
+  useEffect(() => {
+    if (currentProfile?.id && currentProfile.id === routeUserId) {
       // Check if user is blocked
       setIsBlocked(isUserBlocked(currentProfile.id));
-      
+
       fetchLatestPost(currentProfile.id);
       fetchWorkoutDays(currentProfile.id);
       fetchRecentWorkouts(currentProfile.id);
